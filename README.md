@@ -66,4 +66,4 @@ python3 -m unittest discover -s reference -p test_memory.py
 python3 reference/belief_oracle.py
 ```
 
-On the three-way benchmark, atomic revision reduced median edit time by 13.46× for 32 dense edits on 128 rules, compared with the per-branch API. For 128 sparse edits on 1,024 rules, the corresponding gain was 1.40×. The batched full scan still had the lowest total time in all 30 matched trials. Bulk evidence seeding and rule registration are the next costs to measure. [Benchmark, measurements, and reproduction commands](docs/revision-benchmark.md)
+On the three-way benchmark, atomic revision reduced median edit time by 13.46× for 32 dense edits on 128 rules, compared with the per-branch API. For 128 sparse edits on 1,024 rules, the corresponding gain was 1.40×. The batched full scan still had the lowest total time in all 30 matched trials. On a subsequent matched run with 1,024 rules, bulk setup took a median 214 ms versus 3,690 ms for single-item setup. Both production paths retained per-occurrence admission events, branch lineage and logical charges. [Benchmark, measurements, and reproduction commands](docs/revision-benchmark.md)

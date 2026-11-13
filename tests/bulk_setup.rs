@@ -104,8 +104,12 @@ fn failed_acquisitions_and_grants_restore_edges_epochs_and_pending_work() -> Res
     assert_eq!(store.settle(captured, b"late", 3)?, Disposition::StaleView);
     let renewed = store.revise_support(ACTOR, SCOPE, "gate")?;
     assert_ne!(renewed, old);
+    let sole = store.publish_support(ACTOR, SCOPE, "staged-only", &[vec![first]])?;
     store.admit_many(ACTOR, SCOPE, &[first, first])?;
     assert_eq!(store.revise_support(ACTOR, SCOPE, "gate")?, renewed);
+    assert_eq!(store.read_current(ACTOR, SCOPE, "staged-only")?, Current::NeedsReview);
+    assert_ne!(store.revise_support(ACTOR, SCOPE, "staged-only")?, sole);
+    assert_eq!(store.read_current(ACTOR, SCOPE, "staged-only")?, Current::Ready(b"supported".to_vec()));
     assert_eq!(store.epoch(ACTOR, SCOPE)?, 2);
     Ok(())
 }
