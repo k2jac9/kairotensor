@@ -21,7 +21,11 @@ jobs:
           cargo run --example corrected_handoff
           cargo run --example scoped_model_reuse
           cargo run --example scoped_model_reuse -- --replay-invalid
+          cargo run --example token_cap_eval
       - name: Check the original reference contracts
         run: |
           python3 -m unittest discover -s reference -p test_memory.py
           python3 reference/belief_oracle.py
+          python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Verify archived output-cap measurements
+        run: python3 scripts/summarize_token_caps.py docs/evaluations/token-caps-*-2026-11-13.json

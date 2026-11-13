@@ -18,6 +18,19 @@ pub struct Reply {
     pub roundtrip_us: u64,
 }
 
+/// Single-use quote issued by the live worker that owns the prepared tensors.
+pub struct Prepared {
+    handle: String,
+    pub input_tokens: u64,
+    pub max_new_tokens: u64,
+}
+
+pub struct PreparedReply {
+    pub reply: Reply,
+    pub hit_cap: bool,
+    pub ended_eos: bool,
+}
+
 pub struct Adapter {
     worker: Option<Worker>,
 }
@@ -28,22 +41,78 @@ impl Adapter {
     }
 
     pub fn freeze(&self, messages: Value) -> Result<Vec<u8>> {
+        self.freeze_with_cap(messages, 96)
+    }
+
+    pub fn freeze_with_cap(&self, messages: Value, cap: u64) -> Result<Vec<u8>> {
+        if !(1..=96).contains(&cap) {
+            return Err("output cap must be between 1 and 96".into());
+        }
         let request = if self.worker.is_some() {
             json!({
                 "adapter": "transformers-cpu/v1", "model": MODEL, "revision": REVISION,
                 "messages": messages, "dtype": "bfloat16", "add_generation_prompt": true,
-                "generation": {"do_sample": false, "num_beams": 1, "max_new_tokens": 96}
+                "generation": {"do_sample": false, "num_beams": 1, "max_new_tokens": cap}
             })
         } else {
+            if cap != 96 {
+                return Err("variable caps require the live worker".into());
+            }
             json!({"adapter": "fixture/v1", "messages": messages})
         };
         Ok(serde_json::to_vec(&request)?)
     }
 
+    fn live_worker(&mut self) -> Result<&mut Worker> {
+        self.worker.as_mut().ok_or_else(|| "exact preflight requires the live worker".into())
+    }
+
+    /// Tokenize without generating. This is the exact prompt ID count for the
+    /// pinned model and template. Keep the frozen bytes for dispatch accounting.
+    pub fn prepare(&mut self, request: &[u8]) -> Result<Prepared> {
+        let request_utf8 = std::str::from_utf8(request)?;
+        let command = json!({"op":"prepare", "request_utf8":request_utf8});
+        let result = self.live_worker()?.exchange(&serde_json::to_vec(&command)?)?;
+        Ok(Prepared {
+            handle: result["handle"].as_str().ok_or("missing preparation handle")?.to_owned(),
+            input_tokens: result["input_tokens"].as_u64().ok_or("missing preflight input count")?,
+            max_new_tokens: result["max_new_tokens"].as_u64().ok_or("missing preflight output cap")?,
+        })
+    }
+
+    /// Use only after a successful reservation. The worker consumes the handle
+    /// before generating, including when a response is lost or generation fails.
+    pub fn generate_prepared(&mut self, prepared: Prepared) -> Result<PreparedReply> {
+        let start = Instant::now();
+        let command = json!({"op":"generate", "handle":prepared.handle,
+            "input_tokens":prepared.input_tokens, "max_new_tokens":prepared.max_new_tokens});
+        let response = self.live_worker()?.exchange(&serde_json::to_vec(&command)?)?;
+        let mut reply = Worker::reply(&response)?;
+        let output = reply.output_tokens.ok_or("missing output count")?;
+        let hit_cap = response["hit_cap"].as_bool().ok_or("missing output-cap indicator")?;
+        let ended_eos = response["ended_eos"].as_bool().ok_or("missing EOS indicator")?;
+        if reply.input_tokens != Some(prepared.input_tokens) || output > prepared.max_new_tokens
+            || hit_cap != (output == prepared.max_new_tokens)
+        {
+            return Err("generation did not match prepared quote".into());
+        }
+        reply.roundtrip_us = start.elapsed().as_micros() as u64;
+        Ok(PreparedReply { reply, hit_cap, ended_eos })
+    }
+
+    pub fn discard(&mut self, prepared: Prepared) -> Result<()> {
+        let command = json!({"op":"discard", "handle":prepared.handle});
+        let response = self.live_worker()?.exchange(&serde_json::to_vec(&command)?)?;
+        if response["discarded"].as_str() != Some(prepared.handle.as_str()) {
+            return Err("worker did not confirm discard".into());
+        }
+        Ok(())
+    }
+
     pub fn dispatch(&mut self, request: &[u8]) -> Result<Reply> {
         let start = Instant::now();
         let mut reply = match self.worker.as_mut() {
-            Some(worker) => worker.call(request)?,
+            Some(worker) => Worker::reply(&worker.exchange(request)?)?,
             None => {
                 let envelope: Value = serde_json::from_slice(request)?;
                 if envelope["adapter"] != "fixture/v1" {
@@ -122,7 +191,7 @@ impl Worker {
         Ok(serde_json::from_str(&line)?)
     }
 
-    fn call(&mut self, request: &[u8]) -> Result<Reply> {
+    fn exchange(&mut self, request: &[u8]) -> Result<Value> {
         if request.contains(&b'\n') {
             return Err("request must be one JSONL record".into());
         }
@@ -130,6 +199,13 @@ impl Worker {
         self.stdin.write_all(b"\n")?;
         self.stdin.flush()?;
         let response = self.read_json()?;
+        if let Some(error) = response.get("error").and_then(Value::as_str) {
+            return Err(format!("model worker: {error}").into());
+        }
+        Ok(response)
+    }
+
+    fn reply(response: &Value) -> Result<Reply> {
         let count = |key: &str| -> Result<u64> {
             Ok(response[key].as_u64().ok_or("missing worker measurement")?)
         };

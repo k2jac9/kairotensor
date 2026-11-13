@@ -351,6 +351,9 @@ impl Store {
         if crate::model_reuse::is_opted_in(&tx, attempt)? {
             return Err(invalid("use resolve_model_attempt for an opted-in model attempt"));
         }
+        if crate::token_budget::has_decision(&tx, attempt)? {
+            return Err(invalid("budget decision already made; reconcile the original dispatch"));
+        }
         let identical: Option<bool> = tx
             .query_row(
                 "SELECT request = ?2 FROM dispatches WHERE attempt_id = ?1",
