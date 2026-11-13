@@ -162,6 +162,33 @@ fn record_exact_inputs(
     Ok(())
 }
 
+// Called under the same writer lock as the dispatch record or final publication.
+fn applicability(db: &Connection, attempt: i64) -> Result<(i64, Disposition)> {
+    let (branch_id, actor, scope, captured_epoch, parent_matches) = db.query_row(
+        "SELECT b.id, b.actor, b.scope, a.view_epoch,
+                (a.parent IS b.head AND a.branch_revision = b.revision)
+         FROM attempts a JOIN branches b ON b.id = a.branch_id WHERE a.id = ?1",
+        [attempt],
+        |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)?,
+                row.get::<_, bool>(4)?,
+            ))
+        },
+    )?;
+    let disposition = if captured_epoch != view_epoch(db, &actor, &scope)? {
+        Disposition::StaleView
+    } else if !parent_matches {
+        Disposition::StaleBranch
+    } else {
+        Disposition::Accepted
+    };
+    Ok((branch_id, disposition))
+}
+
 impl Store {
     /// Start from explicitly supplied evidence. The existing head is captured
     /// strictly as the expected publication parent; its bytes are never inherited.
@@ -256,6 +283,48 @@ impl Store {
         Ok(result)
     }
 
+    /// Freeze the exact serialized request immediately before an adapter submits
+    /// it. The attempt must still be pending and match its captured view and parent.
+    /// Calling again with the same bytes only verifies an existing capture while
+    /// the attempt remains eligible. Submission and transport retries are the
+    /// adapter's responsibility. Settlement checks the view and parent again.
+    ///
+    /// The trusted caller supplies the client-visible bytes for the previously
+    /// captured inputs. Serialization, model parameters and template selection
+    /// must already be fixed at this boundary.
+    pub fn record_dispatch(&mut self, attempt: i64, request: &[u8]) -> Result<()> {
+        let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let completed: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM deliveries WHERE attempt_id = ?1)",
+            [attempt],
+            |row| row.get(0),
+        )?;
+        if completed {
+            return Err(invalid("cannot dispatch a settled attempt"));
+        }
+        if applicability(&tx, attempt)?.1 != Disposition::Accepted {
+            return Err(invalid("cannot dispatch a stale attempt"));
+        }
+        let identical: Option<bool> = tx
+            .query_row(
+                "SELECT request = ?2 FROM dispatches WHERE attempt_id = ?1",
+                params![attempt, request],
+                |row| row.get(0),
+            )
+            .optional()?;
+        match identical {
+            Some(false) => return Err(invalid("conflicting request for an existing dispatch")),
+            Some(true) => {}
+            None => {
+                tx.execute(
+                    "INSERT INTO dispatches(attempt_id, request) VALUES (?1, ?2)",
+                    params![attempt, request],
+                )?;
+            }
+        }
+        tx.commit()
+    }
+
     /// Atomically record final output, cost, and a terminal disposition.
     /// Identical deliveries return the original disposition, even if the view
     /// has since changed. A conflicting retry fails without charging twice.
@@ -283,28 +352,7 @@ impl Store {
             return Disposition::from_db(&disposition);
         }
 
-        let (branch_id, actor, scope, captured_epoch, parent_matches) = tx.query_row(
-            "SELECT b.id, b.actor, b.scope, a.view_epoch,
-                    (a.parent IS b.head AND a.branch_revision = b.revision)
-             FROM attempts a JOIN branches b ON b.id = a.branch_id WHERE a.id = ?1",
-            [attempt],
-            |r| {
-                Ok((
-                    r.get::<_, i64>(0)?,
-                    r.get::<_, String>(1)?,
-                    r.get::<_, String>(2)?,
-                    r.get::<_, i64>(3)?,
-                    r.get::<_, bool>(4)?,
-                ))
-            },
-        )?;
-        let disposition = if captured_epoch != view_epoch(&tx, &actor, &scope)? {
-            Disposition::StaleView
-        } else if !parent_matches {
-            Disposition::StaleBranch
-        } else {
-            Disposition::Accepted
-        };
+        let (branch_id, disposition) = applicability(&tx, attempt)?;
         if disposition == Disposition::Accepted {
             accept(&tx, branch_id, attempt, output, usage)?;
         } else {

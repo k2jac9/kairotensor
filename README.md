@@ -9,6 +9,7 @@ With stable Rust, Cargo, and a C compiler for bundled SQLite, run these commands
 ```sh
 cargo run --example withdrawal
 cargo run --example selective_revision
+cargo run --example corrected_handoff
 cargo test --all-targets
 ```
 
@@ -39,11 +40,15 @@ The second example asks whether a test run has a reproduction record. An origina
 
 The built-in rule checks **availability of declared witnesses**. The caller defines which observations qualify for the question. `unsupported` means every declared alternative lacks at least one admitted observation. Missing and withheld IDs have the same effect. The store never needs the payload bytes to answer this rule.
 
-SQLite updates the affected clause counts in the same transaction as admission or withdrawal. Reads and resumes check the verdict against the current view. In-flight opaque work still goes through the original epoch check. Schema v2 upgrades existing v1 databases on open and preserves their existing heads and ledger.
+SQLite updates the affected clause counts in the same transaction as admission or withdrawal. Reads and resumes check the verdict against the current view. In-flight opaque work still goes through the original epoch check. Opening a v1 or v2 database migrates it to schema v3. Existing heads and usage records retain their identities.
 
 Use `set_admitted_and_revise` when readers should see the membership update and all affected support heads in the same database snapshot. Any failure rolls back the entire edit. A witness that keeps the same verdict retains its head and cost. Repeating the desired membership while it is already current returns an empty change list. An intervening reversal makes a subsequent call a new edit. The original `set_admitted` and `revise_support` remain available for deferred revision.
 
 The store charges one unit per premise checked during rule registration and one for a changed verdict published by revision. Reusing a head adds no delivery or charge. These logical units exclude index maintenance and read checks. The integration suite compares the incremental answers with fresh databases and an independent evaluator across every admission subset of four observations.
+
+## Corrected handoff
+
+The deployment planner example captures exact dispatch bytes and their source IDs, retires an accepted staging continuation, then asks for a canary plan. A clean rebuild provides a second answer against the same release checklist. Run with the deterministic adapter or the pinned local CPU model. [Example, commands and evaluation](docs/corrected-handoff.md)
 
 ## Implemented contracts
 
@@ -53,6 +58,7 @@ The store charges one unit per premise checked during rule registration and one 
 | `begin_from_candidates` | Select admitted inputs from an ordered list and freeze their bytes, the view epoch and the expected branch head in one transaction. This also covers a selection that returns zero inputs. |
 | `begin_attempt` | Require every explicit input to be admitted. Record the ordered IDs and start fresh, with no inherited output. |
 | `read_current`, `begin_resume` | Check the accepted head against the current view before returning bytes. A resume records which accepted output it inherited. |
+| `record_dispatch` | Freeze the exact serialized adapter request for a still-eligible pending attempt. The request stays linked to the ordered source occurrences. |
 | `settle` | Validate the captured branch and view, record the delivery and usage, and advance the head only on acceptance. Identical retries return the first disposition. Conflicting retries fail. |
 
 The caller authenticates actors for every operation. For opaque computations the caller also validates outputs and measures usage. Settlement distinguishes acceptance, a stale view and a stale branch. Each branch belongs to one actor and scope. An effective admission or revocation in that scope conservatively invalidates an opaque head. A fresh computation can reuse raw evidence that is still admitted. Withdrawal governs future reads from this store. Previously delivered bytes may still exist in a caller.

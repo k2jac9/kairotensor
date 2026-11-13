@@ -27,6 +27,8 @@ python3 scripts/summarize_revision_bench.py setup-samples.csv
 target/release/examples/revision_bench setup sparse 1024 128 6
 ```
 
+The instrumented CSV includes `publish_us` and `initial_read_us` within `register_us`. Publication measures the rule-publication operation itself. Initial readback measures the first persisted verdict lookups on the production arms. The full-scan arm produces its verdicts while publishing and has no separate initial lookup. The remaining registration time includes adapter bookkeeping. The nested times are already included in total and setup time.
+
 ## What is compared
 
 | | Per-branch indexed | Atomic indexed batch | Full scan |
@@ -124,3 +126,7 @@ Bulk setup gave the production implementation the lower setup and end-to-end tim
 The previous atomic-edit run measured 2.48 s for single-item setup on another runner. All speedups above use the current run's single-item control. The remaining setup time on the largest fixture is concentrated in rule registration and initial verdict reads.
 
 Environment: GitHub-hosted Linux x86-64, AMD EPYC 9V74, ext4, runner image `ubuntu26 20261111.196.1`, Rust 1.99.1, and SQLite 3.46.0. Benchmark commit: `10e3a57`. [Measured CI run](https://github.com/k2jac9/kairotensor/actions/runs/43478880682) · [All 90 raw timings](benchmarks/bulk-setup-2026-11-13.csv).
+
+## Measuring registration and readback separately
+
+On the 1,024-rule sparse fixture, bulk rule publication took a median 134.401 ms and the 1,024 initial persisted verdict reads took 15.511 ms. The two operations were measured within each registration phase on an AMD EPYC 9V45 runner. Publication includes branch, dependency, provenance and usage writes as well as membership queries. The 6,144 premise checks share 517 distinct evidence occurrences on this fixture, which motivates testing transaction-local reuse of membership lookups. [Instrumented run](https://github.com/k2jac9/kairotensor/actions/runs/43486844932) · [Raw phase measurements](benchmarks/registration-phases-2026-11-13.csv).
