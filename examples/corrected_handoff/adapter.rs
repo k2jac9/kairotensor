@@ -53,20 +53,7 @@ impl Adapter {
                 let user = messages.last().filter(|m| m["role"] == "user")
                     .and_then(|m| m["content"].as_str()).ok_or("missing final user message")?;
                 let data: Value = serde_json::from_str(user)?;
-                let requirement = &data["requirement"];
-                let report = &data["test_certificate"];
-                let txt = |v: &Value, key: &str| -> Result<String> {
-                    Ok(v[key].as_str().ok_or("missing fixture field")?.to_owned())
-                };
-                let release = txt(requirement, "release")?;
-                if release != txt(report, "release")? {
-                    return Err("release and verified report disagree".into());
-                }
-                let text = json!({
-                    "release": release, "target": txt(requirement, "target")?,
-                    "approval": txt(requirement, "approval")?, "tests": txt(report, "tests")?,
-                    "action": "deploy",
-                }).to_string();
+                let text = fixture_answer(&data)?.to_string();
                 Reply {
                     text, input_tokens: None, output_tokens: None,
                     generation_us: start.elapsed().as_micros() as u64, roundtrip_us: 0,
@@ -76,6 +63,31 @@ impl Adapter {
         reply.roundtrip_us = start.elapsed().as_micros() as u64;
         Ok(reply)
     }
+}
+
+// The fixture mirrors the two structured extraction tasks without token estimates.
+fn fixture_answer(data: &Value) -> Result<Value> {
+    fn field<'a>(value: &'a Value, name: &str) -> Result<&'a str> {
+        value[name].as_str().ok_or_else(|| format!("missing fixture field {name}").into())
+    }
+    if let Some(report) = data.get("ci_report") {
+        let failed = report["failing_cases"].as_u64().ok_or("missing failing_cases")?;
+        return Ok(json!({
+            "release": field(report, "release")?, "tests": field(report, "test_summary")?,
+            "status": if failed == 0 { "pass" } else { "fail" }
+        }));
+    }
+    let requirement = &data["requirement"];
+    let report = &data["test_certificate"];
+    let release = field(requirement, "release")?;
+    if release != field(report, "release")? {
+        return Err("release and verified report disagree".into());
+    }
+    Ok(json!({
+        "release": release, "target": field(requirement, "target")?,
+        "approval": field(requirement, "approval")?, "tests": field(report, "tests")?,
+        "action": if report["status"] == "fail" { "hold" } else { "deploy" }
+    }))
 }
 
 struct Worker {

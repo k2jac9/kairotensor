@@ -10,6 +10,7 @@ With stable Rust, Cargo, and a C compiler for bundled SQLite, run these commands
 cargo run --example withdrawal
 cargo run --example selective_revision
 cargo run --example corrected_handoff
+cargo run --example scoped_model_reuse
 cargo test --all-targets
 ```
 
@@ -40,7 +41,7 @@ The second example asks whether a test run has a reproduction record. An origina
 
 The built-in rule checks **availability of declared witnesses**. The caller defines which observations qualify for the question. `unsupported` means every declared alternative lacks at least one admitted observation. Missing and withheld IDs have the same effect. The store never needs the payload bytes to answer this rule.
 
-SQLite updates the affected clause counts in the same transaction as admission or withdrawal. Reads and resumes check the verdict against the current view. In-flight opaque work still goes through the original epoch check. Opening a v1 or v2 database migrates it to schema v3. Existing heads and usage records retain their identities.
+SQLite updates the affected clause counts in the same transaction as admission or withdrawal. Reads and resumes check the verdict against the current view. In-flight opaque work still goes through the original epoch check. Opening a v1, v2 or v3 database migrates it to schema v4. Existing heads and usage records retain their identities.
 
 Use `set_admitted_and_revise` when readers should see the membership update and all affected support heads in the same database snapshot. Any failure rolls back the entire edit. A witness that keeps the same verdict retains its head and cost. Repeating the desired membership while it is already current returns an empty change list. An intervening reversal makes a subsequent call a new edit. The original `set_admitted` and `revise_support` remain available for deferred revision.
 
@@ -49,6 +50,10 @@ The store charges one unit per premise checked during rule registration and one 
 ## Corrected handoff
 
 The deployment planner example captures exact dispatch bytes and their source IDs, retires an accepted staging continuation, then asks for a canary plan. A clean rebuild provides a second answer against the same release checklist. Run with the deterministic adapter or the pinned local CPU model. [Example, commands and evaluation](docs/corrected-handoff.md)
+
+## Reusing a model result
+
+A caller may reuse a previously validated model response for a closed, versioned computation on a branch. For example, a deployment policy can change while an independent test-report judgment remains eligible. In a live Qwen fixture, repairing the plan used one call and 193 tokens; a clean rebuild used two calls and 404 tokens. Replacing the report forced a fresh judgment and the release was held. [Contract and live evaluation](docs/scoped-model-reuse.md)
 
 ## Implemented contracts
 

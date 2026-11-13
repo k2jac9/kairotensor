@@ -1,10 +1,18 @@
-name: Evaluate corrected handoff
+name: Evaluate model handoff
 on:
   workflow_dispatch:
+    inputs:
+      scenario:
+        description: Synthetic handoff to evaluate
+        required: true
+        default: scoped_model_reuse
+        type: choice
+        options: [scoped_model_reuse, corrected_handoff]
   push:
-    branches: ['bench/corrected-handoff']
+    branches: ['bench/corrected-handoff', 'feat/scoped-model-reuse']
     paths:
       - 'examples/corrected_handoff.rs'
+      - 'examples/scoped_model_reuse.rs'
       - 'examples/corrected_handoff/**'
       - 'scripts/handoff_model.py'
       - '.github/workflows/handoff.yml'
@@ -21,6 +29,7 @@ jobs:
       HF_HUB_DISABLE_TELEMETRY: '1'
       TOKENIZERS_PARALLELISM: 'false'
       OMP_NUM_THREADS: '2'
+      SCENARIO: ${{ inputs.scenario || (github.ref_name == 'feat/scoped-model-reuse' && 'scoped_model_reuse' || 'corrected_handoff') }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -33,11 +42,11 @@ jobs:
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.6.0
           python -m pip install transformers==4.48.3 accelerate==1.3.0 huggingface_hub==0.34.4 safetensors==0.5.3 'numpy<2'
       - name: Build example
-        run: cargo build --release --example corrected_handoff
+        run: cargo build --release --example "$SCENARIO"
       - name: Evaluate synthetic handoff on CPU
         run: |
           status=0
-          target/release/examples/corrected_handoff --live --trace handoff-trace.json || status=$?
+          "target/release/examples/$SCENARIO" --live --trace handoff-trace.json || status=$?
           if [[ -s handoff-trace.json ]]; then
             echo "HANDOFF_TRACE_BEGIN"
             cat handoff-trace.json
