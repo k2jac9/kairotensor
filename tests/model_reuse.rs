@@ -150,6 +150,10 @@ fn only_opted_in_heads_in_the_same_actor_scope_and_branch_can_supply_a_sample() 
         store.set_admitted(actor, scope, id, true)?;
     }
     let origin = begin(&mut store, &[id])?;
+    assert!(store.record_dispatch(origin, REQUEST).is_err());
+    assert!(store.settle(origin, ANSWER, 2).is_err());
+    assert_eq!(store.read_current(ACTOR, SCOPE, BRANCH)?, Current::Empty);
+    assert_eq!(store.charged_usage()?, 0);
     execute(&mut store, origin, REQUEST, ANSWER, 2)?;
     for (actor, scope, branch) in [("other", SCOPE, BRANCH), (ACTOR, "other", BRANCH), (ACTOR, SCOPE, "other")] {
         let attempt = store.begin_model_attempt(actor, scope, branch, &[id], CONTRACT)?.0;
