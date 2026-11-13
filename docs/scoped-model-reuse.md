@@ -34,3 +34,18 @@ Marginal route timing starts after preparing each evidence view and covers the t
 ## Initial live evaluation
 
 In the first live Qwen run, the repaired route reused its passing report judgment and produced the same canary plan as fresh execution. Replacing the report forced a fresh call as required. The model copied the new `11/12` count but incorrectly labeled its status `pass`. The validator stopped publication and the experiment exited before generating a plan from the invalid judgment. The trace records the unsuccessful response and its measured usage; this invalid attempt remained unsettled under the store's existing dispositions. The revised extraction prompt gives balanced examples of passing and failing reports. The report data, Qwen checkpoint and strict output check are unchanged. [First run](https://github.com/k2jac9/kairotensor/actions/runs/43490325882) · [First trace](evaluations/scoped-reuse-first-qwen-2026-11-13.json).
+
+## Live result after the prompt revision
+
+Qwen2.5-1.5B-Instruct ran on CPU with the pinned model and tokenizer revision `989aa7980e4cf806f80c7fef2b1adb7bc71aa306`, two threads, PyTorch 2.6.0+cpu, and Transformers 4.48.3. All returned plans and judgments passed the same field validator used in the first evaluation.
+
+| Phase | Actual model calls | Reused judgments | Input tokens | Output tokens | Observed route time |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Initial staging plan | 2 | 0 | 326 | 78 | 15.78 s |
+| Repair after policy correction | 1 | 1 | 145 | 48 | 9.02 s |
+| Fresh rebuild on corrected evidence | 2 | 0 | 326 | 78 | 15.42 s |
+| Replacement report, 11/12 passing | 2 | 0 | 326 | 78 | 15.65 s |
+
+Repair and clean execution produced the same checked canary plan, with approval `C42-B` and the original 12/12 test result. The opt-in report judgment was the only reuse hit. Its attempt points to the original accepted dispatch; the additional model usage was zero. The two paths used byte-identical model requests for the corresponding tasks. Reuse saved 211 of 404 prompt-plus-completion tokens (52.2%) during correction. On the negative control the report changed, Kairotensor ran both tasks, and the plan action changed to `hold`.
+
+All four routes together ran seven generations and consumed 1,123 input and 282 output tokens. Route timings are individual observations on one synthetic task, with the views already prepared and the model loaded. They do not establish a latency distribution or expected savings on production workloads. [Successful live workflow](https://github.com/k2jac9/kairotensor/actions/runs/43491028189) · [All requests, outputs, usage, and source lineage](evaluations/scoped-reuse-qwen-2026-11-13.json).

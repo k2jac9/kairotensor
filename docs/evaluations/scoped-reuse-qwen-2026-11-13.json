@@ -1,0 +1,259 @@
+{
+  "error": null,
+  "events": [
+    {
+      "attempt": 1,
+      "candidates": [
+        2,
+        3
+      ],
+      "charge_delta": 211,
+      "contract": "ci-report-extractor/2+strict-verdict-validator/1",
+      "disposition": "accepted",
+      "generation_us": 6241821,
+      "input_tokens": 181,
+      "origin_attempt": 1,
+      "output": "{\n  \"release\": \"R42\",\n  \"tests\": \"12/12\",\n  \"status\": \"pass\"\n}",
+      "output_tokens": 30,
+      "path": "dispatch",
+      "phase": "initial",
+      "request_utf8": "{\"adapter\":\"transformers-cpu/v1\",\"add_generation_prompt\":true,\"dtype\":\"bfloat16\",\"generation\":{\"do_sample\":false,\"max_new_tokens\":96,\"num_beams\":1},\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":0,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"12/12\\\",\\\"version\\\":\\\"run/17\\\"}}\",\"role\":\"user\"}],\"model\":\"Qwen/Qwen2.5-1.5B-Instruct\",\"revision\":\"989aa7980e4cf806f80c7fef2b1adb7bc71aa306\"}",
+      "roundtrip_us": 6476352,
+      "source_ids": [
+        2
+      ],
+      "sources": [
+        "run/17"
+      ],
+      "store": "original",
+      "task": "ci-judgment"
+    },
+    {
+      "attempt": 2,
+      "charge_delta": 193,
+      "disposition": "accepted",
+      "generation_us": 9304936,
+      "input_tokens": 145,
+      "judgment_attempt": 1,
+      "judgment_origin": 1,
+      "origin_attempt": 2,
+      "output": "{\n  \"release\": \"R42\",\n  \"target\": \"staging\",\n  \"approval\": \"S42-A\",\n  \"tests\": \"12/12\",\n  \"action\": \"deploy\"\n}",
+      "output_tokens": 48,
+      "path": "dispatch",
+      "phase": "initial",
+      "request_utf8": "{\"adapter\":\"transformers-cpu/v1\",\"add_generation_prompt\":true,\"dtype\":\"bfloat16\",\"generation\":{\"do_sample\":false,\"max_new_tokens\":96,\"num_beams\":1},\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/17\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"S42-A\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"staging\\\",\\\"version\\\":\\\"policy/v1\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"pass\\\",\\\"tests\\\":\\\"12/12\\\"}}\",\"role\":\"user\"}],\"model\":\"Qwen/Qwen2.5-1.5B-Instruct\",\"revision\":\"989aa7980e4cf806f80c7fef2b1adb7bc71aa306\"}",
+      "roundtrip_us": 9306424,
+      "source_ids": [
+        1,
+        2
+      ],
+      "sources": [
+        "policy/v1",
+        "run/17"
+      ],
+      "store": "original",
+      "task": "release-plan"
+    },
+    {
+      "attempt": 3,
+      "candidates": [
+        2,
+        3
+      ],
+      "charge_delta": 0,
+      "contract": "ci-report-extractor/2+strict-verdict-validator/1",
+      "disposition": "accepted",
+      "generation_us": 0,
+      "input_tokens": 0,
+      "origin_attempt": 1,
+      "output": "{\n  \"release\": \"R42\",\n  \"tests\": \"12/12\",\n  \"status\": \"pass\"\n}",
+      "output_tokens": 0,
+      "path": "reuse",
+      "phase": "repair",
+      "request_utf8": "{\"adapter\":\"transformers-cpu/v1\",\"add_generation_prompt\":true,\"dtype\":\"bfloat16\",\"generation\":{\"do_sample\":false,\"max_new_tokens\":96,\"num_beams\":1},\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":0,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"12/12\\\",\\\"version\\\":\\\"run/17\\\"}}\",\"role\":\"user\"}],\"model\":\"Qwen/Qwen2.5-1.5B-Instruct\",\"revision\":\"989aa7980e4cf806f80c7fef2b1adb7bc71aa306\"}",
+      "roundtrip_us": 0,
+      "source_ids": [
+        2
+      ],
+      "sources": [
+        "run/17"
+      ],
+      "store": "original",
+      "task": "ci-judgment"
+    },
+    {
+      "attempt": 4,
+      "charge_delta": 193,
+      "disposition": "accepted",
+      "generation_us": 9020198,
+      "input_tokens": 145,
+      "judgment_attempt": 3,
+      "judgment_origin": 1,
+      "origin_attempt": 4,
+      "output": "{\n  \"release\": \"R42\",\n  \"target\": \"canary\",\n  \"approval\": \"C42-B\",\n  \"tests\": \"12/12\",\n  \"action\": \"deploy\"\n}",
+      "output_tokens": 48,
+      "path": "dispatch",
+      "phase": "repair",
+      "request_utf8": "{\"adapter\":\"transformers-cpu/v1\",\"add_generation_prompt\":true,\"dtype\":\"bfloat16\",\"generation\":{\"do_sample\":false,\"max_new_tokens\":96,\"num_beams\":1},\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/17\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"C42-B\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"canary\\\",\\\"version\\\":\\\"policy/v2\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"pass\\\",\\\"tests\\\":\\\"12/12\\\"}}\",\"role\":\"user\"}],\"model\":\"Qwen/Qwen2.5-1.5B-Instruct\",\"revision\":\"989aa7980e4cf806f80c7fef2b1adb7bc71aa306\"}",
+      "roundtrip_us": 9021534,
+      "source_ids": [
+        4,
+        2
+      ],
+      "sources": [
+        "policy/v2",
+        "run/17"
+      ],
+      "store": "original",
+      "task": "release-plan"
+    },
+    {
+      "attempt": 1,
+      "candidates": [
+        2,
+        3
+      ],
+      "charge_delta": 211,
+      "contract": "ci-report-extractor/2+strict-verdict-validator/1",
+      "disposition": "accepted",
+      "generation_us": 6287637,
+      "input_tokens": 181,
+      "origin_attempt": 1,
+      "output": "{\n  \"release\": \"R42\",\n  \"tests\": \"12/12\",\n  \"status\": \"pass\"\n}",
+      "output_tokens": 30,
+      "path": "dispatch",
+      "phase": "fresh",
+      "request_utf8": "{\"adapter\":\"transformers-cpu/v1\",\"add_generation_prompt\":true,\"dtype\":\"bfloat16\",\"generation\":{\"do_sample\":false,\"max_new_tokens\":96,\"num_beams\":1},\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":0,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"12/12\\\",\\\"version\\\":\\\"run/17\\\"}}\",\"role\":\"user\"}],\"model\":\"Qwen/Qwen2.5-1.5B-Instruct\",\"revision\":\"989aa7980e4cf806f80c7fef2b1adb7bc71aa306\"}",
+      "roundtrip_us": 6288925,
+      "source_ids": [
+        2
+      ],
+      "sources": [
+        "run/17"
+      ],
+      "store": "fresh",
+      "task": "ci-judgment"
+    },
+    {
+      "attempt": 2,
+      "charge_delta": 193,
+      "disposition": "accepted",
+      "generation_us": 9125875,
+      "input_tokens": 145,
+      "judgment_attempt": 1,
+      "judgment_origin": 1,
+      "origin_attempt": 2,
+      "output": "{\n  \"release\": \"R42\",\n  \"target\": \"canary\",\n  \"approval\": \"C42-B\",\n  \"tests\": \"12/12\",\n  \"action\": \"deploy\"\n}",
+      "output_tokens": 48,
+      "path": "dispatch",
+      "phase": "fresh",
+      "request_utf8": "{\"adapter\":\"transformers-cpu/v1\",\"add_generation_prompt\":true,\"dtype\":\"bfloat16\",\"generation\":{\"do_sample\":false,\"max_new_tokens\":96,\"num_beams\":1},\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/17\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"C42-B\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"canary\\\",\\\"version\\\":\\\"policy/v2\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"pass\\\",\\\"tests\\\":\\\"12/12\\\"}}\",\"role\":\"user\"}],\"model\":\"Qwen/Qwen2.5-1.5B-Instruct\",\"revision\":\"989aa7980e4cf806f80c7fef2b1adb7bc71aa306\"}",
+      "roundtrip_us": 9127738,
+      "source_ids": [
+        1,
+        2
+      ],
+      "sources": [
+        "policy/v2",
+        "run/17"
+      ],
+      "store": "fresh",
+      "task": "release-plan"
+    },
+    {
+      "attempt": 5,
+      "candidates": [
+        2,
+        3
+      ],
+      "charge_delta": 211,
+      "contract": "ci-report-extractor/2+strict-verdict-validator/1",
+      "disposition": "accepted",
+      "generation_us": 6210352,
+      "input_tokens": 181,
+      "origin_attempt": 5,
+      "output": "{\n  \"release\": \"R42\",\n  \"tests\": \"11/12\",\n  \"status\": \"fail\"\n}",
+      "output_tokens": 30,
+      "path": "dispatch",
+      "phase": "report_replaced",
+      "request_utf8": "{\"adapter\":\"transformers-cpu/v1\",\"add_generation_prompt\":true,\"dtype\":\"bfloat16\",\"generation\":{\"do_sample\":false,\"max_new_tokens\":96,\"num_beams\":1},\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":1,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"11/12\\\",\\\"version\\\":\\\"run/18\\\"}}\",\"role\":\"user\"}],\"model\":\"Qwen/Qwen2.5-1.5B-Instruct\",\"revision\":\"989aa7980e4cf806f80c7fef2b1adb7bc71aa306\"}",
+      "roundtrip_us": 6211628,
+      "source_ids": [
+        3
+      ],
+      "sources": [
+        "run/18"
+      ],
+      "store": "original",
+      "task": "ci-judgment"
+    },
+    {
+      "attempt": 6,
+      "charge_delta": 193,
+      "disposition": "accepted",
+      "generation_us": 9440247,
+      "input_tokens": 145,
+      "judgment_attempt": 5,
+      "judgment_origin": 5,
+      "origin_attempt": 6,
+      "output": "{\n  \"release\": \"R42\",\n  \"target\": \"canary\",\n  \"approval\": \"C42-B\",\n  \"tests\": \"11/12\",\n  \"action\": \"hold\"\n}",
+      "output_tokens": 48,
+      "path": "dispatch",
+      "phase": "report_replaced",
+      "request_utf8": "{\"adapter\":\"transformers-cpu/v1\",\"add_generation_prompt\":true,\"dtype\":\"bfloat16\",\"generation\":{\"do_sample\":false,\"max_new_tokens\":96,\"num_beams\":1},\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/18\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"C42-B\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"canary\\\",\\\"version\\\":\\\"policy/v2\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"fail\\\",\\\"tests\\\":\\\"11/12\\\"}}\",\"role\":\"user\"}],\"model\":\"Qwen/Qwen2.5-1.5B-Instruct\",\"revision\":\"989aa7980e4cf806f80c7fef2b1adb7bc71aa306\"}",
+      "roundtrip_us": 9441502,
+      "source_ids": [
+        4,
+        3
+      ],
+      "sources": [
+        "policy/v2",
+        "run/18"
+      ],
+      "store": "original",
+      "task": "release-plan"
+    }
+  ],
+  "mode": "live",
+  "summary": {
+    "fresh": {
+      "input_tokens": 326,
+      "model_calls": 2,
+      "model_generation_us": 15413512,
+      "model_roundtrip_us": 15416663,
+      "output_tokens": 78,
+      "reuse_hits": 0,
+      "route_us": 15417791
+    },
+    "identical_repair_and_fresh_requests": true,
+    "initial": {
+      "input_tokens": 326,
+      "model_calls": 2,
+      "model_generation_us": 15546757,
+      "model_roundtrip_us": 15782776,
+      "output_tokens": 78,
+      "reuse_hits": 0,
+      "route_us": 15783802
+    },
+    "negative_control_action": "hold",
+    "repair": {
+      "input_tokens": 145,
+      "model_calls": 1,
+      "model_generation_us": 9020198,
+      "model_roundtrip_us": 9021534,
+      "output_tokens": 48,
+      "reuse_hits": 1,
+      "route_us": 9022338
+    },
+    "repair_target": "canary",
+    "report_replaced": {
+      "input_tokens": 326,
+      "model_calls": 2,
+      "model_generation_us": 15650599,
+      "model_roundtrip_us": 15653130,
+      "output_tokens": 78,
+      "reuse_hits": 0,
+      "route_us": 15654212
+    }
+  }
+}
