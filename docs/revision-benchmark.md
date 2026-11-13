@@ -130,3 +130,18 @@ Environment: GitHub-hosted Linux x86-64, AMD EPYC 9V74, ext4, runner image `ubun
 ## Measuring registration and readback separately
 
 On the 1,024-rule sparse fixture, bulk rule publication took a median 134.401 ms and the 1,024 initial persisted verdict reads took 15.511 ms. The two operations were measured within each registration phase on an AMD EPYC 9V45 runner. Publication includes branch, dependency, provenance and usage writes as well as membership queries. The 6,144 premise checks share 517 distinct evidence occurrences on this fixture, which motivates testing transaction-local reuse of membership lookups. [Instrumented run](https://github.com/k2jac9/kairotensor/actions/runs/43486844932) · [Raw phase measurements](benchmarks/registration-phases-2026-11-13.csv).
+
+### Admission lookup reuse during bulk publication
+
+During one bulk publication transaction, all rules use the same actor, scope and admission snapshot. The publisher can look up each distinct occurrence once and reuse both present and absent membership results. The index, accepted heads, occurrence-level dependencies and logical premise charges keep their usual semantics. The cache is discarded before the next transaction.
+
+The matched experiment alternated which release binary ran first across six pairs on one Intel Xeon Platinum 8573C runner. Each binary ran the same 1,024-rule, 128-sparse-edit fixture through the single-item production, bulk production and scan implementations. For the bulk arm, the verified fixture has 6,144 logical premise checks and 517 unique occurrence IDs. Timing covers the real publication and separate persisted verdict reads.
+
+| Bulk arm, median milliseconds | Instrumented control | With cached membership |
+| --- | ---: | ---: |
+| Rule publication | 196.47 | 62.73 |
+| Initial verdict reads | 15.90 | 15.97 |
+| Registration including adapter overhead | 212.49 | 79.39 |
+| End to end including edits | 442.34 | 301.39 |
+
+The median paired publication speedup was 3.12× (range 3.01–3.17×). All six pairs improved. The end-to-end median paired gain was 1.44×. The full scan still had a lower end-to-end median (169.96 ms on the candidate build) and has a lighter publication-history contract. Workloads with mostly distinct premises may see little reuse. These paired timings use a different runner from the registration split above. [Matched workflow](https://github.com/k2jac9/kairotensor/actions/runs/43487414598) · [All matched samples](benchmarks/membership-cache-2026-11-13.csv).
