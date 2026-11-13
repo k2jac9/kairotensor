@@ -3,7 +3,7 @@
 mod attempts;
 mod support;
 pub use attempts::{CapturedInputs, Current, Disposition};
-pub use support::SupportRevision;
+pub use support::{SupportRegistration, SupportRevision};
 
 use rusqlite::{
     ffi, params, Connection, Error, OptionalExtension, Result, Transaction, TransactionBehavior,
@@ -14,6 +14,7 @@ use std::time::Duration;
 // "KTSM", stored in the SQLite header.
 const APPLICATION_ID: i32 = 0x4b54_534d;
 const SCHEMA_VERSION: i32 = 2;
+const INSERT_OBSERVATION: &str = "INSERT INTO evidence(source, payload) VALUES (?1, ?2)";
 
 /// A local trusted runtime owns the database and supplies authenticated actor/scope names.
 pub struct Store {
@@ -68,11 +69,57 @@ impl Store {
 
     /// Record one acquisition. Repeated acquisitions, even of the same bytes, get new IDs.
     pub fn observe(&self, source: &str, payload: &[u8]) -> Result<i64> {
-        self.conn.execute(
-            "INSERT INTO evidence(source, payload) VALUES (?1, ?2)",
-            params![source, payload],
-        )?;
-        Ok(self.conn.last_insert_rowid())
+        self.conn.prepare_cached(INSERT_OBSERVATION)?.insert(params![source, payload])
+    }
+
+    /// Acquire and admit fresh observations for one actor and scope in one transaction.
+    /// Returned IDs and admission events follow input order. Repeating a successful
+    /// call records new occurrences, including for identical sources and payloads.
+    /// Support indexes are updated immediately; changed heads can be revised separately.
+    pub fn observe_and_admit_many(
+        &mut self,
+        actor: &str,
+        scope: &str,
+        observations: &[(&str, &[u8])],
+    ) -> Result<Vec<i64>> {
+        validate_view(actor, scope)?;
+        if observations.is_empty() {
+            return Ok(Vec::new());
+        }
+        let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let mut epoch = view_epoch(&tx, actor, scope)?;
+        let mut ids = Vec::with_capacity(observations.len());
+        {
+            let mut insert = tx.prepare_cached(INSERT_OBSERVATION)?;
+            for &(source, payload) in observations {
+                let id = insert.insert(params![source, payload])?;
+                // A fresh occurrence has no earlier admission in any view.
+                epoch = append_admission(&tx, actor, scope, id, true, epoch)?;
+                ids.push(id);
+            }
+        }
+        tx.commit()?;
+        Ok(ids)
+    }
+
+    /// Admit existing occurrences atomically in input order. Only effective grants
+    /// advance the view epoch. An unknown ID aborts the entire batch. As with
+    /// `set_admitted`, readers of a changed support verdict must revise its head.
+    pub fn admit_many(
+        &mut self,
+        actor: &str,
+        scope: &str,
+        evidence_ids: &[i64],
+    ) -> Result<()> {
+        validate_view(actor, scope)?;
+        if evidence_ids.is_empty() {
+            return Ok(());
+        }
+        let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        for &id in evidence_ids {
+            let _ = change_admission(&tx, actor, scope, id, true)?;
+        }
+        tx.commit()
     }
 
     /// Change an observation's visibility for exactly one actor and scope.
@@ -114,6 +161,13 @@ impl Store {
     }
 }
 
+fn validate_view(actor: &str, scope: &str) -> Result<()> {
+    if actor.is_empty() || scope.is_empty() {
+        return Err(invalid("actor and scope must be nonempty"));
+    }
+    Ok(())
+}
+
 /// Apply an effective membership change and return its epoch to the writer.
 /// Repeating the current membership leaves the journal and projections alone.
 fn change_admission(
@@ -123,9 +177,7 @@ fn change_admission(
     evidence: i64,
     admitted: bool,
 ) -> Result<Option<i64>> {
-    if actor.is_empty() || scope.is_empty() {
-        return Err(invalid("actor and scope must be nonempty"));
-    }
+    validate_view(actor, scope)?;
     tx.query_row(
         "SELECT 1 FROM evidence WHERE id = ?1",
         [evidence],
@@ -134,16 +186,29 @@ fn change_admission(
     if is_admitted(tx, actor, scope, evidence)? == admitted {
         return Ok(None);
     }
-    let epoch = view_epoch(tx, actor, scope)?
+    let previous = view_epoch(tx, actor, scope)?;
+    append_admission(tx, actor, scope, evidence, admitted, previous).map(Some)
+}
+
+/// Record a known state transition. The caller owns the writer lock and the
+/// previous epoch of this view.
+fn append_admission(
+    tx: &Transaction<'_>,
+    actor: &str,
+    scope: &str,
+    evidence: i64,
+    admitted: bool,
+    previous: i64,
+) -> Result<i64> {
+    let epoch = previous
         .checked_add(1)
         .ok_or_else(|| invalid("view epoch exhausted"))?;
-    tx.execute(
+    tx.prepare_cached(
         "INSERT INTO admission_events(actor, scope, epoch, evidence_id, admitted)
          VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![actor, scope, epoch, evidence, admitted],
-    )?;
+    )?.execute(params![actor, scope, epoch, evidence, admitted])?;
     support::on_admission(tx, actor, scope, evidence, admitted)?;
-    Ok(Some(epoch))
+    Ok(epoch)
 }
 
 pub(crate) fn view_epoch(db: &Connection, actor: &str, scope: &str) -> Result<i64> {

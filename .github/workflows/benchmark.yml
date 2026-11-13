@@ -1,6 +1,12 @@
 name: Benchmark selective revision
 on:
   workflow_dispatch:
+    inputs:
+      suite:
+        description: Benchmark comparison
+        type: choice
+        default: setup
+        options: [setup, revision]
   push:
     branches: ['bench/**']
     paths:
@@ -34,7 +40,11 @@ jobs:
       - name: Compile benchmark
         run: cargo build --release --example revision_bench
       - name: Measure and check matched samples
+        env:
+          SUITE: ${{ inputs.suite || 'setup' }}
         run: |
-          target/release/examples/revision_bench > revision-samples.csv
+          args=()
+          if [[ "$SUITE" == setup ]]; then args=(setup); fi
+          target/release/examples/revision_bench "${args[@]}" > revision-samples.csv
           cat revision-samples.csv
           python3 scripts/summarize_revision_bench.py revision-samples.csv | tee -a "$GITHUB_STEP_SUMMARY"

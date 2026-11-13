@@ -17,11 +17,14 @@ PAIR_HEADER = (
 TRIPLE_HEADER = ["order" if field == "first" else field for field in PAIR_HEADER]
 PAIR_ARMS = ("indexed", "scan")
 TRIPLE_ARMS = ("indexed", "batch", "scan")
+SETUP_ARMS = ("batch", "bulk", "scan")
 
 
 @dataclass(frozen=True)
 class Sample:
     order: tuple[str, ...]
+    seed_us: int
+    register_us: int
     setup_us: int
     edit_us: int
     total_us: int
@@ -36,7 +39,9 @@ def read_cells(stream):
     if header == PAIR_HEADER:
         arms = PAIR_ARMS
     elif header == TRIPLE_HEADER:
-        arms = TRIPLE_ARMS
+        # Both matched triplet suites use this header. The first full order
+        # identifies the suite; subsequent orders must contain the same arms.
+        arms = None
     else:
         raise ValueError("unexpected CSV header; expected a paired 'first' or triplet 'order' header")
     trials = defaultdict(dict)
@@ -47,8 +52,6 @@ def read_cells(stream):
             raise ValueError(f"CSV row {reader.line_num}: expected {len(header)} fields")
         row = dict(zip(header, fields))
         scenario, arm = row["scenario"], row["arm"]
-        if scenario not in ("sparse", "dense") or arm not in arms:
-            raise ValueError(f"CSV row {reader.line_num}: unknown scenario or arm")
         if arms == PAIR_ARMS:
             first = row["first"]
             if first not in arms:
@@ -56,8 +59,12 @@ def read_cells(stream):
             order = (first, next(other for other in arms if other != first))
         else:
             order = tuple(row["order"].split("/"))
+            if arms is None:
+                arms = SETUP_ARMS if "bulk" in order else TRIPLE_ARMS
             if len(order) != len(arms) or set(order) != set(arms):
                 raise ValueError(f"CSV row {reader.line_num}: order must be a permutation of {arms}")
+        if scenario not in ("sparse", "dense") or arm not in arms:
+            raise ValueError(f"CSV row {reader.line_num}: unknown scenario or arm")
         numbers = {}
         for name in ("rules", "edits", "trial", *header[6:]):
             value = row[name]
@@ -74,7 +81,8 @@ def read_cells(stream):
         key = (scenario, numbers["rules"], numbers["edits"], numbers["trial"])
         if arm in trials[key]:
             raise ValueError(f"duplicate {arm} sample for {key}")
-        trials[key][arm] = Sample(order, setup, edits, total, numbers["db_bytes"], numbers["changes"])
+        trials[key][arm] = Sample(order, numbers["seed_us"], numbers["register_us"], setup,
+                                  edits, total, numbers["db_bytes"], numbers["changes"])
     if not trials:
         raise ValueError("no benchmark samples")
     cells = defaultdict(list)
@@ -84,7 +92,7 @@ def read_cells(stream):
         samples = tuple(trial[arm] for arm in arms)
         if any(s.order != samples[0].order or s.changes != samples[0].changes for s in samples):
             raise ValueError(f"arm order or change count differs within trial {key}")
-        if arms == TRIPLE_ARMS and tuple(trial) != samples[0].order:
+        if header == TRIPLE_HEADER and tuple(trial) != samples[0].order:
             raise ValueError(f"observed row order differs from declared execution order for {key}")
         cells[key[:3]].append(samples)
     return arms, cells
@@ -94,7 +102,43 @@ def ratio_range(ratios):
     return f"{median(ratios):.3f} [{min(ratios):.3f}, {max(ratios):.3f}]"
 
 
+def setup_summary(cells):
+    lines = [
+        "Batch and bulk both use atomic edits. Batch seeds and registers one item at a time. "
+        "Bulk uses the bulk setup APIs. Scan uses the full-scan baseline. "
+        "Setup includes opening the database, seeding evidence, and registering rules. "
+        "Phase durations and database sizes are medians.",
+        "",
+        "| Scenario | Rules | Edits | Arm | Seed ms | Register ms | Setup ms | Edit ms | Total ms | Database KiB |",
+        "| --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    ratios = [
+        "Speed ratios are measured within each matched trial and reported as median [min, max]. "
+        "Values above 1 favor bulk. A zero measured setup time makes the setup ratio unavailable.",
+        "",
+        "| Scenario | Rules | Edits | Triplets | Batch / bulk setup | Batch / bulk total | Scan / bulk total |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for (scenario, size, edits), trials in sorted(cells.items()):
+        for arm, samples in zip(SETUP_ARMS, zip(*trials)):
+            durations = [median(getattr(s, field) for s in samples) / 1000
+                         for field in ("seed_us", "register_us", "setup_us", "edit_us", "total_us")]
+            kib = median(s.db_bytes for s in samples) / 1024
+            metrics = " | ".join(f"{n:.3f}" for n in [*durations, kib])
+            lines.append(f"| {scenario} | {size} | {edits} | {arm} | {metrics} |")
+        setup_ratio = "n/a"
+        if all(b.setup_us and u.setup_us for b, u, _ in trials):
+            setup_ratio = ratio_range([b.setup_us / u.setup_us for b, u, _ in trials])
+        batch_total = ratio_range([b.total_us / u.total_us for b, u, _ in trials])
+        scan_total = ratio_range([s.total_us / u.total_us for _, u, s in trials])
+        ratios.append(f"| {scenario} | {size} | {edits} | {len(trials)} | {setup_ratio} | "
+                      f"{batch_total} | {scan_total} |")
+    return "\n".join([*lines, "", *ratios])
+
+
 def format_summary(arms, cells):
+    if arms == SETUP_ARMS:
+        return setup_summary(cells)
     if arms == PAIR_ARMS:
         description = (
             "I = indexed and S = full scan. Times and file sizes are medians. "

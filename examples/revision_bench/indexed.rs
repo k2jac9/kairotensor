@@ -1,4 +1,4 @@
-use kairotensor::{Current, Store};
+use kairotensor::{Current, Store, SupportRegistration};
 use rusqlite::Result;
 use std::collections::HashMap;
 use std::path::Path;
@@ -7,14 +7,15 @@ const ACTOR: &str = "benchmark";
 const SCOPE: &str = "fixture";
 
 #[derive(Clone, Copy)]
-pub enum EditMode {
+pub enum IndexedMode {
     PerBranch,
     Atomic,
+    BulkSetup,
 }
 
 pub struct Indexed {
     store: Store,
-    mode: EditMode,
+    mode: IndexedMode,
     // Rule position and last accepted attempt for each production branch name.
     branches: HashMap<String, (usize, i64)>,
 }
@@ -28,7 +29,7 @@ fn read_verdict(store: &mut Store, branch: &str) -> Result<bool> {
 }
 
 impl Indexed {
-    pub fn open(path: &Path, mode: EditMode) -> Result<Self> {
+    pub fn open(path: &Path, mode: IndexedMode) -> Result<Self> {
         Ok(Self {
             store: Store::open(path)?,
             mode,
@@ -70,6 +71,15 @@ impl Indexed {
 
 impl super::Backend for Indexed {
     fn seed(&mut self, evidence_count: usize) -> Result<()> {
+        if matches!(self.mode, IndexedMode::BulkSetup) {
+            let observations = vec![("fixture", &b""[..]); evidence_count];
+            let ids = self.store.observe_and_admit_many(ACTOR, SCOPE, &observations)?;
+            assert_eq!(ids.len(), evidence_count);
+            for (position, id) in ids.into_iter().enumerate() {
+                assert_eq!(usize::try_from(id).ok(), Some(position + 1));
+            }
+            return Ok(());
+        }
         for ordinal in 1..=evidence_count {
             let id = self.store.observe("fixture", b"")?;
             assert_eq!(
@@ -84,10 +94,24 @@ impl super::Backend for Indexed {
 
     fn register(&mut self, rules: &[Vec<Vec<i64>>]) -> Result<Vec<bool>> {
         assert!(self.branches.is_empty(), "benchmark rules are registered once");
-        let mut initial = Vec::with_capacity(rules.len());
-        for (position, rule) in rules.iter().enumerate() {
-            let branch = position.to_string();
-            let head = self.store.publish_support(ACTOR, SCOPE, &branch, rule)?;
+        let branches: Vec<String> = (0..rules.len()).map(|position| position.to_string()).collect();
+        let heads = if matches!(self.mode, IndexedMode::BulkSetup) {
+            let declarations: Vec<_> = branches.iter().zip(rules).map(|(branch, rule)| {
+                SupportRegistration { branch: branch.as_str(), alternatives: rule.as_slice() }
+            }).collect();
+            self.store.publish_support_many(ACTOR, SCOPE, &declarations)?
+        } else {
+            let mut heads = Vec::with_capacity(rules.len());
+            for (branch, rule) in branches.iter().zip(rules) {
+                heads.push(self.store.publish_support(ACTOR, SCOPE, branch, rule)?);
+            }
+            heads
+        };
+        assert_eq!(heads.len(), branches.len());
+        let mut initial = Vec::with_capacity(heads.len());
+        for (position, (branch, head)) in branches.into_iter().zip(heads).enumerate() {
+            // Registration creates the first attempts in this fresh benchmark DB.
+            assert_eq!(usize::try_from(head).ok(), Some(position + 1));
             initial.push(read_verdict(&mut self.store, &branch)?);
             self.branches.insert(branch, (position, head));
         }
@@ -96,8 +120,8 @@ impl super::Backend for Indexed {
 
     fn edit(&mut self, id: i64, admitted: bool) -> Result<Vec<(usize, bool)>> {
         let mut changed = match self.mode {
-            EditMode::PerBranch => self.per_branch_edit(id, admitted)?,
-            EditMode::Atomic => self.atomic_edit(id, admitted)?,
+            IndexedMode::PerBranch => self.per_branch_edit(id, admitted)?,
+            IndexedMode::Atomic | IndexedMode::BulkSetup => self.atomic_edit(id, admitted)?,
         };
         // SQLite orders branch names as text. All benchmark arms emit changes
         // in numeric rule order so the driver can compare the complete stream.

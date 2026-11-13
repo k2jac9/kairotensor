@@ -18,6 +18,15 @@ To run a single cell, supply the scenario, number of rules, number of edits, and
 target/release/examples/revision_bench sparse 128 32 6
 ```
 
+The `setup` suite compares production atomic edits with single-item setup (`batch`), the same edit path with bulk setup (`bulk`), and the batched full scan (`scan`). Both production arms register identical rules, check the same current verdicts and perform the same subsequent edits. The bulk arm acquires and admits all fixture observations in one transaction, then publishes the catalogue in another. Setup comprises database open, evidence seeding, rule registration and the initial verdict reads. The benchmark records these phase boundaries on each run.
+
+```sh
+target/release/examples/revision_bench setup > setup-samples.csv
+python3 scripts/summarize_revision_bench.py setup-samples.csv
+# Run only the largest sparse workload
+target/release/examples/revision_bench setup sparse 1024 128 6
+```
+
 ## What is compared
 
 | | Per-branch indexed | Atomic indexed batch | Full scan |
