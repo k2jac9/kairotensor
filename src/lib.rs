@@ -15,7 +15,7 @@ use std::time::Duration;
 
 // "KTSM", stored in the SQLite header.
 const APPLICATION_ID: i32 = 0x4b54_534d;
-const SCHEMA_VERSION: i32 = 4;
+const SCHEMA_VERSION: i32 = 5;
 const INSERT_OBSERVATION: &str = "INSERT INTO evidence(source, payload) VALUES (?1, ?2)";
 
 /// A local trusted runtime owns the database and supplies authenticated actor/scope names.
@@ -67,6 +67,9 @@ impl Store {
         }
         if version < 4 {
             tx.execute_batch(include_str!("model_reuse.sql"))?;
+        }
+        if version < 5 {
+            tx.execute_batch(include_str!("validation.sql"))?;
         }
         if version < SCHEMA_VERSION {
             tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
