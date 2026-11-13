@@ -55,3 +55,23 @@ In the 1,024-rule sparse workload only two queries depended on each edit and one
 These results motivated testing a batched production path that preserves the existing head, provenance, and accounting contracts.
 
 Environment: GitHub-hosted Linux x86-64, AMD EPYC 7763, ext4, runner image `ubuntu26 20261111.196.1`, Rust 1.99.1 and bundled SQLite 3.46.0. Measurements came from benchmark commit `1caea4f`. [CI run](https://github.com/k2jac9/kairotensor/actions/runs/43472340750) · [Raw paired samples](benchmarks/revision-2026-11-13.csv).
+
+## Atomic production path, 13 November 2026
+
+The atomic production path reduced edit time in all 30 matched comparisons with the per-branch API in the run below. With 128 rules and 32 dense edits, the median within-trial edit speedup was 13.46× (range 13.24–13.56×). The median edit phase fell from 1,972.5 ms to 146.7 ms. At 1,024 rules and 128 sparse edits, the median within-trial speedup was 1.40× (range 1.34–1.68×).
+
+I = per-branch indexed, B = atomic batch, S = full scan. Times and database sizes are medians. Ratios are calculated within each trial and reported as median [min, max]. Values above 1 favor batch. An edit ratio is unavailable for zero edits or a zero-microsecond edit time in either indexed arm.
+
+| Scenario | Rules | Edits | Triplets | Setup ms (I / B / S) | Edit ms (I / B / S) | Total ms (I / B / S) | I / B edit | S / B total | Database KiB (I / B / S) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| dense | 128 | 1 | 6 | 226.668 / 231.425 / 3.033 | 62.100 / 4.580 / 0.725 | 293.450 / 236.067 / 3.769 | 13.676 [12.080, 15.952] | 0.016 [0.015, 0.097] | 140.000 / 140.000 / 32.000 |
+| dense | 128 | 32 | 6 | 226.686 / 221.019 / 2.959 | 1972.508 / 146.650 / 24.859 | 2198.191 / 369.123 / 27.755 | 13.460 [13.244, 13.563] | 0.075 [0.073, 0.102] | 280.000 / 280.000 / 56.000 |
+| sparse | 128 | 1 | 6 | 238.065 / 242.812 / 2.949 | 1.718 / 1.055 / 0.684 | 239.931 / 243.948 / 3.738 | 1.731 [1.382, 1.918] | 0.016 [0.012, 0.017] | 132.000 / 132.000 / 32.000 |
+| sparse | 128 | 32 | 6 | 231.900 / 233.962 / 3.084 | 57.136 / 30.514 / 22.049 | 292.346 / 263.330 / 25.122 | 1.898 [1.673, 2.598] | 0.094 [0.087, 0.106] | 140.000 / 140.000 / 32.000 |
+| sparse | 1024 | 128 | 6 | 2473.183 / 2477.150 / 8.067 | 258.505 / 189.174 / 101.647 | 2736.232 / 2660.274 / 109.905 | 1.397 [1.344, 1.682] | 0.041 [0.040, 0.046] | 708.000 / 708.000 / 136.000 |
+
+The batched full scan still had the lowest end-to-end time in all 30 trials and returned the same verdicts. In the largest sparse cell, median setup for the atomic indexed path was 2,477 ms, followed by 189 ms for the edits. Its separate median seed and registration times were 706 ms and 1,773 ms. This points to bulk evidence admission and rule registration as the next optimization to measure. Both production arms used the same registration code and had the same final database size in each cell.
+
+All comparisons above use measurements collected together on the same runner. An earlier pre-merge measurement on another runner also favored batch on median edit time in each of the five cells, with greater variation in the sparse cases. These are synthetic single-writer workloads. Simultaneous reader or writer throughput and tail latency require separate measurement.
+
+Environment for the reported run: GitHub-hosted Linux x86-64, Intel Xeon Platinum 8370C, ext4, runner image `ubuntu26 20261111.196.1`, Rust 1.99.1, SQLite 3.46.0, benchmark commit `5d699c4`. [Measured CI run](https://github.com/k2jac9/kairotensor/actions/runs/43476626433) · [All 90 raw timings](benchmarks/atomic-revision-2026-11-13.csv) · [Earlier run](https://github.com/k2jac9/kairotensor/actions/runs/43476460487).

@@ -54,4 +54,4 @@ python3 -m unittest discover -s reference -p test_memory.py
 python3 reference/belief_oracle.py
 ```
 
-The first benchmark compared the indexed production path with a batched full scan on matched sparse and shared-evidence edits. The full scan finished sooner in all 30 pairs with identical answers. The benchmark now includes the atomic production API alongside per-branch revision and the full scan. [Benchmark, measurements, and reproduction commands](docs/revision-benchmark.md)
+On the three-way benchmark, atomic revision reduced median edit time by 13.46× for 32 dense edits on 128 rules, compared with the per-branch API. For 128 sparse edits on 1,024 rules, the corresponding gain was 1.40×. The batched full scan still had the lowest total time in all 30 matched trials. Bulk evidence seeding and rule registration are the next costs to measure. [Benchmark, measurements, and reproduction commands](docs/revision-benchmark.md)
