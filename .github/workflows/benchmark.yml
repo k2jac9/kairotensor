@@ -1,0 +1,40 @@
+name: Benchmark selective revision
+on:
+  workflow_dispatch:
+  push:
+    branches: ['bench/**']
+    paths:
+      - 'src/**'
+      - 'examples/revision_bench.rs'
+      - 'examples/revision_bench/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'scripts/summarize_revision_bench.py'
+      - '.github/workflows/benchmark.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Record the environment
+        run: |
+          rustc -Vv
+          cargo -V
+          uname -srmo
+          lscpu | grep -E '^(Architecture|CPU\(s\)|Model name):'
+          df -T "${TMPDIR:-/tmp}"
+          echo "Runner image $ImageOS $ImageVersion"
+      - name: Compile benchmark
+        run: cargo build --release --example revision_bench
+      - name: Measure and check paired samples
+        run: |
+          target/release/examples/revision_bench > revision-samples.csv
+          cat revision-samples.csv
+          python3 scripts/summarize_revision_bench.py revision-samples.csv | tee -a "$GITHUB_STEP_SUMMARY"
