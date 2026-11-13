@@ -1,14 +1,6 @@
 name: Evaluate output token caps
 on:
   workflow_dispatch:
-  push:
-    branches: ['feat/token-preflight']
-    paths:
-      - 'scripts/handoff_model.py'
-      - 'examples/corrected_handoff/adapter.rs'
-      - 'examples/token_cap_eval.rs'
-      - 'examples/token_cap_eval/**'
-      - '.github/workflows/token-caps.yml'
 permissions:
   contents: read
 jobs:

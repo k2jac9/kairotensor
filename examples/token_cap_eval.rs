@@ -137,7 +137,7 @@ fn trial(case: Case, cap: u64, order: usize, store: &mut Store, worker: &mut Ada
     let ids = store.observe_and_admit_many(ACTOR, SCOPE, &[(case.id, report.as_slice())])?;
     let budget = store.create_token_budget(LIMIT)?;
     *row = json!({"case_id":case.id,"family":case.family,"split":case.split,"trial_order":order,
-        "cap":cap,"budget_limit":LIMIT,"deadline_ms":DEADLINE_MS,"report":case.report(),
+        "cap":cap,"budget_limit":LIMIT,"budget_id":budget,"deadline_ms":DEADLINE_MS,"report":case.report(),
         "dispatched":false,"valid":false,"correct":false,"success":false,"on_time":false,
         "input_tokens":0,"output_tokens":0,"charged_tokens":0,"reserved_tokens":0,
         "hit_cap":false,"ended_eos":false,"disposition":"pending","reason":null});
@@ -165,6 +165,11 @@ fn trial(case: Case, cap: u64, order: usize, store: &mut Store, worker: &mut Ada
     } else {
         row["dispatched"] = json!(true);
         row["reserved_tokens"] = json!(input + cap);
+        // A send can fail after inference started. No usage is known until the
+        // measured response arrives. The store retains the outstanding hold.
+        row["input_tokens"] = Value::Null;
+        row["output_tokens"] = Value::Null;
+        row["charged_tokens"] = Value::Null;
         let response = worker.generate_prepared(prepared)?;
         let reply = response.reply;
         let input_observed = reply.input_tokens.ok_or("missing live input token count")?;
@@ -239,6 +244,15 @@ fn main() -> Result<()> {
                     let mut store = Store::open(tmp.0.join(format!("{}-{cap}.sqlite",case.id)))?;
                     let mut row = Value::Null;
                     let measured = trial(case, cap, order, &mut store, &mut model, &mut row);
+                    if let Err(error) = &measured {
+                        row["operational_error"] = json!(error.to_string());
+                        if let Some(id) = row["budget_id"].as_i64() {
+                            if let Ok(state) = store.token_budget_state(id) {
+                                row["outstanding_after"] = json!(state.reserved);
+                                row["spent_after"] = json!(state.spent);
+                            }
+                        }
+                    }
                     trace["samples"].as_array_mut().unwrap().push(row);
                     measured?;
                 }
