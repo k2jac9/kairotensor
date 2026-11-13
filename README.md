@@ -51,6 +51,4 @@ python3 -m unittest discover -s reference -p test_memory.py
 python3 reference/belief_oracle.py
 ```
 
-The next research question is whether the indexed revision path reduces end-to-end work on realistic edit workloads once index construction and maintenance are included. Additional deterministic rules and model adapters can use this implementation as a baseline.
-
-The [paired revision benchmark](docs/revision-benchmark.md) compares the production indexed path with a batched full scan, including setup, maintenance, and publication costs.
+The first benchmark compared the indexed production path with a batched full scan on matched sparse and shared-evidence edits. The full scan finished sooner in all 30 pairs with identical answers. The next experiment is to batch production writes while preserving the attempt history and per-branch validation. [Benchmark, measurements, and reproduction commands](docs/revision-benchmark.md)
