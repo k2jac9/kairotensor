@@ -22,3 +22,15 @@ cargo run --release --example scoped_model_reuse -- --live --trace reuse-live.js
 ```
 
 The first command uses a deterministic adapter. The second uses the pinned CPU model from the [corrected handoff example](corrected-handoff.md#run), which lists the Python dependencies. Inspect the trace for the fresh, reused and negative-control operations.
+
+## Evaluation design
+
+The bootstrap uses a policy authorizing staging and a test report reporting 12/12 passed. The report and its initially unadmitted replacement are the report judgment's fixed candidate list. Deployment policy is an input only to the planner. Both model tasks use strict typed checklists. A model response with the wrong field, duplicate key, or unexpected key fails validation.
+
+The repair withdraws the old policy and admits a new canary policy in a controlled single-writer scenario. The fresh route uses a separate store with the same revised policy, admitted report and unadmitted replacement. Both routes require identical model-visible requests and the same validated plan. The negative control withdraws the passing report and admits its replacement with 11/12 passed. It must generate a new judgment and hold the release.
+
+Marginal route timing starts after preparing each evidence view and covers the two tasks through publication. The bootstrap and negative control have separate metrics. A reuse event records its origin attempt and zero new model tokens. Its lookup and validation still take application time.
+
+## Initial live evaluation
+
+In the first live Qwen run, the repaired route reused its passing report judgment and produced the same canary plan as fresh execution. Replacing the report forced a fresh call as required. The model copied the new `11/12` count but incorrectly labeled its status `pass`. The validator stopped publication and the experiment exited before generating a plan from the invalid judgment. The trace records the unsuccessful response and its measured usage; this invalid attempt remained unsettled under the store's existing dispositions. The revised extraction prompt gives balanced examples of passing and failing reports. The report data, Qwen checkpoint and strict output check are unchanged. [First run](https://github.com/k2jac9/kairotensor/actions/runs/43490325882) · [First trace](evaluations/scoped-reuse-first-qwen-2026-11-13.json).

@@ -14,13 +14,17 @@ const ACTOR: &str = "release-planner";
 const SCOPE: &str = "R42";
 const REPORT_BRANCH: &str = "ci-judgment";
 const PLAN_BRANCH: &str = "release-plan";
-const CONTRACT: &str = "ci-report-extractor/1+strict-verdict-validator/1";
+const CONTRACT: &str = "ci-report-extractor/2+strict-verdict-validator/1";
 const BEFORE: &[u8] = br#"{"version":"policy/v1","release":"R42","target":"staging","approval":"S42-A"}"#;
 const AFTER: &[u8] = br#"{"version":"policy/v2","release":"R42","target":"canary","approval":"C42-B"}"#;
 const GREEN: &[u8] = br#"{"version":"run/17","release":"R42","test_summary":"12/12","failing_cases":0}"#;
 const RED: &[u8] = br#"{"version":"run/18","release":"R42","test_summary":"11/12","failing_cases":1}"#;
-const REPORT_PROMPT: &str = "Read ci_report. Return only a JSON object with three string fields: release, tests, status. Copy release. Copy test_summary as tests. Set status to pass if failing_cases is zero, otherwise fail. No other keys or explanation.";
-const PLAN_PROMPT: &str = "Return only a JSON deployment plan with five string fields: release, target, approval, tests, action. Copy release, target and approval from requirement. Copy tests from test_certificate. Use action deploy for status pass, or hold for status fail. No other keys or explanation.";
+// The same balanced examples are shown for every run and release.
+const REPORT_PROMPT: &str = r#"Extract the release test verdict. Even ONE failing case makes the entire verdict "fail".
+CI example A: {"release":"EX1","test_summary":"7/8","failing_cases":1} -> {"release":"EX1","tests":"7/8","status":"fail"}
+CI example B: {"release":"EX2","test_summary":"8/8","failing_cases":0} -> {"release":"EX2","tests":"8/8","status":"pass"}
+Read the user's ci_report. Copy release and test_summary. If failing_cases is positive use "fail"; only zero uses "pass". Return only JSON with keys release, tests, status."#;
+const PLAN_PROMPT: &str = r#"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {"status":"pass"} means {"action":"deploy"}; {"status":"fail"} means {"action":"hold"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation."#;
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
