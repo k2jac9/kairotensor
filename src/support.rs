@@ -2,6 +2,7 @@
 //! observation IDs are all admitted is a witness. Only the resulting flag can
 //! be reused under this rule. Observation payloads are never read by the rule.
 use rusqlite::{params, Connection, OptionalExtension, Result, Transaction, TransactionBehavior};
+use std::collections::{hash_map::Entry, HashMap};
 
 use crate::attempts::{accept, ensure_branch, find_branch, record_attempt, Branch};
 use crate::{change_admission, invalid, is_admitted, validate_view, view_epoch, Store};
@@ -160,12 +161,23 @@ fn changed_heads(
     Ok(changed)
 }
 
+// A bulk registration never changes admissions. Bind this cache to its single
+// actor, scope and writer transaction; both missing and visible IDs can repeat.
+fn cached_admissions(mut lookup: impl FnMut(i64) -> Result<bool>) -> impl FnMut(i64) -> Result<bool> {
+    let mut entries = HashMap::new();
+    move |id| match entries.entry(id) {
+        Entry::Occupied(hit) => Ok(*hit.get()),
+        Entry::Vacant(miss) => Ok(*miss.insert(lookup(id)?)),
+    }
+}
+
 fn register_support(
     tx: &Transaction<'_>,
     actor: &str,
     scope: &str,
     epoch: i64,
     rule: &SupportRegistration<'_>,
+    mut admitted: impl FnMut(i64) -> Result<bool>,
 ) -> Result<i64> {
     if rule.alternatives.is_empty() || rule.alternatives.iter().any(Vec::is_empty) {
         return Err(invalid("support requires at least one nonempty group and no empty groups"));
@@ -188,7 +200,7 @@ fn register_support(
             if id <= 0 {
                 return Err(invalid("an observation occurrence ID must be positive"));
             }
-            if !is_admitted(tx, actor, scope, id)? {
+            if !admitted(id)? {
                 missing += 1;
             }
         }
@@ -222,6 +234,7 @@ impl Store {
         let epoch = view_epoch(&tx, actor, scope)?;
         let attempt = register_support(
             &tx, actor, scope, epoch, &SupportRegistration { branch, alternatives },
+            |id| is_admitted(&tx, actor, scope, id),
         )?;
         tx.commit()?;
         Ok(attempt)
@@ -247,8 +260,11 @@ impl Store {
         let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let epoch = view_epoch(&tx, actor, scope)?;
         let mut attempts = Vec::with_capacity(rules.len());
-        for rule in rules {
-            attempts.push(register_support(&tx, actor, scope, epoch, rule)?);
+        {
+            let mut admitted = cached_admissions(|id| is_admitted(&tx, actor, scope, id));
+            for rule in rules {
+                attempts.push(register_support(&tx, actor, scope, epoch, rule, &mut admitted)?);
+            }
         }
         tx.commit()?;
         Ok(attempts)
@@ -324,5 +340,26 @@ impl Store {
         )?;
         let rows = stmt.query_map(params![actor, scope, evidence], |row| row.get(0))?;
         rows.collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn repeated_positive_and_negative_memberships_each_require_one_lookup() -> Result<()> {
+        let mut queried = Vec::new();
+        {
+            let mut admitted = cached_admissions(|id| {
+                queried.push(id);
+                Ok(id == 7)
+            });
+            for id in [7, 8, 8, 7, 7, 8, 9] {
+                assert_eq!(admitted(id)?, id == 7);
+            }
+        }
+        assert_eq!(queried, vec![7, 8, 9]);
+        Ok(())
     }
 }

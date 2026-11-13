@@ -15,6 +15,7 @@ PAIR_HEADER = (
     "edit_us,total_us,db_bytes,changes"
 ).split(",")
 TRIPLE_HEADER = ["order" if field == "first" else field for field in PAIR_HEADER]
+SPLIT_HEADER = TRIPLE_HEADER + ["publish_us", "initial_read_us"]
 PAIR_ARMS = ("indexed", "scan")
 TRIPLE_ARMS = ("indexed", "batch", "scan")
 SETUP_ARMS = ("batch", "bulk", "scan")
@@ -30,6 +31,8 @@ class Sample:
     total_us: int
     db_bytes: int
     changes: int
+    publish_us: int | None
+    initial_read_us: int | None
 
 
 def read_cells(stream):
@@ -38,7 +41,7 @@ def read_cells(stream):
     header = next(reader, None)
     if header == PAIR_HEADER:
         arms = PAIR_ARMS
-    elif header == TRIPLE_HEADER:
+    elif header in (TRIPLE_HEADER, SPLIT_HEADER):
         # Both matched triplet suites use this header. The first full order
         # identifies the suite; subsequent orders must contain the same arms.
         arms = None
@@ -78,11 +81,17 @@ def read_cells(stream):
         # Four independently rounded phase durations may differ by up to 2 us.
         if total + 2 < setup + edits:
             raise ValueError(f"CSV row {reader.line_num}: total_us is shorter than its phases")
+        if header == SPLIT_HEADER:
+            if numbers["publish_us"] + numbers["initial_read_us"] > numbers["register_us"]:
+                raise ValueError(f"CSV row {reader.line_num}: registration components exceed register_us")
+            if arm == "scan" and numbers["initial_read_us"] != 0:
+                raise ValueError(f"CSV row {reader.line_num}: scan has no separate timed initial read")
         key = (scenario, numbers["rules"], numbers["edits"], numbers["trial"])
         if arm in trials[key]:
             raise ValueError(f"duplicate {arm} sample for {key}")
         trials[key][arm] = Sample(order, numbers["seed_us"], numbers["register_us"], setup,
-                                  edits, total, numbers["db_bytes"], numbers["changes"])
+                                  edits, total, numbers["db_bytes"], numbers["changes"],
+                                  numbers.get("publish_us"), numbers.get("initial_read_us"))
     if not trials:
         raise ValueError("no benchmark samples")
     cells = defaultdict(list)
@@ -92,7 +101,7 @@ def read_cells(stream):
         samples = tuple(trial[arm] for arm in arms)
         if any(s.order != samples[0].order or s.changes != samples[0].changes for s in samples):
             raise ValueError(f"arm order or change count differs within trial {key}")
-        if header == TRIPLE_HEADER and tuple(trial) != samples[0].order:
+        if header != PAIR_HEADER and tuple(trial) != samples[0].order:
             raise ValueError(f"observed row order differs from declared execution order for {key}")
         cells[key[:3]].append(samples)
     return arms, cells
@@ -134,6 +143,26 @@ def setup_summary(cells):
         ratios.append(f"| {scenario} | {size} | {edits} | {len(trials)} | {setup_ratio} | "
                       f"{batch_total} | {scan_total} |")
     return "\n".join([*lines, "", *ratios])
+
+
+def registration_summary(arms, cells):
+    lines = [
+        "Publication and initial reads are nested inside registration. Other time covers the "
+        "adapter's declaration preparation and bookkeeping. The scan publishes its computed "
+        "answers in the write transaction and performs no separate timed initial read. "
+        "Values are per-arm medians in milliseconds.",
+        "",
+        "| Scenario | Rules | Edits | Arm | Publish ms | Initial reads ms | Other ms |",
+        "| --- | ---: | ---: | --- | ---: | ---: | ---: |",
+    ]
+    for (scenario, size, edits), trials in sorted(cells.items()):
+        for arm, samples in zip(arms, zip(*trials)):
+            publish = median(s.publish_us for s in samples) / 1000
+            reads = median(s.initial_read_us for s in samples) / 1000
+            other = median(s.register_us - s.publish_us - s.initial_read_us for s in samples) / 1000
+            lines.append(f"| {scenario} | {size} | {edits} | {arm} | "
+                         f"{publish:.3f} | {reads:.3f} | {other:.3f} |")
+    return "\n".join(lines)
 
 
 def format_summary(arms, cells):
@@ -198,6 +227,10 @@ def main():
             with Path(args.file).open(encoding="utf-8", newline="") as stream:
                 arms, cells = read_cells(stream)
         print(format_summary(arms, cells))
+        first_sample = next(iter(cells.values()))[0][0]
+        if first_sample.publish_us is not None:
+            print()
+            print(registration_summary(arms, cells))
     except (ValueError, csv.Error, OSError) as error:
         parser.exit(1, f"{parser.prog}: {error}\n")
 

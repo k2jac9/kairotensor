@@ -195,3 +195,38 @@ fn a_late_invalid_registration_rolls_back_retired_watches_heads_and_charges() ->
     assert!(store.support_consumers(ACTOR, SCOPE, id)?.is_empty());
     Ok(())
 }
+
+#[test]
+fn bulk_membership_results_do_not_escape_their_transaction_or_view() -> Result<()> {
+    let mut store = Store::in_memory()?;
+    let first = store.observe("A", b"a")?;
+    let future = first + 1;
+    let first_only = [vec![first]];
+    let both = [vec![first, future]];
+    let rules = [
+        registration("first", &first_only),
+        registration("both", &both),
+    ];
+    let check = |db: &mut Store, actor: &str, scope: &str, expected: [bool; 2]| -> Result<()> {
+        let before = db.charged_usage()?;
+        db.publish_support_many(actor, scope, &rules)?;
+        assert_eq!(db.charged_usage()?, before + 3);
+        for (rule, supported) in rules.iter().zip(expected) {
+            let bytes: &[u8] = if supported { b"supported" } else { b"unsupported" };
+            assert_eq!(db.read_current(actor, scope, rule.branch)?, Current::Ready(bytes.to_vec()));
+        }
+        Ok(())
+    };
+
+    store.admit_many(ACTOR, SCOPE, &[first])?;
+    check(&mut store, ACTOR, SCOPE, [true, false])?;
+    assert_eq!(store.observe("B", b"b")?, future);
+    // Presence in storage does not grant admission, and other views begin empty.
+    check(&mut store, "other", SCOPE, [false, false])?;
+    check(&mut store, ACTOR, "other", [false, false])?;
+    store.admit_many(ACTOR, SCOPE, &[future])?;
+    check(&mut store, ACTOR, SCOPE, [true, true])?;
+    store.set_admitted(ACTOR, SCOPE, first, false)?;
+    check(&mut store, ACTOR, SCOPE, [false, false])?;
+    Ok(())
+}

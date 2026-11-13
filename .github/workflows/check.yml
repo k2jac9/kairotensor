@@ -14,10 +14,11 @@ jobs:
           persist-credentials: false
       - name: Test the Rust store, including the withdrawal example
         run: cargo test --all-targets
-      - name: Run the withdrawal and selective revision examples
+      - name: Run the revision and corrected handoff examples
         run: |
           cargo run --example withdrawal
           cargo run --example selective_revision
+          cargo run --example corrected_handoff
       - name: Check the original reference contracts
         run: |
           python3 -m unittest discover -s reference -p test_memory.py

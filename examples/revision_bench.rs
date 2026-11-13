@@ -59,9 +59,17 @@ impl Arm {
     }
 }
 
+// Both durations are nested inside the existing end-to-end register phase.
+// Initial verdicts remain part of the benchmark's correctness contract.
+struct Registration {
+    initial: Vec<bool>,
+    publish: Duration,
+    initial_read: Duration,
+}
+
 trait Backend {
     fn seed(&mut self, n: usize) -> rusqlite::Result<()>;
-    fn register(&mut self, rules: &[Vec<Vec<i64>>]) -> rusqlite::Result<Vec<bool>>;
+    fn register(&mut self, rules: &[Vec<Vec<i64>>]) -> rusqlite::Result<Registration>;
     fn edit(&mut self, id: i64, admitted: bool) -> rusqlite::Result<Changes>;
     fn read_all(&mut self) -> rusqlite::Result<Vec<bool>>;
 }
@@ -93,7 +101,7 @@ impl Expected {
 // Full persisted checks run on their own file, never between timed edits.
 fn verify(mut db: Box<dyn Backend>, work: &Workload, oracle: &Expected) -> Result<()> {
     db.seed(work.evidence_count)?;
-    assert_eq!(db.register(&work.rules)?, oracle.initial);
+    assert_eq!(db.register(&work.rules)?.initial, oracle.initial);
     let mut current = oracle.initial.clone();
     assert_eq!(db.read_all()?, current);
     for (&(id, admitted), expected) in work.edits.iter().zip(&oracle.edits) {
@@ -110,6 +118,8 @@ struct Sample {
     open: Duration,
     seed: Duration,
     register: Duration,
+    publish: Duration,
+    initial_read: Duration,
     edits: Duration,
     total: Duration,
 }
@@ -118,7 +128,7 @@ fn measure(mut db: Box<dyn Backend>, work: &Workload, oracle: &Expected, start: 
     let opened = Instant::now();
     db.seed(work.evidence_count)?;
     let seeded = Instant::now();
-    let initial = db.register(&work.rules)?;
+    let registration = db.register(&work.rules)?;
     let registered = Instant::now();
     let mut observed = Vec::with_capacity(work.edits.len());
     for &(id, admitted) in &work.edits {
@@ -127,12 +137,16 @@ fn measure(mut db: Box<dyn Backend>, work: &Workload, oracle: &Expected, start: 
     let edited = Instant::now();
     drop(db);
     let total = start.elapsed();
-    assert_eq!(initial, oracle.initial);
+    assert_eq!(registration.initial, oracle.initial);
+    let register = registered - seeded;
+    assert!(registration.publish + registration.initial_read <= register);
     assert_eq!(observed, oracle.edits);
     Ok(Sample {
         open: opened - start,
         seed: seeded - opened,
-        register: registered - seeded,
+        register,
+        publish: registration.publish,
+        initial_read: registration.initial_read,
         edits: edited - registered,
         total,
     })
@@ -172,9 +186,10 @@ fn cell(dir: &Path, suite: Suite, rules: usize, edits: usize, trials: usize, den
             let start = Instant::now();
             let s = measure(arm.open(&path)?, &work, &oracle, start)?;
             let bytes = fs::metadata(&path)?.len();
-            println!("{scenario},{rules},{edits},{trial},{},{},{},{},{},{},{},{bytes},{changes}",
+            println!("{scenario},{rules},{edits},{trial},{},{},{},{},{},{},{},{bytes},{changes},{},{}",
                 order_label, arm.label(), s.open.as_micros(), s.seed.as_micros(),
-                s.register.as_micros(), s.edits.as_micros(), s.total.as_micros());
+                s.register.as_micros(), s.edits.as_micros(), s.total.as_micros(),
+                s.publish.as_micros(), s.initial_read.as_micros());
             fs::remove_file(path)?;
         }
     }
@@ -185,7 +200,7 @@ fn main() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     let scratch = Scratch::new()?;
     eprintln!("revision_bench: SQLite {}, seed {SEED}, file-backed in {}", rusqlite::version(), scratch.0.display());
-    println!("scenario,rules,edits,trial,order,arm,open_us,seed_us,register_us,edit_us,total_us,db_bytes,changes");
+    println!("scenario,rules,edits,trial,order,arm,open_us,seed_us,register_us,edit_us,total_us,db_bytes,changes,publish_us,initial_read_us");
     let (suite, args) = match args.as_slice() {
         [command, rest @ ..] if command == "setup" => (Suite::Setup, rest),
         rest => (Suite::Revision, rest),

@@ -13,7 +13,7 @@ use std::time::Duration;
 
 // "KTSM", stored in the SQLite header.
 const APPLICATION_ID: i32 = 0x4b54_534d;
-const SCHEMA_VERSION: i32 = 2;
+const SCHEMA_VERSION: i32 = 3;
 const INSERT_OBSERVATION: &str = "INSERT INTO evidence(source, payload) VALUES (?1, ?2)";
 
 /// A local trusted runtime owns the database and supplies authenticated actor/scope names.
@@ -39,11 +39,7 @@ impl Store {
         let application: i32 = tx.pragma_query_value(None, "application_id", |row| row.get(0))?;
         let version: i32 = tx.pragma_query_value(None, "user_version", |row| row.get(0))?;
         match (application, version) {
-            (APPLICATION_ID, SCHEMA_VERSION) => {}
-            (APPLICATION_ID, 1) => {
-                tx.execute_batch(include_str!("support.sql"))?;
-                tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
-            }
+            (APPLICATION_ID, 1..=SCHEMA_VERSION) => {}
             (0, 0) => {
                 let populated: bool = tx.query_row(
                     "SELECT EXISTS(SELECT 1 FROM sqlite_schema WHERE name NOT GLOB 'sqlite_*')",
@@ -57,11 +53,18 @@ impl Store {
                 }
                 tx.execute_batch(include_str!("schema.sql"))?;
                 tx.execute_batch(include_str!("attempts.sql"))?;
-                tx.execute_batch(include_str!("support.sql"))?;
                 tx.pragma_update(None, "application_id", APPLICATION_ID)?;
-                tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
             }
             _ => return Err(invalid("unrecognized database or unsupported schema version")),
+        }
+        if version < 2 {
+            tx.execute_batch(include_str!("support.sql"))?;
+        }
+        if version < 3 {
+            tx.execute_batch(include_str!("dispatch.sql"))?;
+        }
+        if version < SCHEMA_VERSION {
+            tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         }
         tx.commit()?;
         Ok(Self { conn })

@@ -1,0 +1,186 @@
+{
+  "calls": [
+    {
+      "attempt": 3,
+      "certificate": {
+        "fact": {
+          "release": "R42",
+          "tests": "12/12"
+        },
+        "report_occurrence": 2,
+        "report_version": "ci/run-17",
+        "support_attempt": 2,
+        "verification_attempt": 1,
+        "verifier": "release-fixture/check-all-12/v1"
+      },
+      "charge": 194,
+      "checklist_passed": true,
+      "checkpoint_attempt": null,
+      "disposition": "accepted",
+      "generation_us": 49798146,
+      "input_tokens": 142,
+      "output": "```json\n{\n  \"release\": \"R42\",\n  \"target\": \"staging\",\n  \"approval\": \"S42-A\",\n  \"tests\": \"12/12\",\n  \"action\": \"deploy\"\n}\n```",
+      "output_tokens": 52,
+      "phase": "initial",
+      "request_utf8": "{\"adapter\":\"transformers-cpu/v1\",\"add_generation_prompt\":true,\"dtype\":\"bfloat16\",\"generation\":{\"do_sample\":false,\"max_new_tokens\":96,\"num_beams\":1},\"messages\":[{\"content\":\"You are a deployment planner. Return exactly one JSON object with five string fields: release, target, approval, tests, action. Copy release, target and approval from requirement. Copy tests from test_certificate. For a passing certificate use action deploy. Do not add other keys or explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"requirement\\\":{\\\"approval\\\":\\\"S42-A\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"staging\\\",\\\"version\\\":\\\"policy/v1\\\"},\\\"sources\\\":[\\\"policy/v1\\\",\\\"ci/run-17\\\"],\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"tests\\\":\\\"12/12\\\"},\\\"test_verifier\\\":\\\"release-fixture/check-all-12/v1\\\"}\",\"role\":\"user\"}],\"model\":\"Qwen/Qwen2.5-1.5B-Instruct\",\"revision\":\"989aa7980e4cf806f80c7fef2b1adb7bc71aa306\"}",
+      "roundtrip_us": 49812748,
+      "source_ids": [
+        1,
+        2
+      ],
+      "source_versions": [
+        "policy/v1",
+        "ci/run-17"
+      ],
+      "store": "original"
+    },
+    {
+      "attempt": 5,
+      "certificate": {
+        "fact": {
+          "release": "R42",
+          "tests": "12/12"
+        },
+        "report_occurrence": 2,
+        "report_version": "ci/run-17",
+        "support_attempt": 2,
+        "verification_attempt": 1,
+        "verifier": "release-fixture/check-all-12/v1"
+      },
+      "charge": 254,
+      "checklist_passed": true,
+      "checkpoint_attempt": 4,
+      "disposition": "stale_view",
+      "generation_us": 64432814,
+      "input_tokens": 202,
+      "output": "```json\n{\n  \"release\": \"R42\",\n  \"target\": \"staging\",\n  \"approval\": \"S42-A\",\n  \"tests\": \"12/12\",\n  \"action\": \"deploy\"\n}\n```",
+      "output_tokens": 52,
+      "phase": "delayed",
+      "request_utf8": "{\"adapter\":\"transformers-cpu/v1\",\"add_generation_prompt\":true,\"dtype\":\"bfloat16\",\"generation\":{\"do_sample\":false,\"max_new_tokens\":96,\"num_beams\":1},\"messages\":[{\"content\":\"You are a deployment planner. Return exactly one JSON object with five string fields: release, target, approval, tests, action. Copy release, target and approval from requirement. Copy tests from test_certificate. For a passing certificate use action deploy. Do not add other keys or explanation.\",\"role\":\"system\"},{\"content\":\"old-plan checkpoint\\n```json\\n{\\n  \\\"release\\\": \\\"R42\\\",\\n  \\\"target\\\": \\\"staging\\\",\\n  \\\"approval\\\": \\\"S42-A\\\",\\n  \\\"tests\\\": \\\"12/12\\\",\\n  \\\"action\\\": \\\"deploy\\\"\\n}\\n```\",\"role\":\"assistant\"},{\"content\":\"{\\\"requirement\\\":{\\\"approval\\\":\\\"S42-A\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"staging\\\",\\\"version\\\":\\\"policy/v1\\\"},\\\"sources\\\":[\\\"policy/v1\\\",\\\"ci/run-17\\\"],\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"tests\\\":\\\"12/12\\\"},\\\"test_verifier\\\":\\\"release-fixture/check-all-12/v1\\\"}\",\"role\":\"user\"}],\"model\":\"Qwen/Qwen2.5-1.5B-Instruct\",\"revision\":\"989aa7980e4cf806f80c7fef2b1adb7bc71aa306\"}",
+      "roundtrip_us": 64434431,
+      "source_ids": [
+        1,
+        2
+      ],
+      "source_versions": [
+        "policy/v1",
+        "ci/run-17"
+      ],
+      "store": "original"
+    },
+    {
+      "attempt": 6,
+      "certificate": {
+        "fact": {
+          "release": "R42",
+          "tests": "12/12"
+        },
+        "report_occurrence": 2,
+        "report_version": "ci/run-17",
+        "support_attempt": 2,
+        "verification_attempt": 1,
+        "verifier": "release-fixture/check-all-12/v1"
+      },
+      "charge": 194,
+      "checklist_passed": true,
+      "checkpoint_attempt": null,
+      "disposition": "accepted",
+      "generation_us": 50014609,
+      "input_tokens": 142,
+      "output": "```json\n{\n  \"release\": \"R42\",\n  \"target\": \"canary\",\n  \"approval\": \"C42-B\",\n  \"tests\": \"12/12\",\n  \"action\": \"deploy\"\n}\n```",
+      "output_tokens": 52,
+      "phase": "repair",
+      "request_utf8": "{\"adapter\":\"transformers-cpu/v1\",\"add_generation_prompt\":true,\"dtype\":\"bfloat16\",\"generation\":{\"do_sample\":false,\"max_new_tokens\":96,\"num_beams\":1},\"messages\":[{\"content\":\"You are a deployment planner. Return exactly one JSON object with five string fields: release, target, approval, tests, action. Copy release, target and approval from requirement. Copy tests from test_certificate. For a passing certificate use action deploy. Do not add other keys or explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"requirement\\\":{\\\"approval\\\":\\\"C42-B\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"canary\\\",\\\"version\\\":\\\"policy/v2\\\"},\\\"sources\\\":[\\\"policy/v2\\\",\\\"ci/run-17\\\"],\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"tests\\\":\\\"12/12\\\"},\\\"test_verifier\\\":\\\"release-fixture/check-all-12/v1\\\"}\",\"role\":\"user\"}],\"model\":\"Qwen/Qwen2.5-1.5B-Instruct\",\"revision\":\"989aa7980e4cf806f80c7fef2b1adb7bc71aa306\"}",
+      "roundtrip_us": 50016877,
+      "source_ids": [
+        3,
+        2
+      ],
+      "source_versions": [
+        "policy/v2",
+        "ci/run-17"
+      ],
+      "store": "original"
+    },
+    {
+      "attempt": 3,
+      "certificate": {
+        "fact": {
+          "release": "R42",
+          "tests": "12/12"
+        },
+        "report_occurrence": 2,
+        "report_version": "ci/run-17",
+        "support_attempt": 2,
+        "verification_attempt": 1,
+        "verifier": "release-fixture/check-all-12/v1"
+      },
+      "charge": 194,
+      "checklist_passed": true,
+      "checkpoint_attempt": null,
+      "disposition": "accepted",
+      "generation_us": 50626275,
+      "input_tokens": 142,
+      "output": "```json\n{\n  \"release\": \"R42\",\n  \"target\": \"canary\",\n  \"approval\": \"C42-B\",\n  \"tests\": \"12/12\",\n  \"action\": \"deploy\"\n}\n```",
+      "output_tokens": 52,
+      "phase": "fresh",
+      "request_utf8": "{\"adapter\":\"transformers-cpu/v1\",\"add_generation_prompt\":true,\"dtype\":\"bfloat16\",\"generation\":{\"do_sample\":false,\"max_new_tokens\":96,\"num_beams\":1},\"messages\":[{\"content\":\"You are a deployment planner. Return exactly one JSON object with five string fields: release, target, approval, tests, action. Copy release, target and approval from requirement. Copy tests from test_certificate. For a passing certificate use action deploy. Do not add other keys or explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"requirement\\\":{\\\"approval\\\":\\\"C42-B\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"canary\\\",\\\"version\\\":\\\"policy/v2\\\"},\\\"sources\\\":[\\\"policy/v2\\\",\\\"ci/run-17\\\"],\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"tests\\\":\\\"12/12\\\"},\\\"test_verifier\\\":\\\"release-fixture/check-all-12/v1\\\"}\",\"role\":\"user\"}],\"model\":\"Qwen/Qwen2.5-1.5B-Instruct\",\"revision\":\"989aa7980e4cf806f80c7fef2b1adb7bc71aa306\"}",
+      "roundtrip_us": 50627650,
+      "source_ids": [
+        1,
+        2
+      ],
+      "source_versions": [
+        "policy/v2",
+        "ci/run-17"
+      ],
+      "store": "fresh"
+    }
+  ],
+  "error": null,
+  "mode": "live",
+  "summary": {
+    "all_phases": {
+      "input_tokens": 628,
+      "model_calls": 4,
+      "model_generation_us": 214871844,
+      "model_roundtrip_us": 214891706,
+      "output_tokens": 208,
+      "verifier_runs": 2
+    },
+    "checklist_passed": true,
+    "corrected_requirement": 3,
+    "delayed_delivery_charge": 254,
+    "delayed_delivery_count": 2,
+    "fresh": {
+      "elapsed_us": 50629931,
+      "input_tokens": 142,
+      "model_calls": 1,
+      "model_roundtrip_us": 50627650,
+      "output_tokens": 52,
+      "verifier_runs": 1
+    },
+    "identical_repaired_and_fresh_request": true,
+    "old_checkpoint": 4,
+    "repair": {
+      "elapsed_us": 50018175,
+      "input_tokens": 142,
+      "model_calls": 1,
+      "model_roundtrip_us": 50016877,
+      "output_tokens": 52,
+      "verifier_runs": 0
+    },
+    "retired_requirement": 1,
+    "reused_certificate": {
+      "fact": {
+        "release": "R42",
+        "tests": "12/12"
+      },
+      "report_occurrence": 2,
+      "report_version": "ci/run-17",
+      "support_attempt": 2,
+      "verification_attempt": 1,
+      "verifier": "release-fixture/check-all-12/v1"
+    }
+  }
+}

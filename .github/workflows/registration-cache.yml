@@ -1,0 +1,45 @@
+name: Compare registration membership lookups
+on:
+  workflow_dispatch:
+  push:
+    branches: ['bench/corrected-handoff']
+    paths:
+      - 'src/support.rs'
+      - '.github/workflows/registration-cache.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          path: candidate
+      - name: Check out instrumented comparison
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: 8b0fb583620b33872d80ad49512aaaa1d50d0f8d
+          persist-credentials: false
+          path: control
+      - name: Compile matched release binaries
+        run: |
+          cargo build --release --manifest-path candidate/Cargo.toml --example revision_bench
+          cp candidate/Cargo.lock control/Cargo.lock
+          cargo build --offline --release --manifest-path control/Cargo.toml --example revision_bench
+          rustc -Vv
+          lscpu | grep -E '^(Architecture|CPU\(s\)|Model name):'
+          df -T "${TMPDIR:-/tmp}"
+      - name: Compare matched runs on one runner
+        shell: bash
+        run: |
+          for pair in {0..5}; do
+            if (( pair % 2 == 0 )); then order=(control candidate); else order=(candidate control); fi
+            for variant in "${order[@]}"; do
+              echo "CACHE_SAMPLE $pair $variant"
+              "$variant/target/release/examples/revision_bench" setup sparse 1024 128 1
+            done
+          done
