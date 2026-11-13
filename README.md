@@ -52,3 +52,5 @@ python3 reference/belief_oracle.py
 ```
 
 The next research question is whether the indexed revision path reduces end-to-end work on realistic edit workloads once index construction and maintenance are included. Additional deterministic rules and model adapters can use this implementation as a baseline.
+
+The [paired revision benchmark](docs/revision-benchmark.md) compares the production indexed path with a batched full scan, including setup, maintenance, and publication costs.
