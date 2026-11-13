@@ -33,7 +33,7 @@ jobs:
           echo "Runner image $ImageOS $ImageVersion"
       - name: Compile benchmark
         run: cargo build --release --example revision_bench
-      - name: Measure and check paired samples
+      - name: Measure and check matched samples
         run: |
           target/release/examples/revision_bench > revision-samples.csv
           cat revision-samples.csv

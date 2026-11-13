@@ -16,17 +16,20 @@ The example counts 8 items on one shelf and 4 on another. It starts a second cou
 
 ## Selective revision
 
-The second example asks whether a test run has a reproduction record. An original report **and** its input manifest qualify together. A self-contained record from a second run also qualifies on its own. Withdrawing the original report preserves the accepted reproduction result through the second run. A separate check that requires the original report immediately becomes ineligible for read or resume. Revising that check publishes `unsupported`.
+The second example asks whether a test run has a reproduction record. An original report **and** its input manifest qualify together. A self-contained record from a second run also qualifies on its own. Withdrawing the original report preserves the accepted reproduction result through the second run. In the same transaction, the separate check that requires the original report publishes `unsupported`.
 
 | Operation | Contract |
 | --- | --- |
 | `publish_support(actor, scope, branch, alternatives)` | Publish a fixed rule over observation IDs. Every ID in one group must be admitted. Any complete group suffices. |
+| `set_admitted_and_revise(actor, scope, evidence, admitted)` | Apply one membership edit and publish changed support verdicts in one transaction. Return the changed branch names, accepted attempt IDs, and verdicts. |
 | `support_consumers(actor, scope, evidence)` | List current support-rule branches that name this occurrence in this actor's scope. A listed branch may retain another witness. |
 | `revise_support(actor, scope, branch)` | Return the same accepted attempt ID if its verdict still holds. Publish a new attempt if the verdict changed. |
 
 The built-in rule checks **availability of declared witnesses**. The caller defines which observations qualify for the question. `unsupported` means every declared alternative lacks at least one admitted observation. Missing and withheld IDs have the same effect. The store never needs the payload bytes to answer this rule.
 
 SQLite updates the affected clause counts in the same transaction as admission or withdrawal. Reads and resumes check the verdict against the current view. In-flight opaque work still goes through the original epoch check. Schema v2 upgrades existing v1 databases on open and preserves their existing heads and ledger.
+
+Use `set_admitted_and_revise` when readers should see the membership update and all affected support heads in the same database snapshot. Any failure rolls back the entire edit. A witness that keeps the same verdict retains its head and cost. Repeating the desired membership while it is already current returns an empty change list. An intervening reversal makes a subsequent call a new edit. The original `set_admitted` and `revise_support` remain available for deferred revision.
 
 The store charges one unit per premise checked during rule registration and one for a changed verdict published by revision. Reusing a head adds no delivery or charge. These logical units exclude index maintenance and read checks. The integration suite compares the incremental answers with fresh databases and an independent evaluator across every admission subset of four observations.
 
@@ -51,4 +54,4 @@ python3 -m unittest discover -s reference -p test_memory.py
 python3 reference/belief_oracle.py
 ```
 
-The first benchmark compared the indexed production path with a batched full scan on matched sparse and shared-evidence edits. The full scan finished sooner in all 30 pairs with identical answers. The next experiment is to batch production writes while preserving the attempt history and per-branch validation. [Benchmark, measurements, and reproduction commands](docs/revision-benchmark.md)
+The first benchmark compared the indexed production path with a batched full scan on matched sparse and shared-evidence edits. The full scan finished sooner in all 30 pairs with identical answers. The benchmark now includes the atomic production API alongside per-branch revision and the full scan. [Benchmark, measurements, and reproduction commands](docs/revision-benchmark.md)
