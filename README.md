@@ -41,7 +41,7 @@ The second example asks whether a test run has a reproduction record. An origina
 
 The built-in rule checks **availability of declared witnesses**. The caller defines which observations qualify for the question. `unsupported` means every declared alternative lacks at least one admitted observation. Missing and withheld IDs have the same effect. The store never needs the payload bytes to answer this rule.
 
-SQLite updates the affected clause counts in the same transaction as admission or withdrawal. Reads and resumes check the verdict against the current view. In-flight opaque work still goes through the original epoch check. Opening a v1, v2 or v3 database migrates it to schema v4. Existing heads and usage records retain their identities.
+SQLite updates the affected clause counts in the same transaction as admission or withdrawal. Reads and resumes check the verdict against the current view. In-flight opaque work still goes through the original epoch check. Opening a v1 through v4 database migrates it to schema v5. Existing heads and usage records retain their identities.
 
 Use `set_admitted_and_revise` when readers should see the membership update and all affected support heads in the same database snapshot. Any failure rolls back the entire edit. A witness that keeps the same verdict retains its head and cost. Repeating the desired membership while it is already current returns an empty change list. An intervening reversal makes a subsequent call a new edit. The original `set_admitted` and `revise_support` remain available for deferred revision.
 
@@ -67,8 +67,9 @@ The [live evaluation prompt catalogue](docs/evaluation-prompts.md) includes the 
 | `read_current`, `begin_resume` | Check the accepted head against the current view before returning bytes. A resume records which accepted output it inherited. |
 | `record_dispatch` | Freeze the exact serialized adapter request for a still-eligible pending attempt. The request stays linked to the ordered source occurrences. |
 | `settle` | Validate the captured branch and view, record the delivery and usage, and advance the head only on acceptance. Identical retries return the first disposition. Conflicting retries fail. |
+| `reject_invalid` | Record a dispatched response that failed validation, including the versioned validator, reason, exact returned bytes, and final usage. Keep the current branch head. |
 
-The caller authenticates actors for every operation. For opaque computations the caller also validates outputs and measures usage. Settlement distinguishes acceptance, a stale view and a stale branch. Each branch belongs to one actor and scope. An effective admission or revocation in that scope conservatively invalidates an opaque head. A fresh computation can reuse raw evidence that is still admitted. Withdrawal governs future reads from this store. Previously delivered bytes may still exist in a caller.
+The caller authenticates actors for every operation. For opaque computations the caller also validates outputs and measures usage. Settlement distinguishes acceptance, stale views, stale branch heads and validator rejection. A rejected answer also records whether its captured view and branch were current at settlement. Each branch belongs to one actor and scope. An effective admission or revocation in that scope conservatively invalidates an opaque head. A fresh computation can reuse raw evidence that is still admitted. Withdrawal governs future reads from this store. Previously delivered bytes may still exist in a caller.
 
 ## Reference and next milestone
 

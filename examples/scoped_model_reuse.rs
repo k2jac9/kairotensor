@@ -1,4 +1,4 @@
-//! cargo run --example scoped_model_reuse -- [--live] [--trace FILE]
+//! cargo run --example scoped_model_reuse -- [--live | --replay-invalid] [--trace FILE]
 //! Synthetic, single-writer fixture. Both model tasks only produce text.
 #[path = "corrected_handoff/adapter.rs"]
 mod adapter;
@@ -15,6 +15,8 @@ const SCOPE: &str = "R42";
 const REPORT_BRANCH: &str = "ci-judgment";
 const PLAN_BRANCH: &str = "release-plan";
 const CONTRACT: &str = "ci-report-extractor/2+strict-verdict-validator/1";
+const REPORT_VALIDATOR: &str = "strict-verdict-validator/1";
+const PLAN_VALIDATOR: &str = "scoped-release-plan-checklist/1";
 const BEFORE: &[u8] = br#"{"version":"policy/v1","release":"R42","target":"staging","approval":"S42-A"}"#;
 const AFTER: &[u8] = br#"{"version":"policy/v2","release":"R42","target":"canary","approval":"C42-B"}"#;
 const GREEN: &[u8] = br#"{"version":"run/17","release":"R42","test_summary":"12/12","failing_cases":0}"#;
@@ -83,6 +85,53 @@ struct Answer<T> {
     request: Vec<u8>,
 }
 
+fn charge(input: Option<u64>, output: Option<u64>) -> Result<i64> {
+    match (input, output) {
+        (Some(i), Some(o)) => Ok(i64::try_from(i.checked_add(o).ok_or("token count overflow")?)?),
+        (None, None) => Ok(1), // A deterministic fixture dispatch, not a token estimate.
+        _ => Err("incomplete adapter usage".into()),
+    }
+}
+
+// Use only for dispatched responses. A reused answer is already settled.
+fn validate_delivery<T>(
+    store: &mut Store, attempt: i64, output: &str, usage: i64, validator: &str,
+    row: &mut Value, check: impl FnOnce(&str) -> Result<T>,
+) -> Result<T> {
+    row["validator"] = json!(validator);
+    let before = store.charged_usage()?;
+    match check(output) {
+        Ok(value) => {
+            row["checklist_passed"] = json!(true);
+            let disposition = store.settle(attempt, output.as_bytes(), usage)?;
+            row["charge_delta"] = json!(store.charged_usage()? - before);
+            row["disposition"] = json!(match disposition {
+                Disposition::Accepted => "accepted",
+                Disposition::StaleView => "stale_view",
+                Disposition::StaleBranch => "stale_branch",
+                Disposition::InvalidOutput => return Err("unexpected invalid disposition for valid result".into()),
+            });
+            if disposition != Disposition::Accepted {
+                return Err("model answer became stale before publication".into());
+            }
+            Ok(value)
+        }
+        Err(error) => {
+            let reason = error.to_string();
+            row["checklist_passed"] = json!(false);
+            row["validation_reason"] = json!(reason);
+            if store.reject_invalid(attempt, output.as_bytes(), usage, validator, &reason)?
+                != Disposition::InvalidOutput
+            {
+                return Err("unexpected invalid-output disposition".into());
+            }
+            row["disposition"] = json!("invalid_output");
+            row["charge_delta"] = json!(store.charged_usage()? - before);
+            Err(error)
+        }
+    }
+}
+
 fn finish<T>(
     store: &mut Store, model: &mut Adapter, attempt: i64, request: Vec<u8>,
     mut entry: Value, events: &mut Vec<Value>, check: impl FnOnce(&str) -> Result<T>,
@@ -108,15 +157,9 @@ fn finish<T>(
             row["output_tokens"] = json!(reply.output_tokens);
             row["generation_us"] = json!(reply.generation_us);
             row["roundtrip_us"] = json!(reply.roundtrip_us);
-            let value = check(&reply.text)?;
-            let charge = match (reply.input_tokens, reply.output_tokens) {
-                (Some(i), Some(o)) => i64::try_from(i.checked_add(o).ok_or("token count overflow")?)?,
-                (None, None) => 1, // One fixture dispatch, not an estimated token count.
-                _ => return Err("incomplete adapter usage".into()),
-            };
-            if store.settle(attempt, reply.text.as_bytes(), charge)? != Disposition::Accepted {
-                return Err("model answer became stale before publication".into());
-            }
+            let usage = charge(reply.input_tokens, reply.output_tokens)?;
+            let validator = if row["task"] == REPORT_BRANCH { REPORT_VALIDATOR } else { PLAN_VALIDATOR };
+            let value = validate_delivery(store, attempt, &reply.text, usage, validator, row, check)?;
             (attempt, reply.text, value)
         }
         ModelAction::Reused { origin_attempt, output } => {
@@ -231,20 +274,82 @@ fn scenario(model: &mut Adapter, events: &mut Vec<Value>) -> Result<Value> {
         "repair_target":repair.plan.value.target,"negative_control_action":negative.plan.value.action}))
 }
 
+// Re-evaluate a historical delivery from its original client-visible bytes.
+// The archive is an immutable input. This store and all attempt IDs are new.
+fn replay_invalid(events: &mut Vec<Value>) -> Result<Value> {
+    let archive: Value = serde_json::from_str(include_str!(
+        "../docs/evaluations/scoped-reuse-first-qwen-2026-11-13.json"
+    ))?;
+    let original = archive["events"].as_array().ok_or("missing archived events")?
+        .iter().find(|e| e["phase"] == "report_replaced" && e["task"] == REPORT_BRANCH)
+        .ok_or("missing archived report replacement")?;
+    let request = field(original, "request_utf8")?;
+    let envelope: Value = serde_json::from_str(request)?;
+    let user = envelope["messages"].as_array().and_then(|messages| messages.last())
+        .filter(|message| message["role"] == "user").ok_or("missing archived user message")?;
+    let input: Value = serde_json::from_str(field(user, "content")?)?;
+    let report = &input["ci_report"];
+    let output = field(original, "output")?;
+    let prompt_tokens = original["input_tokens"].as_u64().ok_or("missing archived input usage")?;
+    let completion_tokens = original["output_tokens"].as_u64().ok_or("missing archived output usage")?;
+    let usage = charge(Some(prompt_tokens), Some(completion_tokens))?;
+
+    let mut store = Store::in_memory()?;
+    let payload = serde_json::to_vec(report)?;
+    let ids = store.observe_and_admit_many(ACTOR, SCOPE, &[(field(report,"version")?, &payload)])?;
+    let (attempt, _) = store.begin_model_attempt(ACTOR, SCOPE, REPORT_BRANCH, &ids, field(original, "contract")?)?;
+    if store.resolve_model_attempt(attempt, request.as_bytes())? != ModelAction::Dispatch {
+        return Err("unexpected reuse in empty replay store".into());
+    }
+
+    for delivery in 1..=2 {
+        events.push(json!({"path":"archived_replay","store":"replay","task":REPORT_BRANCH,
+            "delivery":delivery,"attempt":attempt,"source_ids":ids,"archived_attempt":original["attempt"],
+            "request_utf8":request,"output":output,"input_tokens":prompt_tokens,"output_tokens":completion_tokens,
+            "disposition":"pending"}));
+        let row = events.last_mut().expect("just inserted");
+        let outcome = validate_delivery(&mut store, attempt, output, usage, REPORT_VALIDATOR, row,
+            |text| validate_verdict(text, report));
+        if outcome.is_ok() {
+            return Err("archived invalid output passed validation".into());
+        }
+        if row["disposition"] != "invalid_output" {
+            return Err(outcome.unwrap_err());
+        }
+        if row["charge_delta"] != if delivery == 1 { usage } else { 0 } {
+            return Err("archived replay usage settled incorrectly".into());
+        }
+    }
+    let ledger = store.charged_usage()?;
+    if ledger != usage || store.read_current(ACTOR, SCOPE, REPORT_BRANCH)? != Current::Empty {
+        return Err("archived rejection changed the head or overcharged usage".into());
+    }
+    Ok(json!({"source_trace":"scoped-reuse-first-qwen-2026-11-13.json","new_model_calls":0,
+        "attempt":attempt,"disposition":"invalid_output","deliveries":2,"current_head":"empty",
+        "validator":REPORT_VALIDATOR, "reason":events[0]["validation_reason"],
+        "archived_input_tokens":prompt_tokens,"archived_output_tokens":completion_tokens,
+        "ledger_charge":ledger,"duplicate_charge":events[1]["charge_delta"]}))
+}
+
 fn main() -> Result<()> {
     let mut live = false;
+    let mut replay = false;
     let mut trace = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
-            "--live" => live = true,
+            "--live" if !replay => live = true,
+            "--replay-invalid" if !live => replay = true,
             "--trace" if trace.is_none() => trace = Some(PathBuf::from(args.next().ok_or("--trace needs FILE")?)),
-            _ => return Err("usage: scoped_model_reuse [--live] [--trace FILE]".into()),
+            _ => return Err("usage: scoped_model_reuse [--live | --replay-invalid] [--trace FILE]".into()),
         }
     }
     let mut events = Vec::new();
-    let result = Adapter::new(live).and_then(|mut model| scenario(&mut model,&mut events));
-    let report = json!({"mode":if live {"live"} else {"fixture"},"events":events,
+    let result = if replay { replay_invalid(&mut events) } else {
+        Adapter::new(live).and_then(|mut model| scenario(&mut model,&mut events))
+    };
+    let mode = if replay { "archived_replay" } else if live { "live" } else { "fixture" };
+    let report = json!({"mode":mode,"events":events,
         "summary":result.as_ref().ok(),"error":result.as_ref().err().map(ToString::to_string)});
     if let Some(path) = trace { fs::write(path,serde_json::to_vec_pretty(&report)?)?; }
     println!("{}",report["summary"]);
@@ -267,6 +372,19 @@ mod tests {
         assert_eq!(events[2]["charge_delta"], 0);
         assert_eq!(events[4]["path"], "dispatch");
         assert_eq!(events[6]["path"], "dispatch");
+        Ok(())
+    }
+
+    #[test]
+    fn archived_invalid_reply_is_rejected_once_without_a_model_call() -> Result<()> {
+        let mut events = Vec::new();
+        let replay = replay_invalid(&mut events)?;
+        assert_eq!(replay["ledger_charge"], 127);
+        assert_eq!(replay["new_model_calls"], 0);
+        assert_eq!(replay["duplicate_charge"], 0);
+        assert_eq!(replay["current_head"], "empty");
+        assert_eq!(events[0]["validation_reason"], "test verdict disagrees with captured evidence");
+        assert_eq!(events[0]["output"], events[1]["output"]);
         Ok(())
     }
 
