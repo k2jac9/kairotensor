@@ -9,8 +9,11 @@ use crate::{change_admission, invalid, is_admitted, view_epoch, Store};
 /// One accepted support/v1 publication made by an atomic admission edit.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SupportRevision {
+    /// Branch name within the edited actor and scope.
     pub branch: String,
+    /// Newly accepted attempt containing the published result and its charge.
     pub attempt_id: i64,
+    /// Whether any declared witness group is complete at this edit.
     pub supported: bool,
 }
 
@@ -214,9 +217,8 @@ impl Store {
             tx.commit()?;
             return Ok(head);
         }
-        let attempt = publish_revision(
-            &tx, &branch, view_epoch(&tx, actor, scope)?, state.rule, state.current,
-        )?;
+        let epoch = view_epoch(&tx, actor, scope)?;
+        let attempt = publish_revision(&tx, &branch, epoch, state.rule, state.current)?;
         tx.commit()?;
         Ok(attempt)
     }
@@ -239,11 +241,14 @@ impl Store {
         evidence: i64,
         admitted: bool,
     ) -> Result<Vec<SupportRevision>> {
-        let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
         let mut revisions = Vec::new();
         if let Some(epoch) = change_admission(&tx, actor, scope, evidence, admitted)? {
             for head in changed_heads(&tx, actor, scope, evidence)? {
-                let attempt_id = publish_revision(&tx, &head.branch, epoch, head.rule, head.supported)?;
+                let attempt_id =
+                    publish_revision(&tx, &head.branch, epoch, head.rule, head.supported)?;
                 revisions.push(SupportRevision {
                     branch: head.name,
                     attempt_id,

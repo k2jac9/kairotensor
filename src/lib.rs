@@ -5,7 +5,9 @@ mod support;
 pub use attempts::{CapturedInputs, Current, Disposition};
 pub use support::SupportRevision;
 
-use rusqlite::{ffi, params, Connection, Error, OptionalExtension, Result, Transaction, TransactionBehavior};
+use rusqlite::{
+    ffi, params, Connection, Error, OptionalExtension, Result, Transaction, TransactionBehavior,
+};
 use std::path::Path;
 use std::time::Duration;
 
@@ -82,7 +84,7 @@ impl Store {
         admitted: bool,
     ) -> Result<()> {
         let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        change_admission(&tx, actor, scope, evidence, admitted)?;
+        let _ = change_admission(&tx, actor, scope, evidence, admitted)?;
         tx.commit()
     }
 
@@ -124,7 +126,11 @@ fn change_admission(
     if actor.is_empty() || scope.is_empty() {
         return Err(invalid("actor and scope must be nonempty"));
     }
-    tx.query_row("SELECT 1 FROM evidence WHERE id = ?1", [evidence], |_| Ok(()))?;
+    tx.query_row(
+        "SELECT 1 FROM evidence WHERE id = ?1",
+        [evidence],
+        |_| Ok(()),
+    )?;
     if is_admitted(tx, actor, scope, evidence)? == admitted {
         return Ok(None);
     }

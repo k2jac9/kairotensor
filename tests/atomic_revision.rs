@@ -215,3 +215,36 @@ fn concurrent_identical_edits_publish_and_charge_each_changed_head_once() -> Res
     }
     Ok(())
 }
+
+#[test]
+fn a_reader_snapshot_crossing_commit_sees_one_consistent_epoch() -> Result<()> {
+    let file = Database::new();
+    let mut store = Store::open(&file.0)?;
+    let mut reader = Connection::open(&file.0)?;
+    let mode: String = reader.query_row("PRAGMA journal_mode=WAL", [], |r| r.get(0))?;
+    assert_eq!(mode, "wal");
+    let id = store.observe("check", b"ok")?;
+    store.set_admitted(ACTOR, SCOPE, id, true)?;
+    for name in ["alpha", "beta"] {
+        store.publish_support(ACTOR, SCOPE, name, &[vec![id]])?;
+    }
+
+    fn snapshot(db: &Connection) -> Result<(i64, i64, i64, i64)> {
+        db.query_row(
+            "SELECT (SELECT MAX(epoch) FROM admission_events),
+                    (SELECT SUM(missing) FROM support_clauses),
+                    (SELECT SUM(s.verdict) FROM branches b JOIN support_bindings s ON b.head = s.attempt_id),
+                    (SELECT SUM(usage) FROM deliveries)",
+            [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        )
+    }
+
+    // WAL allows the writer to commit while this read transaction stays pinned.
+    let tx = reader.transaction()?;
+    assert_eq!(snapshot(&tx)?, (1, 0, 2, 2));
+    assert_eq!(store.set_admitted_and_revise(ACTOR, SCOPE, id, false)?.len(), 2);
+    assert_eq!(snapshot(&tx)?, (1, 0, 2, 2));
+    tx.commit()?;
+    assert_eq!(snapshot(&reader)?, (2, 2, 0, 4));
+    Ok(())
+}
