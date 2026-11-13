@@ -2,6 +2,9 @@
 //! Each edit batches its membership change and all changed verdicts in one commit.
 use rusqlite::{params, Connection, Result, TransactionBehavior};
 use std::path::Path;
+use std::time::{Duration, Instant};
+
+use super::Registration;
 
 pub struct Scan {
     db: Connection,
@@ -99,7 +102,8 @@ impl super::Backend for Scan {
         Ok(())
     }
 
-    fn register(&mut self, rules: &[Vec<Vec<i64>>]) -> Result<Vec<bool>> {
+    fn register(&mut self, rules: &[Vec<Vec<i64>>]) -> Result<Registration> {
+        let start = Instant::now();
         let tx = self.db.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let active = admissions(&tx, self.evidence_count)?;
         let epoch: i64 = tx.query_row(
@@ -140,9 +144,12 @@ impl super::Backend for Scan {
             }
         }
         tx.commit()?;
+        let publish = start.elapsed();
         self.rules = catalog;
         self.answers = answers.clone();
-        Ok(answers)
+        // This arm returns the verdicts it just computed and persisted. Its separate
+        // full-table read is confined to the existing untimed verification replay.
+        Ok(Registration { initial: answers, publish, initial_read: Duration::ZERO })
     }
 
     fn edit(&mut self, id: i64, admitted: bool) -> Result<Vec<(usize, bool)>> {
@@ -205,7 +212,9 @@ mod tests {
         let mut scan = Scan::open(Path::new(":memory:"))?;
         scan.seed(3)?;
         let rules = vec![vec![vec![1, 2], vec![3]], vec![vec![1]], vec![vec![9]]];
-        assert_eq!(scan.register(&rules)?, vec![true, true, false]);
+        let registration = scan.register(&rules)?;
+        assert_eq!(registration.initial, vec![true, true, false]);
+        assert_eq!(registration.initial_read, Duration::ZERO);
         assert_eq!(scan.edit(1, false)?, vec![(1, false)]);
         assert!(scan.edit(1, false)?.is_empty());
         assert_eq!(scan.read_all()?, vec![true, false, false]);

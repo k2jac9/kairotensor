@@ -2,6 +2,9 @@ use kairotensor::{Current, Store, SupportRegistration};
 use rusqlite::Result;
 use std::collections::HashMap;
 use std::path::Path;
+use std::time::Instant;
+
+use super::Registration;
 
 const ACTOR: &str = "benchmark";
 const SCOPE: &str = "fixture";
@@ -92,30 +95,37 @@ impl super::Backend for Indexed {
         Ok(())
     }
 
-    fn register(&mut self, rules: &[Vec<Vec<i64>>]) -> Result<Vec<bool>> {
+    fn register(&mut self, rules: &[Vec<Vec<i64>>]) -> Result<Registration> {
         assert!(self.branches.is_empty(), "benchmark rules are registered once");
         let branches: Vec<String> = (0..rules.len()).map(|position| position.to_string()).collect();
-        let heads = if matches!(self.mode, IndexedMode::BulkSetup) {
+        let (heads, publish) = if matches!(self.mode, IndexedMode::BulkSetup) {
             let declarations: Vec<_> = branches.iter().zip(rules).map(|(branch, rule)| {
                 SupportRegistration { branch: branch.as_str(), alternatives: rule.as_slice() }
             }).collect();
-            self.store.publish_support_many(ACTOR, SCOPE, &declarations)?
+            let start = Instant::now();
+            let heads = self.store.publish_support_many(ACTOR, SCOPE, &declarations)?;
+            (heads, start.elapsed())
         } else {
             let mut heads = Vec::with_capacity(rules.len());
+            let start = Instant::now();
             for (branch, rule) in branches.iter().zip(rules) {
                 heads.push(self.store.publish_support(ACTOR, SCOPE, branch, rule)?);
             }
-            heads
+            (heads, start.elapsed())
         };
         assert_eq!(heads.len(), branches.len());
         let mut initial = Vec::with_capacity(heads.len());
+        let start = Instant::now();
+        for branch in &branches {
+            initial.push(read_verdict(&mut self.store, branch)?);
+        }
+        let initial_read = start.elapsed();
         for (position, (branch, head)) in branches.into_iter().zip(heads).enumerate() {
             // Registration creates the first attempts in this fresh benchmark DB.
             assert_eq!(usize::try_from(head).ok(), Some(position + 1));
-            initial.push(read_verdict(&mut self.store, &branch)?);
             self.branches.insert(branch, (position, head));
         }
-        Ok(initial)
+        Ok(Registration { initial, publish, initial_read })
     }
 
     fn edit(&mut self, id: i64, admitted: bool) -> Result<Vec<(usize, bool)>> {
