@@ -38,13 +38,18 @@ pub enum Current {
 /// Ordered (observation occurrence ID, exact payload) pairs captured together.
 pub type CapturedInputs = Vec<(i64, Vec<u8>)>;
 
-struct Branch {
-    id: i64,
-    head: Option<i64>,
-    revision: i64,
+pub(crate) struct Branch {
+    pub(crate) id: i64,
+    pub(crate) head: Option<i64>,
+    pub(crate) revision: i64,
 }
 
-fn find_branch(db: &Connection, actor: &str, scope: &str, name: &str) -> Result<Option<Branch>> {
+pub(crate) fn find_branch(
+    db: &Connection,
+    actor: &str,
+    scope: &str,
+    name: &str,
+) -> Result<Option<Branch>> {
     db.query_row(
         "SELECT id, head, revision FROM branches WHERE actor = ?1 AND scope = ?2 AND name = ?3",
         params![actor, scope, name],
@@ -59,7 +64,12 @@ fn find_branch(db: &Connection, actor: &str, scope: &str, name: &str) -> Result<
     .optional()
 }
 
-fn ensure_branch(tx: &Transaction<'_>, actor: &str, scope: &str, name: &str) -> Result<Branch> {
+pub(crate) fn ensure_branch(
+    tx: &Transaction<'_>,
+    actor: &str,
+    scope: &str,
+    name: &str,
+) -> Result<Branch> {
     tx.execute(
         "INSERT INTO branches (actor, scope, name) VALUES (?1, ?2, ?3)
          ON CONFLICT(actor, scope, name) DO NOTHING",
@@ -78,7 +88,7 @@ fn current_head(db: &Connection, branch: &Branch, epoch: i64) -> Result<Current>
         [head],
         |r| r.get(0),
     )?;
-    if certified_epoch != epoch {
+    if certified_epoch != epoch && !crate::support::is_current(db, head)? {
         return Ok(Current::NeedsReview);
     }
     db.query_row(
@@ -89,7 +99,7 @@ fn current_head(db: &Connection, branch: &Branch, epoch: i64) -> Result<Current>
     .map(Current::Ready)
 }
 
-fn record_attempt(
+pub(crate) fn record_attempt(
     tx: &Transaction<'_>,
     branch: &Branch,
     epoch: i64,
@@ -101,6 +111,36 @@ fn record_attempt(
         params![branch.id, branch.head, branch.revision, epoch, inherited_from],
     )?;
     Ok(tx.last_insert_rowid())
+}
+
+fn record_delivery(
+    tx: &Transaction<'_>,
+    attempt: i64,
+    disposition: Disposition,
+    output: &[u8],
+    usage: i64,
+) -> Result<()> {
+    tx.execute(
+        "INSERT INTO deliveries (attempt_id, disposition, output, usage) VALUES (?1, ?2, ?3, ?4)",
+        params![attempt, disposition.as_str(), output, usage],
+    )?;
+    Ok(())
+}
+
+/// The caller has already checked publication conditions under this writer lock.
+pub(crate) fn accept(
+    tx: &Transaction<'_>,
+    branch_id: i64,
+    attempt: i64,
+    output: &[u8],
+    usage: i64,
+) -> Result<()> {
+    record_delivery(tx, attempt, Disposition::Accepted, output, usage)?;
+    tx.execute(
+        "UPDATE branches SET head = ?1, revision = revision + 1 WHERE id = ?2",
+        params![attempt, branch_id],
+    )?;
+    Ok(())
 }
 
 fn record_exact_inputs(
@@ -265,15 +305,10 @@ impl Store {
         } else {
             Disposition::Accepted
         };
-        tx.execute(
-            "INSERT INTO deliveries (attempt_id, disposition, output, usage) VALUES (?1, ?2, ?3, ?4)",
-            params![attempt, disposition.as_str(), output, usage],
-        )?;
         if disposition == Disposition::Accepted {
-            tx.execute(
-                "UPDATE branches SET head = ?1, revision = revision + 1 WHERE id = ?2",
-                params![attempt, branch_id],
-            )?;
+            accept(&tx, branch_id, attempt, output, usage)?;
+        } else {
+            record_delivery(&tx, attempt, disposition, output, usage)?;
         }
         tx.commit()?;
         Ok(disposition)
