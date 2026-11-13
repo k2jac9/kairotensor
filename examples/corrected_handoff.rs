@@ -15,6 +15,7 @@ const SCOPE: &str = "R42";
 const PLAN: &str = "deployment-plan";
 const PROOF: &str = "passing-report";
 const REPORT_VERSION: &str = "ci/run-17";
+const PLAN_VALIDATOR: &str = "corrected-release-plan-checklist/1";
 const VERIFIER: &str = "release-fixture/check-all-12/v1";
 const OLD: &[u8] = br#"{"version":"policy/v1","release":"R42","target":"staging","approval":"S42-A"}"#;
 const NEW: &[u8] = br#"{"version":"policy/v2","release":"R42","target":"canary","approval":"C42-B"}"#;
@@ -166,17 +167,37 @@ fn valid_plan(text: &str, policy: &[u8]) -> Result<bool> {
         && plan.tests == "12/12" && plan.action == "deploy")
 }
 
-fn accept(store: &mut Store, call: &Call, policy: &[u8], trace: &mut [Value]) -> Result<()> {
+fn settle_plan(
+    store: &mut Store, call: &Call, policy: &[u8], trace: &mut [Value],
+) -> Result<Disposition> {
     let valid = valid_plan(&call.reply.text, policy)?;
-    trace[call.row]["checklist_passed"] = json!(valid);
-    if !valid {
-        return Err(format!("{}: invalid model reply; usage measured, attempt unsettled", trace[call.row]["phase"]).into());
+    let row = &mut trace[call.row];
+    row["checklist_passed"] = json!(valid);
+    row["validator"] = json!(PLAN_VALIDATOR);
+    let before = store.charged_usage()?;
+    let disposition = if valid {
+        store.settle(call.attempt, call.reply.text.as_bytes(), call.charge)?
+    } else {
+        let reason = "model plan failed the captured release checklist";
+        row["validation_reason"] = json!(reason);
+        store.reject_invalid(call.attempt, call.reply.text.as_bytes(), call.charge, PLAN_VALIDATOR, reason)?
+    };
+    row["charge_delta"] = json!(store.charged_usage()? - before);
+    row["disposition"] = json!(match disposition {
+        Disposition::Accepted => "accepted",
+        Disposition::StaleView => "stale_view",
+        Disposition::StaleBranch => "stale_branch",
+        Disposition::InvalidOutput => "invalid_output",
+    });
+    Ok(disposition)
+}
+
+fn accept(store: &mut Store, call: &Call, policy: &[u8], trace: &mut [Value]) -> Result<()> {
+    match settle_plan(store, call, policy, trace)? {
+        Disposition::Accepted => Ok(()),
+        Disposition::InvalidOutput => Err("model plan failed the captured release checklist".into()),
+        _ => Err("model attempt became ineligible".into()),
     }
-    if store.settle(call.attempt, call.reply.text.as_bytes(), call.charge)? != Disposition::Accepted {
-        return Err("model attempt became ineligible".into());
-    }
-    trace[call.row]["disposition"] = json!("accepted");
-    Ok(())
 }
 
 fn route(call: &Call, checks: u64, start: Instant) -> Value {
@@ -214,14 +235,19 @@ fn scenario(model: &mut Adapter, trace: &mut Vec<Value>) -> Result<Value> {
         || store.begin_resume(ACTOR, SCOPE, PLAN, &[]).is_ok()
     { return Err("withdrawn checkpoint was reusable".into()); }
     let before = store.charged_usage()?;
-    for _ in 0..2 {
-        if store.settle(late.attempt, late.reply.text.as_bytes(), late.charge)? != Disposition::StaleView {
-            return Err("old delivery escaped stale rejection".into());
-        }
+    // Validate delayed bytes against the inputs they were generated from.
+    let disposition = settle_plan(&mut store, &late, OLD, trace)?;
+    let after_first = store.charged_usage()?;
+    if settle_plan(&mut store, &late, OLD, trace)? != disposition
+        || store.charged_usage()? != after_first || after_first - before != late.charge
+    {
+        return Err("late delivery retry failed to reproduce the original settlement".into());
     }
-    if store.charged_usage()? - before != late.charge { return Err("late work charged twice".into()); }
-    trace[late.row]["disposition"] = json!("stale_view");
-    trace[late.row]["checklist_passed"] = json!(valid_plan(&late.reply.text, OLD)?);
+    trace[late.row]["duplicate_charge"] = trace[late.row]["charge_delta"].clone();
+    trace[late.row]["charge_delta"] = json!(after_first - before);
+    if disposition != Disposition::StaleView {
+        return Err("late answer failed its original checklist or escaped stale rejection".into());
+    }
     let repaired = call(&mut store, model, &cert, &[ids[0],new], "repair", None, trace)?;
     accept(&mut store, &repaired, NEW, trace)?;
     let repair_metrics = route(&repaired, checks - before_repair, repair_start);
@@ -285,6 +311,31 @@ mod tests {
         assert_eq!(calls[2]["request_utf8"], calls[3]["request_utf8"]);
         assert_eq!(result["repair"]["verifier_runs"], 0);
         assert_eq!(result["fresh"]["verifier_runs"], 1);
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_plan_is_recorded_and_charged_even_if_delivery_is_late() -> Result<()> {
+        for withdraw in [false, true] {
+            let mut store = Store::in_memory()?;
+            let id = store.observe_and_admit_many(ACTOR, SCOPE, &[("policy/v1", OLD)])?[0];
+            let attempt = store.begin_attempt(ACTOR, SCOPE, PLAN, &[id])?;
+            store.record_dispatch(attempt, b"request")?;
+            let reply = Reply {
+                text: r#"{"release":"R42"}"#.into(), input_tokens: Some(5), output_tokens: Some(7),
+                generation_us: 0, roundtrip_us: 0,
+            };
+            let call = Call { attempt, request: b"request".to_vec(), reply, row: 0, charge: 12 };
+            if withdraw { store.set_admitted(ACTOR, SCOPE, id, false)?; }
+            let mut rows = [json!({"disposition":"pending"})];
+            assert!(accept(&mut store, &call, OLD, &mut rows).is_err());
+            assert_eq!(rows[0]["disposition"], "invalid_output");
+            assert_eq!(rows[0]["charge_delta"], 12);
+            assert!(accept(&mut store, &call, OLD, &mut rows).is_err());
+            assert_eq!(rows[0]["charge_delta"], 0);
+            assert_eq!(store.charged_usage()?, 12);
+            assert_eq!(store.read_current(ACTOR,SCOPE,PLAN)?, Current::Empty);
+        }
         Ok(())
     }
 

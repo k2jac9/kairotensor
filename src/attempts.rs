@@ -7,6 +7,7 @@ pub enum Disposition {
     Accepted,
     StaleView,
     StaleBranch,
+    InvalidOutput,
 }
 
 impl Disposition {
@@ -15,6 +16,7 @@ impl Disposition {
             Self::Accepted => "accepted",
             Self::StaleView => "stale_view",
             Self::StaleBranch => "stale_branch",
+            Self::InvalidOutput => "invalid_output",
         }
     }
 
@@ -23,6 +25,7 @@ impl Disposition {
             "accepted" => Ok(Self::Accepted),
             "stale_view" => Ok(Self::StaleView),
             "stale_branch" => Ok(Self::StaleBranch),
+            "invalid_output" => Ok(Self::InvalidOutput),
             _ => Err(invalid("unknown stored disposition")),
         }
     }
@@ -125,6 +128,29 @@ fn record_delivery(
         params![attempt, disposition.as_str(), output, usage],
     )?;
     Ok(())
+}
+
+// Both settlement paths identify redelivery by the original output, usage and
+// declared validation decision. Applicability is determined only on first delivery.
+fn existing_disposition(
+    tx: &Transaction<'_>,
+    attempt: i64,
+    output: &[u8],
+    usage: i64,
+    validator: Option<&str>,
+    reason: Option<&str>,
+) -> Result<Option<Disposition>> {
+    let prior: Option<(String, bool)> = tx.query_row(
+        "SELECT disposition, (output = ?2 AND usage = ?3 AND validator IS ?4 AND reason IS ?5)
+         FROM deliveries WHERE attempt_id = ?1",
+        params![attempt, output, usage, validator, reason],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    ).optional()?;
+    match prior {
+        None => Ok(None),
+        Some((name, true)) => Disposition::from_db(&name).map(Some),
+        Some((_, false)) => Err(invalid("conflicting final delivery for an already settled attempt")),
+    }
 }
 
 /// The caller has already checked publication conditions under this writer lock.
@@ -355,21 +381,8 @@ impl Store {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let prior: Option<(String, bool)> = tx
-            .query_row(
-                "SELECT disposition, (output = ?2 AND usage = ?3)
-                 FROM deliveries WHERE attempt_id = ?1",
-                params![attempt, output, usage],
-                |r| Ok((r.get(0)?, r.get(1)?)),
-            )
-            .optional()?;
-        if let Some((disposition, identical)) = prior {
-            if !identical {
-                return Err(invalid(
-                    "conflicting final delivery for an already settled attempt",
-                ));
-            }
-            return Disposition::from_db(&disposition);
+        if let Some(prior) = existing_disposition(&tx, attempt, output, usage, None, None)? {
+            return Ok(prior);
         }
 
         if crate::model_reuse::unresolved(&tx, attempt)? {
@@ -383,6 +396,46 @@ impl Store {
         }
         tx.commit()?;
         Ok(disposition)
+    }
+
+    /// Record a dispatched output rejected by the caller's versioned validator.
+    /// The original bytes, cost, validator identity and reason share one terminal
+    /// delivery. The branch head stays in place. Its applicability at settlement
+    /// is recorded separately; a stale view takes precedence over a stale branch.
+    ///
+    /// The caller provides a stable validator/version and reason. Redelivery must
+    /// repeat that decision, those exact strings, the bytes, and the reported usage.
+    pub fn reject_invalid(
+        &mut self,
+        attempt: i64,
+        output: &[u8],
+        usage: i64,
+        validator: &str,
+        reason: &str,
+    ) -> Result<Disposition> {
+        if usage < 0 {
+            return Err(invalid("final usage must be nonnegative"));
+        }
+        if validator.trim().is_empty() || reason.trim().is_empty() {
+            return Err(invalid("validation rejection requires a validator and reason"));
+        }
+        let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if let Some(prior) = existing_disposition(&tx, attempt, output, usage, Some(validator), Some(reason))? {
+            return Ok(prior);
+        }
+        let (_, state) = applicability(&tx, attempt)?;
+        let at_delivery = if state == Disposition::Accepted { "current" } else { state.as_str() };
+        let recorded = tx.execute(
+            "INSERT INTO deliveries (attempt_id, disposition, output, usage, validator, reason, applicability)
+             SELECT attempt_id, 'invalid_output', ?2, ?3, ?4, ?5, ?6
+             FROM dispatches WHERE attempt_id = ?1",
+            params![attempt, output, usage, validator, reason, at_delivery],
+        )?;
+        if recorded != 1 {
+            return Err(invalid("validation rejection requires a recorded dispatch"));
+        }
+        tx.commit()?;
+        Ok(Disposition::InvalidOutput)
     }
 
     /// Total known final cost across every accepted and rejected delivery.

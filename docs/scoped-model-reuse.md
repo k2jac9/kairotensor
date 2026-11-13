@@ -35,7 +35,7 @@ Marginal route timing starts after preparing each evidence view and covers the t
 
 ## Initial live evaluation
 
-In the first live Qwen run, the repaired route reused its passing report judgment and produced the same canary plan as fresh execution. Replacing the report forced a fresh call as required. The model copied the new `11/12` count but incorrectly labeled its status `pass`. The validator stopped publication and the experiment exited before generating a plan from the invalid judgment. The trace records the unsuccessful response and its measured usage; this invalid attempt remained unsettled under the store's existing dispositions. The revised extraction prompt gives balanced examples of passing and failing reports. The report data, Qwen checkpoint and strict output check are unchanged. [First run](https://github.com/k2jac9/kairotensor/actions/runs/43490325882) · [First trace](evaluations/scoped-reuse-first-qwen-2026-11-13.json).
+In the first live Qwen run, the repaired route reused its passing report judgment and produced the same canary plan as fresh execution. Replacing the report forced a fresh call as required. The model copied the new `11/12` count but incorrectly labeled its status `pass`. The validator stopped publication and the experiment exited before generating a plan from the invalid judgment. The trace records the unsuccessful response and its measured usage; this invalid attempt remained unsettled in that historical run. The revised extraction prompt gives balanced examples of passing and failing reports. The report data, Qwen checkpoint and strict output check are unchanged. [First run](https://github.com/k2jac9/kairotensor/actions/runs/43490325882) · [First trace](evaluations/scoped-reuse-first-qwen-2026-11-13.json).
 
 ## Live result after the prompt revision
 
@@ -51,3 +51,14 @@ Qwen2.5-1.5B-Instruct ran on CPU with the pinned model and tokenizer revision `9
 Repair and clean execution produced the same checked canary plan, with approval `C42-B` and the original 12/12 test result. The opt-in report judgment was the only reuse hit. Its attempt points to the original accepted dispatch; the additional model usage was zero. The two paths used byte-identical model requests for the corresponding tasks. Reuse saved 211 of 404 prompt-plus-completion tokens (52.2%) during correction. On the negative control the report changed, Kairotensor ran both tasks, and the plan action changed to `hold`.
 
 All four routes together ran seven generations and consumed 1,123 input and 282 output tokens. Route timings are individual observations on one synthetic task, with the views already prepared and the model loaded. They do not establish a latency distribution or expected savings on production workloads. [Successful live workflow](https://github.com/k2jac9/kairotensor/actions/runs/43491028189) · [All requests, outputs, usage, and source lineage](evaluations/scoped-reuse-qwen-2026-11-13.json).
+
+
+## Replay the failed verdict
+
+```sh
+cargo run --example scoped_model_reuse -- --replay-invalid
+```
+
+The replay reads the archived model request, response, and measured usage from the first run and applies the report validator to them in a fresh store. It records the response that reported `11/12` and `pass` as `invalid_output`. Its 93 input and 34 output tokens give a single 127-unit ledger entry. An identical second delivery returns the original disposition. The replay issues zero model calls and the archived trace retains its original pending state.
+
+For a newly dispatched response that fails its checklist, the caller supplies the validator version and reason to `reject_invalid`. The store records both the validation outcome and whether the attempt was current, had a stale view, or had a stale branch at settlement. A retry must reproduce the validator, reason, bytes and usage exactly. The rejected attempt cannot advance a head or become the origin for model-result reuse. An authorization to dispatch is the store's precondition; the adapter remains responsible for accurately reporting the response and usage that it received.
