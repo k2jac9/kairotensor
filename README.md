@@ -14,6 +14,18 @@ cargo test --all-targets
 
 The example counts 8 items on one shelf and 4 on another. It starts a second count, then withdraws the second shelf report. The previous total of 12 becomes unavailable for both current reads and resume. The late count still costs two additions. A fresh attempt over the same candidate list sees only the first shelf and publishes 8. The ledger records five additions across all three attempts.
 
+## Bulk setup
+
+The Rust store provides three ordered batch operations. Each call commits in one SQLite transaction. An error in any item rolls back every write in that call, including index updates and usage records.
+
+| Operation | Use it when |
+| --- | --- |
+| `observe_and_admit_many(actor, scope, observations)` | Import new source/payload pairs and grant access to their occurrences. The returned IDs follow input order. Repeating the import creates new occurrences, even for identical bytes. |
+| `admit_many(actor, scope, evidence_ids)` | Grant access to observations already in storage. Each effective grant advances the view epoch once. Repeated IDs and already-admitted IDs add no events. |
+| `publish_support_many(actor, scope, rules)` | Register support rules and publish their initial verdicts together. Every declaration has its own accepted attempt, parent and charge. Repeating a branch name creates successive versions in input order. |
+
+Evidence ingestion and rule publication are separate commit boundaries. A caller can reuse IDs from a successful import if rule registration fails. For an existing catalogue, bulk grants update witness counts immediately. Use `revise_support` for an affected head whose verdict needs a new publication. The selective revision example exercises bulk setup followed by an atomic withdrawal.
+
 ## Selective revision
 
 The second example asks whether a test run has a reproduction record. An original report **and** its input manifest qualify together. A self-contained record from a second run also qualifies on its own. Withdrawing the original report preserves the accepted reproduction result through the second run. In the same transaction, the separate check that requires the original report publishes `unsupported`.
@@ -54,4 +66,4 @@ python3 -m unittest discover -s reference -p test_memory.py
 python3 reference/belief_oracle.py
 ```
 
-On the three-way benchmark, atomic revision reduced median edit time by 13.46× for 32 dense edits on 128 rules, compared with the per-branch API. For 128 sparse edits on 1,024 rules, the corresponding gain was 1.40×. The batched full scan still had the lowest total time in all 30 matched trials. Bulk evidence seeding and rule registration are the next costs to measure. [Benchmark, measurements, and reproduction commands](docs/revision-benchmark.md)
+On the three-way benchmark, atomic revision reduced median edit time by 13.46× for 32 dense edits on 128 rules, compared with the per-branch API. For 128 sparse edits on 1,024 rules, the corresponding gain was 1.40×. The batched full scan still had the lowest total time in all 30 matched trials. On a subsequent matched run with 1,024 rules, bulk setup took a median 214 ms versus 3,690 ms for single-item setup. Both production paths retained per-occurrence admission events, branch lineage and logical charges. [Benchmark, measurements, and reproduction commands](docs/revision-benchmark.md)

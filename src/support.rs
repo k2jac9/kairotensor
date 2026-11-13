@@ -4,7 +4,17 @@
 use rusqlite::{params, Connection, OptionalExtension, Result, Transaction, TransactionBehavior};
 
 use crate::attempts::{accept, ensure_branch, find_branch, record_attempt, Branch};
-use crate::{change_admission, invalid, is_admitted, view_epoch, Store};
+use crate::{change_admission, invalid, is_admitted, validate_view, view_epoch, Store};
+
+/// One named support/v1 rule to publish. Every observation in one group must
+/// be admitted; any complete group supports the rule.
+#[derive(Clone, Copy, Debug)]
+pub struct SupportRegistration<'a> {
+    /// Branch to receive the new accepted head.
+    pub branch: &'a str,
+    /// Ordered alternatives. Each group must contain distinct positive IDs.
+    pub alternatives: &'a [Vec<i64>],
+}
 
 /// One accepted support/v1 publication made by an atomic admission edit.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -150,6 +160,52 @@ fn changed_heads(
     Ok(changed)
 }
 
+fn register_support(
+    tx: &Transaction<'_>,
+    actor: &str,
+    scope: &str,
+    epoch: i64,
+    rule: &SupportRegistration<'_>,
+) -> Result<i64> {
+    if rule.alternatives.is_empty() || rule.alternatives.iter().any(Vec::is_empty) {
+        return Err(invalid("support requires at least one nonempty group and no empty groups"));
+    }
+    let branch = ensure_branch(tx, actor, scope, rule.branch)?;
+    let attempt = record_attempt(tx, &branch, epoch, None)?;
+    let mut insert_clause = tx.prepare_cached(
+        "INSERT INTO support_clauses(rule_id, arity, missing) VALUES (?1, ?2, ?3)",
+    )?;
+    let mut insert_premise = tx.prepare_cached(
+        "INSERT INTO support_premises(clause_id, requested_id, actor, scope)
+         VALUES (?1, ?2, ?3, ?4)",
+    )?;
+    let mut supported = false;
+    let mut checks = 0_i64;
+    for group in rule.alternatives {
+        let arity = i64::try_from(group.len()).map_err(|_| invalid("group is too large"))?;
+        let mut missing = 0_i64;
+        for &id in group {
+            if id <= 0 {
+                return Err(invalid("an observation occurrence ID must be positive"));
+            }
+            if !is_admitted(tx, actor, scope, id)? {
+                missing += 1;
+            }
+        }
+        insert_clause.execute(params![attempt, arity, missing])?;
+        let clause = tx.last_insert_rowid();
+        for &id in group {
+            // The compound primary key rejects a duplicate within a group.
+            insert_premise.execute(params![clause, id, actor, scope])?;
+        }
+        checks = checks.checked_add(arity).ok_or_else(|| invalid("rule is too large"))?;
+        supported |= missing == 0;
+    }
+    bind(tx, attempt, attempt, supported)?;
+    accept(tx, branch.id, attempt, output(supported), checks)?;
+    Ok(attempt)
+}
+
 impl Store {
     /// Publish a new support/v1 definition and its current flag. Groups are
     /// alternatives and each group requires all its distinct positive IDs.
@@ -162,45 +218,40 @@ impl Store {
         branch: &str,
         alternatives: &[Vec<i64>],
     ) -> Result<i64> {
-        if alternatives.is_empty() || alternatives.iter().any(Vec::is_empty) {
-            return Err(invalid("support requires at least one nonempty group and no empty groups"));
-        }
         let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let branch = ensure_branch(&tx, actor, scope, branch)?;
-        let attempt = record_attempt(&tx, &branch, view_epoch(&tx, actor, scope)?, None)?;
-        let mut supported = false;
-        let mut checks = 0;
-        for group in alternatives {
-            let arity = i64::try_from(group.len()).map_err(|_| invalid("group is too large"))?;
-            let mut missing = 0_i64;
-            for &id in group {
-                if id <= 0 {
-                    return Err(invalid("an observation occurrence ID must be positive"));
-                }
-                if !is_admitted(&tx, actor, scope, id)? {
-                    missing += 1;
-                }
-            }
-            tx.execute(
-                "INSERT INTO support_clauses(rule_id, arity, missing) VALUES (?1, ?2, ?3)",
-                params![attempt, arity, missing],
-            )?;
-            let clause = tx.last_insert_rowid();
-            for &id in group {
-                // The compound primary key rejects a duplicate within a group.
-                tx.execute(
-                    "INSERT INTO support_premises(clause_id, requested_id, actor, scope)
-                     VALUES (?1, ?2, ?3, ?4)",
-                    params![clause, id, actor, scope],
-                )?;
-            }
-            checks += arity;
-            supported |= missing == 0;
-        }
-        bind(&tx, attempt, attempt, supported)?;
-        accept(&tx, branch.id, attempt, output(supported), checks)?;
+        let epoch = view_epoch(&tx, actor, scope)?;
+        let attempt = register_support(
+            &tx, actor, scope, epoch, &SupportRegistration { branch, alternatives },
+        )?;
         tx.commit()?;
         Ok(attempt)
+    }
+
+    /// Publish an ordered catalogue of rules in one transaction and return their
+    /// accepted attempt IDs in input order. All rules see the same admission epoch.
+    /// Repeated branch names form successive publications, retaining each attempt,
+    /// its parent, and its charge. A later error rolls back the entire call.
+    ///
+    /// An empty catalogue returns an empty list. Replaying a successful nonempty
+    /// catalogue intentionally creates fresh assertions and charges.
+    pub fn publish_support_many(
+        &mut self,
+        actor: &str,
+        scope: &str,
+        rules: &[SupportRegistration<'_>],
+    ) -> Result<Vec<i64>> {
+        validate_view(actor, scope)?;
+        if rules.is_empty() {
+            return Ok(Vec::new());
+        }
+        let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let epoch = view_epoch(&tx, actor, scope)?;
+        let mut attempts = Vec::with_capacity(rules.len());
+        for rule in rules {
+            attempts.push(register_support(&tx, actor, scope, epoch, rule)?);
+        }
+        tx.commit()?;
+        Ok(attempts)
     }
 
     /// Return an eligible head unchanged or issue the revised flag atomically.

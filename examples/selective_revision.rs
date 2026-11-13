@@ -1,5 +1,5 @@
 //! Run with `cargo run --example selective_revision`.
-use kairotensor::{Current, Store};
+use kairotensor::{Current, Store, SupportRegistration};
 use rusqlite::Result;
 use std::collections::BTreeSet;
 
@@ -26,17 +26,20 @@ fn recompute(store: &Store, alternatives: &[Vec<i64>]) -> Result<Current> {
 
 fn main() -> Result<()> {
     let mut store = Store::in_memory()?;
-    let report = store.observe("original-run/report", b"report for run 42")?;
-    let manifest = store.observe("original-run/manifest", b"inputs for run 42")?;
-    let rerun = store.observe("second-run/record", b"self-contained record for run 42")?;
-    for id in [report, manifest, rerun] {
-        store.set_admitted(ACTOR, SCOPE, id, true)?;
-    }
-
+    let observations: &[(&str, &[u8])] = &[
+        ("original-run/report", b"report for run 42"),
+        ("original-run/manifest", b"inputs for run 42"),
+        ("second-run/record", b"self-contained record for run 42"),
+    ];
+    let ids = store.observe_and_admit_many(ACTOR, SCOPE, observations)?;
+    let &[report, manifest, rerun] = ids.as_slice() else { unreachable!() };
     let report_rule = [vec![report]];
     let record_rule = [vec![report, manifest], vec![rerun]];
-    let old_report = store.publish_support(ACTOR, SCOPE, REPORT, &report_rule)?;
-    let old_record = store.publish_support(ACTOR, SCOPE, RECORD, &record_rule)?;
+    let heads = store.publish_support_many(ACTOR, SCOPE, &[
+        SupportRegistration { branch: REPORT, alternatives: &report_rule },
+        SupportRegistration { branch: RECORD, alternatives: &record_rule },
+    ])?;
+    let &[old_report, old_record] = heads.as_slice() else { unreachable!() };
     let consumers = store.support_consumers(ACTOR, SCOPE, report)?;
     assert_eq!(consumers, vec![REPORT.to_owned(), RECORD.to_owned()]);
     let usage = store.charged_usage()?;

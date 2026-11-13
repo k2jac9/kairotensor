@@ -1,4 +1,4 @@
-//! Compare three single-writer revision paths on identical file-backed fixtures.
+//! Compare three revision or setup paths on identical file-backed fixtures.
 #[path = "revision_bench/indexed.rs"]
 mod indexed;
 #[path = "revision_bench/scan.rs"]
@@ -6,7 +6,7 @@ mod scan;
 #[path = "revision_bench/workload.rs"]
 mod workload;
 
-use indexed::{EditMode, Indexed};
+use indexed::{Indexed, IndexedMode};
 use scan::Scan;
 use std::error::Error;
 use std::fs;
@@ -19,34 +19,41 @@ type Changes = Vec<(usize, bool)>;
 const SEED: u64 = 20261113;
 
 #[derive(Clone, Copy)]
-enum Arm { Indexed, Batch, Scan }
+enum Arm { Indexed, Batch, Bulk, Scan }
 
-// All six orders balance positions and immediate predecessors across a block.
-const ORDERS: [[Arm; 3]; 6] = {
-    use Arm::{Batch, Indexed, Scan};
-    [
-        [Indexed, Batch, Scan],
-        [Batch, Scan, Indexed],
-        [Scan, Indexed, Batch],
-        [Scan, Batch, Indexed],
-        [Batch, Indexed, Scan],
-        [Indexed, Scan, Batch],
-    ]
-};
+#[derive(Clone, Copy)]
+enum Suite { Revision, Setup }
+
+impl Suite {
+    // Each three-arm trial uses a different order. A full block balances
+    // position and immediate predecessor for every arm.
+    fn orders(self) -> [[Arm; 3]; 6] {
+        let [a, b, c] = match self {
+            Self::Revision => [Arm::Indexed, Arm::Batch, Arm::Scan],
+            Self::Setup => [Arm::Batch, Arm::Bulk, Arm::Scan],
+        };
+        [
+            [a, b, c], [b, c, a], [c, a, b],
+            [c, b, a], [b, a, c], [a, c, b],
+        ]
+    }
+}
 
 impl Arm {
     fn label(self) -> &'static str {
         match self {
             Self::Indexed => "indexed",
             Self::Batch => "batch",
+            Self::Bulk => "bulk",
             Self::Scan => "scan",
         }
     }
 
     fn open(self, path: &Path) -> rusqlite::Result<Box<dyn Backend>> {
         match self {
-            Self::Indexed => Ok(Box::new(Indexed::open(path, EditMode::PerBranch)?)),
-            Self::Batch => Ok(Box::new(Indexed::open(path, EditMode::Atomic)?)),
+            Self::Indexed => Ok(Box::new(Indexed::open(path, IndexedMode::PerBranch)?)),
+            Self::Batch => Ok(Box::new(Indexed::open(path, IndexedMode::Atomic)?)),
+            Self::Bulk => Ok(Box::new(Indexed::open(path, IndexedMode::BulkSetup)?)),
             Self::Scan => Ok(Box::new(Scan::open(path)?)),
         }
     }
@@ -146,18 +153,19 @@ impl Drop for Scratch {
     fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); }
 }
 
-fn cell(dir: &Path, rules: usize, edits: usize, trials: usize, dense: bool) -> Result<()> {
+fn cell(dir: &Path, suite: Suite, rules: usize, edits: usize, trials: usize, dense: bool) -> Result<()> {
     let scenario = if dense { "dense" } else { "sparse" };
     let work = generate(rules, edits, dense, SEED);
     let oracle = Expected::new(&work);
     let changes: usize = oracle.edits.iter().map(Vec::len).sum();
-    for arm in ORDERS[0] {
+    let orders = suite.orders();
+    for arm in orders[0] {
         let path = dir.join(format!("verify-{}.db", arm.label()));
         verify(arm.open(&path)?, &work, &oracle)?;
         fs::remove_file(path)?;
     }
     for trial in 0..trials {
-        let order = ORDERS[trial % ORDERS.len()];
+        let order = orders[trial % orders.len()];
         let order_label = order.map(Arm::label).join("/");
         for arm in order {
             let path = dir.join(format!("{scenario}-{rules}-{edits}-{trial}-{}.db", arm.label()));
@@ -178,12 +186,16 @@ fn main() -> Result<()> {
     let scratch = Scratch::new()?;
     eprintln!("revision_bench: SQLite {}, seed {SEED}, file-backed in {}", rusqlite::version(), scratch.0.display());
     println!("scenario,rules,edits,trial,order,arm,open_us,seed_us,register_us,edit_us,total_us,db_bytes,changes");
-    match args.as_slice() {
+    let (suite, args) = match args.as_slice() {
+        [command, rest @ ..] if command == "setup" => (Suite::Setup, rest),
+        rest => (Suite::Revision, rest),
+    };
+    match args {
         [] => {
             for dense in [false, true] {
-                for edits in [1, 32] { cell(&scratch.0, 128, edits, 6, dense)?; }
+                for edits in [1, 32] { cell(&scratch.0, suite, 128, edits, 6, dense)?; }
             }
-            cell(&scratch.0, 1024, 128, 6, false)?;
+            cell(&scratch.0, suite, 1024, 128, 6, false)?;
         }
         [scenario, rules, edits, trials] => {
             let dense = match scenario.as_str() {
@@ -191,9 +203,9 @@ fn main() -> Result<()> {
             };
             let (n, e, t) = (rules.parse()?, edits.parse()?, trials.parse()?);
             if n == 0 || t == 0 { return Err("rules and trials must be positive".into()); }
-            cell(&scratch.0, n, e, t, dense)?;
+            cell(&scratch.0, suite, n, e, t, dense)?;
         }
-        _ => return Err("usage: revision_bench [sparse|dense RULES EDITS TRIALS]".into()),
+        _ => return Err("usage: revision_bench [setup] [sparse|dense RULES EDITS TRIALS]".into()),
     }
     Ok(())
 }
@@ -204,21 +216,30 @@ mod tests {
 
     #[test]
     fn all_six_arm_orders_are_represented() {
-        let mut orders = std::collections::BTreeSet::new();
-        for order in ORDERS {
-            let labels = order.map(Arm::label);
-            let mut sorted = labels;
-            sorted.sort();
-            assert_eq!(sorted, ["batch", "indexed", "scan"]);
-            assert!(orders.insert(labels));
+        for (suite, expected) in [
+            (Suite::Revision, ["batch", "indexed", "scan"]),
+            (Suite::Setup, ["batch", "bulk", "scan"]),
+        ] {
+            let mut orders = std::collections::BTreeSet::new();
+            for order in suite.orders() {
+                let labels = order.map(Arm::label);
+                let mut sorted = labels;
+                sorted.sort();
+                assert_eq!(sorted, expected);
+                assert!(orders.insert(labels));
+            }
+            assert_eq!(orders.len(), 6);
         }
-        assert_eq!(orders.len(), 6);
     }
 
     #[test]
     fn file_backed_arms_match_the_oracle() -> Result<()> {
         let scratch = Scratch::new()?;
-        for dense in [false, true] { cell(&scratch.0, 8, 6, 2, dense)?; }
+        for suite in [Suite::Revision, Suite::Setup] {
+            for dense in [false, true] {
+                cell(&scratch.0, suite, 8, 6, 2, dense)?;
+            }
+        }
         Ok(())
     }
 }
