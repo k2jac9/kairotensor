@@ -61,7 +61,7 @@ The [live evaluation prompt catalogue](docs/evaluation-prompts.md) includes the 
 
 The local Qwen worker can tokenize a frozen chat before generation and return its exact prompt count. Kairotensor can reserve that count plus the enforced output cap in a token budget. An affordable request uses the prepared inputs; an unaffordable request can discard them without running the model. On delivery, the ledger charges actual prompt and completion tokens and releases the unused reservation. Unresolved dispatched work retains its reservation.
 
-The `token_cap_eval` example compares four output caps on synthetic reports and replays the archived 403/404-token boundary. [Experiment protocol](docs/token-cap-protocol.md)
+The `token_cap_eval` example compares four output caps on synthetic reports and replays the archived 403/404-token boundary. [Experiment protocol](docs/token-cap-protocol.md) · [Results and reproduction commands](docs/token-cap-results.md)
 
 ## Implemented contracts
 
@@ -72,6 +72,8 @@ The `token_cap_eval` example compares four output caps on synthetic reports and 
 | `begin_attempt` | Require every explicit input to be admitted. Record the ordered IDs and start fresh, with no inherited output. |
 | `read_current`, `begin_resume` | Check the accepted head against the current view before returning bytes. A resume records which accepted output it inherited. |
 | `record_dispatch` | Freeze the exact serialized adapter request for a still-eligible pending attempt. The request stays linked to the ordered source occurrences. |
+| `create_token_budget`, `token_budget_state` | Set a ceiling in input-plus-output tokens and read the amount spent and still reserved. |
+| `reserve_dispatch` | Atomically reserve the measured input plus the configured output cap and authorize dispatch. A denial records the decision and consumes no capacity. |
 | `settle` | Validate the captured branch and view, record the delivery and usage, and advance the head only on acceptance. Identical retries return the first disposition. Conflicting retries fail. |
 | `reject_invalid` | Record a dispatched response that failed validation, including the versioned validator, reason, exact returned bytes, and final usage. Keep the current branch head. |
 

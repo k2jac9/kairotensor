@@ -11,6 +11,11 @@ FAMILIES = {
     "unit": "calibration", "integration": "calibration",
     "package": "heldout", "migration": "heldout", "compatibility": "heldout",
 }
+# Each pair gives the green/red row in the preregistered Williams order.
+CAP_ORDERS = ((32, 48, 96, 64), (48, 64, 32, 96), (64, 96, 48, 32), (96, 32, 64, 48))
+FAMILY_ORDERS = {"unit": (0, 1), "integration": (2, 3), "package": (1, 0),
+                 "migration": (3, 2), "compatibility": (0, 2)}
+PINNED_MODEL = ("Qwen/Qwen2.5-1.5B-Instruct", "989aa7980e4cf806f80c7fef2b1adb7bc71aa306")
 LIMIT = 1024
 DEADLINE_MS = 60_000
 MIN_CALIBRATION_SUCCESSES = 3  # 75% of four cases; fixed before any holdout generation.
@@ -20,7 +25,6 @@ def load_traces(paths):
     """Validate the paired design, token ledger, and score labels before summarizing."""
     cases = defaultdict(dict)
     seen = set()
-    model = None
     for path in paths:
         with path.open(encoding="utf-8") as stream:
             data = json.load(stream)
@@ -33,9 +37,8 @@ def load_traces(paths):
         if data["budget_limit"] != LIMIT or data["deadline_ms"] != DEADLINE_MS:
             raise ValueError(f"{path}: budget or deadline differs from the preregistration")
         identity = data["model"], data["revision"]
-        if not all(isinstance(x, str) and x for x in identity) or (model and identity != model):
-            raise ValueError(f"{path}: incomplete or inconsistent model identity")
-        model = identity
+        if identity != PINNED_MODEL:
+            raise ValueError(f"{path}: model differs from the pinned evaluation revision")
         expected_cases = {f"{family}-green", f"{family}-red"}
         for row in data["samples"]:
             case, cap = row["case_id"], row["cap"]
@@ -67,8 +70,16 @@ def load_traces(paths):
                 raise ValueError(f"{context}: unreconciled token accounting")
             if row["spent_after"] != spent or row["outstanding_after"] != 0 or row["budget_limit"] != LIMIT:
                 raise ValueError(f"{context}: final ledger state does not match the row")
-            if row["dispatched"] and row["disposition"] != ("accepted" if row["valid"] and row["correct"] else "invalid_output"):
-                raise ValueError(f"{context}: terminal disposition conflicts with verdict")
+            if row["dispatched"]:
+                expected_disposition = "accepted" if row["valid"] and row["correct"] else "invalid_output"
+            elif row["disposition"] == "deadline_expired" and row["receipt_us"] >= DEADLINE_MS * 1000:
+                expected_disposition = "deadline_expired"
+            elif requested > LIMIT:
+                expected_disposition = "budget_denied"
+            else:
+                raise ValueError(f"{context}: affordable request denied before deadline")
+            if row["disposition"] != expected_disposition:
+                raise ValueError(f"{context}: disposition conflicts with budget, deadline or verdict")
             if row["deadline_ms"] != DEADLINE_MS or row["on_time"] != (row["receipt_us"] <= DEADLINE_MS * 1000):
                 raise ValueError(f"{context}: inconsistent caller deadline")
             if row["correct"] and not row["valid"]:
@@ -78,16 +89,18 @@ def load_traces(paths):
 
             # Within a paired case only the output cap may change in the frozen request.
             envelope = json.loads(row["request_utf8"])
-            if envelope["generation"].pop("max_new_tokens") != cap or (envelope["model"], envelope["revision"]) != model:
+            if envelope["generation"].pop("max_new_tokens") != cap or (envelope["model"], envelope["revision"]) != PINNED_MODEL:
                 raise ValueError(f"{context}: request conflicts with experiment metadata")
             if cases[case]:
                 first = next(iter(cases[case].values()))
                 if envelope != first["envelope"] or prompt != first["preflight_input_tokens"]:
                     raise ValueError(f"{context}: paired trials must use identical prompt and decoding settings")
             cases[case][cap] = dict(row, envelope=envelope)
-        for case in expected_cases:
-            if set(cases[case]) != set(CAPS) or {r["trial_order"] for r in cases[case].values()} != set(range(4)):
-                raise ValueError(f"{path}: incomplete cap grid/order for {case}")
+        for color, schedule in zip(("green", "red"), FAMILY_ORDERS[family]):
+            case = f"{family}-{color}"
+            trace = cases[case]
+            if tuple(trace) != CAP_ORDERS[schedule] or [r["trial_order"] for r in trace.values()] != list(range(4)):
+                raise ValueError(f"{path}: incomplete or out-of-order cap grid for {case}")
     if seen != set(FAMILIES):
         raise ValueError(f"missing family traces: {', '.join(sorted(set(FAMILIES) - seen))}")
     return cases
