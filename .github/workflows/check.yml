@@ -1,0 +1,22 @@
+name: Check Kairotensor
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Test the Rust store, including the withdrawal example
+        run: cargo test --all-targets
+      - name: Run the withdrawal example
+        run: cargo run --example withdrawal
+      - name: Check the original reference contracts
+        run: |
+          python3 -m unittest discover -s reference -p test_memory.py
+          python3 reference/belief_oracle.py
