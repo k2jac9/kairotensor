@@ -2,6 +2,8 @@
 
 This example asks a release planner for a structured deployment instruction. The original requirement names staging. A correction changes the target to canary. The same test report applies to either environment. All sources, approvals and release identifiers in this example are synthetic.
 
+[Exact handoff prompts and message order](evaluation-prompts.md#corrected-handoff)
+
 ## Run
 
 Use the deterministic adapter to exercise the storage and correction protocol without downloading weights.

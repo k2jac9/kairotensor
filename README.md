@@ -55,6 +55,8 @@ The deployment planner example captures exact dispatch bytes and their source ID
 
 A caller may reuse a previously validated model response for a closed, versioned computation on a branch. For example, a deployment policy can change while an independent test-report judgment remains eligible. In a live Qwen fixture, repairing the plan used one call and 193 tokens; a clean rebuild used two calls and 404 tokens. Replacing the report forced a fresh judgment and the release was held. [Contract and live evaluation](docs/scoped-model-reuse.md)
 
+The [live evaluation prompt catalogue](docs/evaluation-prompts.md) includes the original and revised instructions, exact user payloads, checkpoint history, and the request used at each step.
+
 ## Implemented contracts
 
 | Operation | Behavior |

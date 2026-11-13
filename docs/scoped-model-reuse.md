@@ -2,6 +2,8 @@
 
 A change to deployment policy can require a new plan while leaving a test report unchanged. The example models those decisions as separate calls. One model call extracts a typed judgment from the report; the planner uses the applicable policy and the validated judgment. All sources and identifiers in the experiment are synthetic.
 
+[Exact prompts from the first and revised runs](evaluation-prompts.md#scoped-reuse-first-run)
+
 ## Use the contract
 
 1. Call `begin_model_attempt` with an actor, scope, branch, fixed ordered list of candidate observations, and a versioned computation contract. Use the captured observations to assemble the final adapter request, including model revision, messages and decoding parameters.
