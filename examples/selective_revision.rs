@@ -37,24 +37,21 @@ fn main() -> Result<()> {
     let record_rule = [vec![report, manifest], vec![rerun]];
     let old_report = store.publish_support(ACTOR, SCOPE, REPORT, &report_rule)?;
     let old_record = store.publish_support(ACTOR, SCOPE, RECORD, &record_rule)?;
-    store.set_admitted(ACTOR, SCOPE, report, false)?;
-
     let consumers = store.support_consumers(ACTOR, SCOPE, report)?;
     assert_eq!(consumers, vec![REPORT.to_owned(), RECORD.to_owned()]);
-    println!("Withdrew the original report. Affected branches: {}.", consumers.join(", "));
-
     let usage = store.charged_usage()?;
-    assert_eq!(store.read_current(ACTOR, SCOPE, RECORD)?, Current::Ready(b"supported".to_vec()));
-    assert_eq!(store.revise_support(ACTOR, SCOPE, RECORD)?, old_record);
-    assert_eq!(store.charged_usage()?, usage);
-    println!("The second run still supplies a reproduction record. Kept attempt {old_record}.");
+    let changes = store.set_admitted_and_revise(ACTOR, SCOPE, report, false)?;
 
-    assert_eq!(store.read_current(ACTOR, SCOPE, REPORT)?, Current::NeedsReview);
-    let new_report = store.revise_support(ACTOR, SCOPE, REPORT)?;
-    assert_ne!(new_report, old_report);
-    assert_eq!(store.read_current(ACTOR, SCOPE, REPORT)?, Current::Ready(b"unsupported".to_vec()));
+    assert_eq!(changes.len(), 1);
+    let revision = &changes[0];
+    assert_eq!(revision.branch, REPORT);
+    assert_ne!(revision.attempt_id, old_report);
+    assert!(!revision.supported);
     assert_eq!(store.charged_usage()?, usage + 1);
-    println!("The primary report has no admitted witness. Published attempt {new_report}.");
+    assert_eq!(store.revise_support(ACTOR, SCOPE, RECORD)?, old_record);
+    println!("Withdrew the original report and revised its dependent branches in one commit.");
+    println!("The primary report lost its only witness. Published attempt {}.", revision.attempt_id);
+    println!("The second run still supplies a reproduction record. Kept attempt {old_record}.");
 
     for (branch, rule) in [(REPORT, report_rule.as_slice()), (RECORD, record_rule.as_slice())] {
         let expected = recompute(&store, rule)?;

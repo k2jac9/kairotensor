@@ -3,8 +3,19 @@
 //! be reused under this rule. Observation payloads are never read by the rule.
 use rusqlite::{params, Connection, OptionalExtension, Result, Transaction, TransactionBehavior};
 
-use crate::attempts::{accept, ensure_branch, find_branch, record_attempt};
-use crate::{invalid, is_admitted, view_epoch, Store};
+use crate::attempts::{accept, ensure_branch, find_branch, record_attempt, Branch};
+use crate::{change_admission, invalid, is_admitted, view_epoch, Store};
+
+/// One accepted support/v1 publication made by an atomic admission edit.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SupportRevision {
+    /// Branch name within the edited actor and scope.
+    pub branch: String,
+    /// Newly accepted attempt containing the published result and its charge.
+    pub attempt_id: i64,
+    /// Whether any declared witness group is complete at this edit.
+    pub supported: bool,
+}
 
 fn output(supported: bool) -> &'static [u8] {
     if supported { b"supported" } else { b"unsupported" }
@@ -74,6 +85,71 @@ fn bind(
     Ok(())
 }
 
+fn publish_revision(
+    tx: &Transaction<'_>,
+    branch: &Branch,
+    epoch: i64,
+    rule: i64,
+    supported: bool,
+) -> Result<i64> {
+    let attempt = record_attempt(tx, branch, epoch, None)?;
+    bind(tx, attempt, rule, supported)?;
+    accept(tx, branch.id, attempt, output(supported), 1)?;
+    Ok(attempt)
+}
+
+struct ChangedHead {
+    name: String,
+    branch: Branch,
+    rule: i64,
+    supported: bool,
+}
+
+// Deduplicate rules before checking their verdicts: an occurrence can appear in
+// several alternatives. Finish the SELECT before mutating the heads it reads.
+fn changed_heads(
+    tx: &Transaction<'_>,
+    actor: &str,
+    scope: &str,
+    evidence: i64,
+) -> Result<Vec<ChangedHead>> {
+    let mut select = tx.prepare_cached(
+        "WITH affected(rule_id) AS (
+             SELECT DISTINCT c.rule_id FROM support_premises p
+             JOIN support_clauses c ON c.id = p.clause_id
+             WHERE p.actor = ?1 AND p.scope = ?2 AND p.requested_id = ?3 AND p.watching = 1
+         )
+         SELECT b.name, b.id, b.head, b.revision, s.rule_id, s.verdict, EXISTS (
+             SELECT 1 FROM support_clauses c WHERE c.rule_id = s.rule_id AND c.missing = 0
+         )
+         FROM affected
+         JOIN attempts a ON a.id = affected.rule_id
+         JOIN branches b ON b.id = a.branch_id
+         JOIN support_bindings s ON s.attempt_id = b.head AND s.rule_id = affected.rule_id
+         WHERE b.actor = ?1 AND b.scope = ?2
+         ORDER BY b.name",
+    )?;
+    let mut rows = select.query(params![actor, scope, evidence])?;
+    let mut changed = Vec::new();
+    while let Some(row) = rows.next()? {
+        let published: bool = row.get(5)?;
+        let supported: bool = row.get(6)?;
+        if published != supported {
+            changed.push(ChangedHead {
+                name: row.get(0)?,
+                branch: Branch {
+                    id: row.get(1)?,
+                    head: row.get(2)?,
+                    revision: row.get(3)?,
+                },
+                rule: row.get(4)?,
+                supported,
+            });
+        }
+    }
+    Ok(changed)
+}
+
 impl Store {
     /// Publish a new support/v1 definition and its current flag. Groups are
     /// alternatives and each group requires all its distinct positive IDs.
@@ -141,11 +217,47 @@ impl Store {
             tx.commit()?;
             return Ok(head);
         }
-        let attempt = record_attempt(&tx, &branch, view_epoch(&tx, actor, scope)?, None)?;
-        bind(&tx, attempt, state.rule, state.current)?;
-        accept(&tx, branch.id, attempt, output(state.current), 1)?;
+        let epoch = view_epoch(&tx, actor, scope)?;
+        let attempt = publish_revision(&tx, &branch, epoch, state.rule, state.current)?;
         tx.commit()?;
         Ok(attempt)
+    }
+
+    /// Change one observation's admission and reconcile its current support/v1
+    /// consumers in this actor's scope in one SQLite transaction. A reader
+    /// using a single snapshot sees the state before or after the whole edit.
+    ///
+    /// Returns only newly published verdicts, ordered by branch name. Each
+    /// receives a new accepted attempt and a one-unit charge. Consumers whose
+    /// published verdict still holds keep their original attempts.
+    ///
+    /// Setting the existing admission is a no-op with an empty receipt.
+    /// An immediate retry after commit therefore adds no charges. If another
+    /// writer reversed the admission since then, the call is a new edit.
+    pub fn set_admitted_and_revise(
+        &mut self,
+        actor: &str,
+        scope: &str,
+        evidence: i64,
+        admitted: bool,
+    ) -> Result<Vec<SupportRevision>> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let mut revisions = Vec::new();
+        if let Some(epoch) = change_admission(&tx, actor, scope, evidence, admitted)? {
+            for head in changed_heads(&tx, actor, scope, evidence)? {
+                let attempt_id =
+                    publish_revision(&tx, &head.branch, epoch, head.rule, head.supported)?;
+                revisions.push(SupportRevision {
+                    branch: head.name,
+                    attempt_id,
+                    supported: head.supported,
+                });
+            }
+        }
+        tx.commit()?;
+        Ok(revisions)
     }
 
     /// List the active support-rule branch names watching this occurrence in

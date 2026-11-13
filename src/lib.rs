@@ -3,8 +3,11 @@
 mod attempts;
 mod support;
 pub use attempts::{CapturedInputs, Current, Disposition};
+pub use support::SupportRevision;
 
-use rusqlite::{ffi, params, Connection, Error, OptionalExtension, Result, TransactionBehavior};
+use rusqlite::{
+    ffi, params, Connection, Error, OptionalExtension, Result, Transaction, TransactionBehavior,
+};
 use std::path::Path;
 use std::time::Duration;
 
@@ -80,26 +83,8 @@ impl Store {
         evidence: i64,
         admitted: bool,
     ) -> Result<()> {
-        if actor.is_empty() || scope.is_empty() {
-            return Err(invalid("actor and scope must be nonempty"));
-        }
         let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        tx.query_row(
-            "SELECT 1 FROM evidence WHERE id = ?1",
-            [evidence],
-            |_| Ok(()),
-        )?;
-        if is_admitted(&tx, actor, scope, evidence)? != admitted {
-            let epoch = view_epoch(&tx, actor, scope)?
-                .checked_add(1)
-                .ok_or_else(|| invalid("view epoch exhausted"))?;
-            tx.execute(
-                "INSERT INTO admission_events(actor, scope, epoch, evidence_id, admitted)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![actor, scope, epoch, evidence, admitted],
-            )?;
-            support::on_admission(&tx, actor, scope, evidence, admitted)?;
-        }
+        let _ = change_admission(&tx, actor, scope, evidence, admitted)?;
         tx.commit()
     }
 
@@ -127,6 +112,38 @@ impl Store {
             )
             .optional()
     }
+}
+
+/// Apply an effective membership change and return its epoch to the writer.
+/// Repeating the current membership leaves the journal and projections alone.
+fn change_admission(
+    tx: &Transaction<'_>,
+    actor: &str,
+    scope: &str,
+    evidence: i64,
+    admitted: bool,
+) -> Result<Option<i64>> {
+    if actor.is_empty() || scope.is_empty() {
+        return Err(invalid("actor and scope must be nonempty"));
+    }
+    tx.query_row(
+        "SELECT 1 FROM evidence WHERE id = ?1",
+        [evidence],
+        |_| Ok(()),
+    )?;
+    if is_admitted(tx, actor, scope, evidence)? == admitted {
+        return Ok(None);
+    }
+    let epoch = view_epoch(tx, actor, scope)?
+        .checked_add(1)
+        .ok_or_else(|| invalid("view epoch exhausted"))?;
+    tx.execute(
+        "INSERT INTO admission_events(actor, scope, epoch, evidence_id, admitted)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![actor, scope, epoch, evidence, admitted],
+    )?;
+    support::on_admission(tx, actor, scope, evidence, admitted)?;
+    Ok(Some(epoch))
 }
 
 pub(crate) fn view_epoch(db: &Connection, actor: &str, scope: &str) -> Result<i64> {

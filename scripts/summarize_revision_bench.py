@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize paired Kairotensor revision benchmark CSV rows as Markdown."""
+"""Summarize matched Kairotensor revision benchmark trials as Markdown."""
 
 import argparse
 import csv
@@ -10,16 +10,18 @@ from pathlib import Path
 from statistics import median
 
 
-HEADER = (
+PAIR_HEADER = (
     "scenario,rules,edits,trial,first,arm,open_us,seed_us,register_us,"
     "edit_us,total_us,db_bytes,changes"
 ).split(",")
-ARMS = ("indexed", "scan")
+TRIPLE_HEADER = ["order" if field == "first" else field for field in PAIR_HEADER]
+PAIR_ARMS = ("indexed", "scan")
+TRIPLE_ARMS = ("indexed", "batch", "scan")
 
 
 @dataclass(frozen=True)
 class Sample:
-    first: str
+    order: tuple[str, ...]
     setup_us: int
     edit_us: int
     total_us: int
@@ -28,22 +30,36 @@ class Sample:
 
 
 def read_cells(stream):
-    """Pair each trial before calculating any aggregate."""
+    """Keep the reported arm order and validate each trial before aggregation."""
     reader = csv.reader((line for line in stream if not line.startswith("#")), strict=True)
-    if next(reader, None) != HEADER:
-        raise ValueError("unexpected CSV header; expected " + ",".join(HEADER))
+    header = next(reader, None)
+    if header == PAIR_HEADER:
+        arms = PAIR_ARMS
+    elif header == TRIPLE_HEADER:
+        arms = TRIPLE_ARMS
+    else:
+        raise ValueError("unexpected CSV header; expected a paired 'first' or triplet 'order' header")
     trials = defaultdict(dict)
     for fields in reader:
         if not fields:
             continue
-        if len(fields) != len(HEADER):
-            raise ValueError(f"CSV row {reader.line_num}: expected {len(HEADER)} fields")
-        row = dict(zip(HEADER, fields))
-        scenario, arm, first = row["scenario"], row["arm"], row["first"]
-        if scenario not in ("sparse", "dense") or arm not in ARMS or first not in ARMS:
-            raise ValueError(f"CSV row {reader.line_num}: unknown scenario, arm, or first arm")
+        if len(fields) != len(header):
+            raise ValueError(f"CSV row {reader.line_num}: expected {len(header)} fields")
+        row = dict(zip(header, fields))
+        scenario, arm = row["scenario"], row["arm"]
+        if scenario not in ("sparse", "dense") or arm not in arms:
+            raise ValueError(f"CSV row {reader.line_num}: unknown scenario or arm")
+        if arms == PAIR_ARMS:
+            first = row["first"]
+            if first not in arms:
+                raise ValueError(f"CSV row {reader.line_num}: unknown first arm")
+            order = (first, next(other for other in arms if other != first))
+        else:
+            order = tuple(row["order"].split("/"))
+            if len(order) != len(arms) or set(order) != set(arms):
+                raise ValueError(f"CSV row {reader.line_num}: order must be a permutation of {arms}")
         numbers = {}
-        for name in ("rules", "edits", "trial", *HEADER[6:]):
+        for name in ("rules", "edits", "trial", *header[6:]):
             value = row[name]
             if not value.isascii() or not value.isdecimal():
                 raise ValueError(f"CSV row {reader.line_num}: {name} must be a nonnegative integer")
@@ -58,48 +74,72 @@ def read_cells(stream):
         key = (scenario, numbers["rules"], numbers["edits"], numbers["trial"])
         if arm in trials[key]:
             raise ValueError(f"duplicate {arm} sample for {key}")
-        trials[key][arm] = Sample(first, setup, edits, total, numbers["db_bytes"], numbers["changes"])
+        trials[key][arm] = Sample(order, setup, edits, total, numbers["db_bytes"], numbers["changes"])
     if not trials:
         raise ValueError("no benchmark samples")
     cells = defaultdict(list)
-    for key, pair in trials.items():
-        if set(pair) != set(ARMS):
-            raise ValueError(f"incomplete pair for {key}")
-        indexed, scan = pair["indexed"], pair["scan"]
-        if indexed.first != scan.first or indexed.changes != scan.changes:
-            raise ValueError(f"first arm or change count differs within pair {key}")
-        cells[key[:3]].append((indexed, scan))
-    return cells
+    for key, trial in trials.items():
+        if set(trial) != set(arms):
+            raise ValueError(f"incomplete trial for {key}")
+        samples = tuple(trial[arm] for arm in arms)
+        if any(s.order != samples[0].order or s.changes != samples[0].changes for s in samples):
+            raise ValueError(f"arm order or change count differs within trial {key}")
+        if arms == TRIPLE_ARMS and tuple(trial) != samples[0].order:
+            raise ValueError(f"observed row order differs from declared execution order for {key}")
+        cells[key[:3]].append(samples)
+    return arms, cells
 
 
-def format_summary(cells):
-    header = (
-        "| Scenario | Rules | Edits | Pairs | Setup ms (I / S) | Edit ms (I / S) | "
-        "Total ms (I / S) | S / I total, median [min, max] | Database KiB (I / S) |"
-    )
-    lines = [
-        "I = indexed and S = full scan. Times and file sizes are medians. "
-        "Ratios are computed within each pair. Values above 1 favor indexed.",
-        "",
-        header,
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+def ratio_range(ratios):
+    return f"{median(ratios):.3f} [{min(ratios):.3f}, {max(ratios):.3f}]"
+
+
+def format_summary(arms, cells):
+    if arms == PAIR_ARMS:
+        description = (
+            "I = indexed and S = full scan. Times and file sizes are medians. "
+            "Ratios are computed within each pair. Values above 1 favor indexed."
+        )
+        names = "I / S"
+        count = "Pairs"
+        ratio_headers = ["S / I total, median [min, max]"]
+    else:
+        description = (
+            "I = per-branch indexed, B = atomic batch, S = full scan. "
+            "Times and database sizes are medians. Ratios are calculated within each trial "
+            "and reported as median [min, max]. Values above 1 favor batch. "
+            "An edit ratio is unavailable for zero edits or a zero-microsecond edit time in either indexed arm."
+        )
+        names = "I / B / S"
+        count = "Triplets"
+        ratio_headers = ["I / B edit", "S / B total"]
+    columns = [
+        "Scenario", "Rules", "Edits", count, f"Setup ms ({names})", f"Edit ms ({names})",
+        f"Total ms ({names})", *ratio_headers, f"Database KiB ({names})",
     ]
-    for (scenario, size, edits), pairs in sorted(cells.items()):
-        indexed, scan = zip(*pairs)
+    lines = [
+        description, "", "| " + " | ".join(columns) + " |",
+        "| --- |" + " ---: |" * (len(columns) - 1),
+    ]
+    for (scenario, size, edits), trials in sorted(cells.items()):
         metrics = []
         for name, scale in (("setup_us", 1000), ("edit_us", 1000),
                             ("total_us", 1000), ("db_bytes", 1024)):
             values = [
                 median(getattr(sample, name) for sample in arm) / scale
-                for arm in (indexed, scan)
+                for arm in zip(*trials)
             ]
             metrics.append(" / ".join(f"{value:.3f}" for value in values))
         setup, edit, total, storage = metrics
-        ratios = [s.total_us / i.total_us for i, s in pairs]
-        lines.append(
-            f"| {scenario} | {size} | {edits} | {len(pairs)} | {setup} | {edit} | {total} | "
-            f"{median(ratios):.3f} [{min(ratios):.3f}, {max(ratios):.3f}] | {storage} |"
-        )
+        if arms == PAIR_ARMS:
+            ratios = [ratio_range([s.total_us / i.total_us for i, s in trials])]
+        else:
+            edit_ratio = "n/a"
+            if edits and all(i.edit_us and b.edit_us for i, b, _ in trials):
+                edit_ratio = ratio_range([i.edit_us / b.edit_us for i, b, _ in trials])
+            ratios = [edit_ratio, ratio_range([s.total_us / b.total_us for _, b, s in trials])]
+        values = [scenario, size, edits, len(trials), setup, edit, total, *ratios, storage]
+        lines.append("| " + " | ".join(map(str, values)) + " |")
     return "\n".join(lines)
 
 
@@ -109,11 +149,11 @@ def main():
     args = parser.parse_args()
     try:
         if args.file in (None, "-"):
-            cells = read_cells(sys.stdin)
+            arms, cells = read_cells(sys.stdin)
         else:
             with Path(args.file).open(encoding="utf-8", newline="") as stream:
-                cells = read_cells(stream)
-        print(format_summary(cells))
+                arms, cells = read_cells(stream)
+        print(format_summary(arms, cells))
     except (ValueError, csv.Error, OSError) as error:
         parser.exit(1, f"{parser.prog}: {error}\n")
 

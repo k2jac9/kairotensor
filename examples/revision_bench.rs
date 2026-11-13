@@ -1,4 +1,4 @@
-//! Compare two single-writer implementations on identical file-backed fixtures.
+//! Compare three single-writer revision paths on identical file-backed fixtures.
 #[path = "revision_bench/indexed.rs"]
 mod indexed;
 #[path = "revision_bench/scan.rs"]
@@ -6,7 +6,7 @@ mod scan;
 #[path = "revision_bench/workload.rs"]
 mod workload;
 
-use indexed::Indexed;
+use indexed::{EditMode, Indexed};
 use scan::Scan;
 use std::error::Error;
 use std::fs;
@@ -19,16 +19,34 @@ type Changes = Vec<(usize, bool)>;
 const SEED: u64 = 20261113;
 
 #[derive(Clone, Copy)]
-enum Arm { Indexed, Scan }
+enum Arm { Indexed, Batch, Scan }
+
+// All six orders balance positions and immediate predecessors across a block.
+const ORDERS: [[Arm; 3]; 6] = {
+    use Arm::{Batch, Indexed, Scan};
+    [
+        [Indexed, Batch, Scan],
+        [Batch, Scan, Indexed],
+        [Scan, Indexed, Batch],
+        [Scan, Batch, Indexed],
+        [Batch, Indexed, Scan],
+        [Indexed, Scan, Batch],
+    ]
+};
 
 impl Arm {
     fn label(self) -> &'static str {
-        match self { Self::Indexed => "indexed", Self::Scan => "scan" }
+        match self {
+            Self::Indexed => "indexed",
+            Self::Batch => "batch",
+            Self::Scan => "scan",
+        }
     }
 
     fn open(self, path: &Path) -> rusqlite::Result<Box<dyn Backend>> {
         match self {
-            Self::Indexed => Ok(Box::new(Indexed::open(path)?)),
+            Self::Indexed => Ok(Box::new(Indexed::open(path, EditMode::PerBranch)?)),
+            Self::Batch => Ok(Box::new(Indexed::open(path, EditMode::Atomic)?)),
             Self::Scan => Ok(Box::new(Scan::open(path)?)),
         }
     }
@@ -128,25 +146,26 @@ impl Drop for Scratch {
     fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); }
 }
 
-fn cell(dir: &Path, rules: usize, edits: usize, pairs: usize, dense: bool) -> Result<()> {
+fn cell(dir: &Path, rules: usize, edits: usize, trials: usize, dense: bool) -> Result<()> {
     let scenario = if dense { "dense" } else { "sparse" };
     let work = generate(rules, edits, dense, SEED);
     let oracle = Expected::new(&work);
     let changes: usize = oracle.edits.iter().map(Vec::len).sum();
-    for arm in [Arm::Indexed, Arm::Scan] {
+    for arm in ORDERS[0] {
         let path = dir.join(format!("verify-{}.db", arm.label()));
         verify(arm.open(&path)?, &work, &oracle)?;
         fs::remove_file(path)?;
     }
-    for trial in 0..pairs {
-        let order = if trial % 2 == 0 { [Arm::Indexed, Arm::Scan] } else { [Arm::Scan, Arm::Indexed] };
+    for trial in 0..trials {
+        let order = ORDERS[trial % ORDERS.len()];
+        let order_label = order.map(Arm::label).join("/");
         for arm in order {
             let path = dir.join(format!("{scenario}-{rules}-{edits}-{trial}-{}.db", arm.label()));
             let start = Instant::now();
             let s = measure(arm.open(&path)?, &work, &oracle, start)?;
             let bytes = fs::metadata(&path)?.len();
             println!("{scenario},{rules},{edits},{trial},{},{},{},{},{},{},{},{bytes},{changes}",
-                order[0].label(), arm.label(), s.open.as_micros(), s.seed.as_micros(),
+                order_label, arm.label(), s.open.as_micros(), s.seed.as_micros(),
                 s.register.as_micros(), s.edits.as_micros(), s.total.as_micros());
             fs::remove_file(path)?;
         }
@@ -158,7 +177,7 @@ fn main() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     let scratch = Scratch::new()?;
     eprintln!("revision_bench: SQLite {}, seed {SEED}, file-backed in {}", rusqlite::version(), scratch.0.display());
-    println!("scenario,rules,edits,trial,first,arm,open_us,seed_us,register_us,edit_us,total_us,db_bytes,changes");
+    println!("scenario,rules,edits,trial,order,arm,open_us,seed_us,register_us,edit_us,total_us,db_bytes,changes");
     match args.as_slice() {
         [] => {
             for dense in [false, true] {
@@ -166,15 +185,15 @@ fn main() -> Result<()> {
             }
             cell(&scratch.0, 1024, 128, 6, false)?;
         }
-        [scenario, rules, edits, pairs] => {
+        [scenario, rules, edits, trials] => {
             let dense = match scenario.as_str() {
                 "sparse" => false, "dense" => true, _ => return Err("scenario must be sparse or dense".into()),
             };
-            let (n, e, p) = (rules.parse()?, edits.parse()?, pairs.parse()?);
-            if n == 0 || p == 0 { return Err("rules and pairs must be positive".into()); }
-            cell(&scratch.0, n, e, p, dense)?;
+            let (n, e, t) = (rules.parse()?, edits.parse()?, trials.parse()?);
+            if n == 0 || t == 0 { return Err("rules and trials must be positive".into()); }
+            cell(&scratch.0, n, e, t, dense)?;
         }
-        _ => return Err("usage: revision_bench [sparse|dense RULES EDITS PAIRS]".into()),
+        _ => return Err("usage: revision_bench [sparse|dense RULES EDITS TRIALS]".into()),
     }
     Ok(())
 }
@@ -182,6 +201,19 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn all_six_arm_orders_are_represented() {
+        let mut orders = std::collections::BTreeSet::new();
+        for order in ORDERS {
+            let labels = order.map(Arm::label);
+            let mut sorted = labels;
+            sorted.sort();
+            assert_eq!(sorted, ["batch", "indexed", "scan"]);
+            assert!(orders.insert(labels));
+        }
+        assert_eq!(orders.len(), 6);
+    }
 
     #[test]
     fn file_backed_arms_match_the_oracle() -> Result<()> {
