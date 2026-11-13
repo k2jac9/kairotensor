@@ -1,6 +1,7 @@
 //! Local versioned evidence memory with actor-scoped admission and atomic publication.
 
 mod attempts;
+mod support;
 pub use attempts::{CapturedInputs, Current, Disposition};
 
 use rusqlite::{ffi, params, Connection, Error, OptionalExtension, Result, TransactionBehavior};
@@ -9,7 +10,7 @@ use std::time::Duration;
 
 // "KTSM", stored in the SQLite header.
 const APPLICATION_ID: i32 = 0x4b54_534d;
-const SCHEMA_VERSION: i32 = 1;
+const SCHEMA_VERSION: i32 = 2;
 
 /// A local trusted runtime owns the database and supplies authenticated actor/scope names.
 pub struct Store {
@@ -35,6 +36,10 @@ impl Store {
         let version: i32 = tx.pragma_query_value(None, "user_version", |row| row.get(0))?;
         match (application, version) {
             (APPLICATION_ID, SCHEMA_VERSION) => {}
+            (APPLICATION_ID, 1) => {
+                tx.execute_batch(include_str!("support.sql"))?;
+                tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+            }
             (0, 0) => {
                 let populated: bool = tx.query_row(
                     "SELECT EXISTS(SELECT 1 FROM sqlite_schema WHERE name NOT GLOB 'sqlite_*')",
@@ -48,6 +53,7 @@ impl Store {
                 }
                 tx.execute_batch(include_str!("schema.sql"))?;
                 tx.execute_batch(include_str!("attempts.sql"))?;
+                tx.execute_batch(include_str!("support.sql"))?;
                 tx.pragma_update(None, "application_id", APPLICATION_ID)?;
                 tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
             }
@@ -92,6 +98,7 @@ impl Store {
                  VALUES (?1, ?2, ?3, ?4, ?5)",
                 params![actor, scope, epoch, evidence, admitted],
             )?;
+            support::on_admission(&tx, actor, scope, evidence, admitted)?;
         }
         tx.commit()
     }
@@ -240,6 +247,45 @@ mod tests {
         );
         drop(reader);
         std::fs::remove_file(path).unwrap();
+        Ok(())
+    }
+
+    #[test]
+    fn migrate_v1_preserves_opaque_heads_pending_work_and_charges() -> Result<()> {
+        let conn = Connection::open_in_memory()?;
+        conn.execute_batch(include_str!("schema.sql"))?;
+        conn.execute_batch(include_str!("attempts.sql"))?;
+        conn.pragma_update(None, "application_id", APPLICATION_ID)?;
+        conn.pragma_update(None, "user_version", 1)?;
+        // Populate the exact v1 layout. The old deliveries have no proof metadata,
+        // even when their bytes happen to match a built-in rule's output.
+        conn.execute_batch(
+            "INSERT INTO evidence VALUES (1, 'release-log', X'01');
+             INSERT INTO admission_events VALUES ('reviewer', 'release', 1, 1, 1);
+             INSERT INTO branches (id, actor, scope, name) VALUES (1, 'reviewer', 'release', 'old');
+             INSERT INTO attempts VALUES (1, 1, NULL, 0, 1, NULL);
+             INSERT INTO attempt_inputs VALUES (1, 0, 1);
+             INSERT INTO deliveries VALUES (1, 'accepted', CAST('supported' AS BLOB), 3);
+             UPDATE branches SET head = 1, revision = 1 WHERE id = 1;
+             INSERT INTO attempts VALUES (2, 1, 1, 1, 1, 1);",
+        )?;
+        let mut store = Store::initialize(conn)?;
+        assert_eq!(store.read_current("reviewer", "release", "old")?,
+                   Current::Ready(b"supported".to_vec()));
+        assert_eq!(store.charged_usage()?, 3);
+        store.set_admitted("reviewer", "release", 1, false)?;
+        assert_eq!(store.read_current("reviewer", "release", "old")?, Current::NeedsReview);
+        assert!(store.revise_support("reviewer", "release", "old").is_err());
+        assert_eq!(store.settle(2, b"late", 4)?, Disposition::StaleView);
+        assert_eq!(store.settle(2, b"late", 4)?, Disposition::StaleView);
+        assert_eq!(store.charged_usage()?, 7);
+        // The same migrated file can immediately register a new guarded branch.
+        store.publish_support("reviewer", "release", "new", &[vec![1]])?;
+        assert_eq!(store.read_current("reviewer", "release", "new")?,
+                   Current::Ready(b"unsupported".to_vec()));
+        let reopened = Store::initialize(store.conn)?;
+        let version: i32 = reopened.conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
+        assert_eq!(version, SCHEMA_VERSION);
         Ok(())
     }
 
