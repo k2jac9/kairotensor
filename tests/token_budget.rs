@@ -139,3 +139,31 @@ fn concurrent_reservations_serialize_and_unknown_usage_survives_restart() -> Res
     assert!(restarted.reserve_dispatch(budget, late, b"after reconciliation", 2, 2)?);
     Ok(())
 }
+
+#[test]
+fn v5_migration_never_assigns_prior_or_pending_work_to_a_new_budget() -> Result<()> {
+    let file = Database::new("migration");
+    let legacy = Connection::open(&file.0)?;
+    for script in [
+        include_str!("../src/schema.sql"), include_str!("../src/attempts.sql"), include_str!("../src/support.sql"),
+        include_str!("../src/dispatch.sql"), include_str!("../src/model_reuse.sql"), include_str!("../src/validation.sql"),
+    ] { legacy.execute_batch(script)?; }
+    legacy.pragma_update(None, "application_id", 0x4b54_534d_i32)?;
+    legacy.pragma_update(None, "user_version", 5)?;
+    legacy.execute_batch(
+        "INSERT INTO branches(id,actor,scope,name) VALUES(1,'planner','release','legacy');
+         INSERT INTO attempts(id,branch_id,branch_revision,view_epoch) VALUES(1,1,0,0),(2,1,0,0);
+         INSERT INTO dispatches VALUES(1,X'01'),(2,X'02');
+         INSERT INTO deliveries VALUES(1,'invalid_output',X'00',7,'validator/1','bad','current');",
+    )?;
+    drop(legacy);
+    let mut store = Store::open(&file.0)?;
+    let budget = store.create_token_budget(10)?;
+    assert_eq!(store.charged_usage()?, 7);
+    assert!(store.reserve_dispatch(budget, 2, &[2], 3, 4).is_err());
+    assert_eq!(store.settle(2, b"legacy result", 3)?, Disposition::Accepted);
+    assert_eq!(store.charged_usage()?, 10);
+    assert_eq!(store.token_budget_state(budget)?,
+               TokenBudgetState { limit: 10, spent: 0, reserved: 0 });
+    Ok(())
+}

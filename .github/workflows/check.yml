@@ -21,7 +21,9 @@ jobs:
           cargo run --example corrected_handoff
           cargo run --example scoped_model_reuse
           cargo run --example scoped_model_reuse -- --replay-invalid
+          cargo run --example token_cap_eval
       - name: Check the original reference contracts
         run: |
           python3 -m unittest discover -s reference -p test_memory.py
           python3 reference/belief_oracle.py
+          python3 -m unittest discover -s scripts -p 'test_*.py'
