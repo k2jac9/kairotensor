@@ -162,6 +162,36 @@ fn record_exact_inputs(
     Ok(())
 }
 
+pub(crate) fn capture_candidates(
+    tx: &Transaction<'_>,
+    actor: &str,
+    scope: &str,
+    branch: &str,
+    candidates: &[i64],
+) -> Result<(i64, CapturedInputs)> {
+    let branch = ensure_branch(tx, actor, scope, branch)?;
+    let attempt = record_attempt(tx, &branch, view_epoch(tx, actor, scope)?, None)?;
+    let mut inputs = CapturedInputs::new();
+    {
+        let mut candidate = tx.prepare(
+            "INSERT INTO attempt_candidates (attempt_id, position, requested_id)
+             VALUES (?1, ?2, ?3)",
+        )?;
+        let mut selected = tx.prepare(
+            "INSERT INTO attempt_inputs (attempt_id, position, evidence_id) VALUES (?1, ?2, ?3)",
+        )?;
+        let mut payload = tx.prepare("SELECT payload FROM evidence WHERE id = ?1")?;
+        for (index, &id) in candidates.iter().enumerate() {
+            candidate.execute(params![attempt, index as i64, id])?;
+            if is_admitted(tx, actor, scope, id)? {
+                selected.execute(params![attempt, inputs.len() as i64, id])?;
+                inputs.push((id, payload.query_row([id], |row| row.get(0))?));
+            }
+        }
+    }
+    Ok((attempt, inputs))
+}
+
 // Called under the same writer lock as the dispatch record or final publication.
 fn applicability(db: &Connection, attempt: i64) -> Result<(i64, Disposition)> {
     let (branch_id, actor, scope, captured_epoch, parent_matches) = db.query_row(
@@ -187,6 +217,22 @@ fn applicability(db: &Connection, attempt: i64) -> Result<(i64, Disposition)> {
         Disposition::Accepted
     };
     Ok((branch_id, disposition))
+}
+
+pub(crate) fn pending_branch(db: &Connection, attempt: i64) -> Result<i64> {
+    let completed: bool = db.query_row(
+        "SELECT EXISTS(SELECT 1 FROM deliveries WHERE attempt_id = ?1)",
+        [attempt],
+        |row| row.get(0),
+    )?;
+    if completed {
+        return Err(invalid("cannot dispatch a settled attempt"));
+    }
+    let (branch, disposition) = applicability(db, attempt)?;
+    if disposition != Disposition::Accepted {
+        return Err(invalid("cannot dispatch a stale attempt"));
+    }
+    Ok(branch)
 }
 
 impl Store {
@@ -222,28 +268,9 @@ impl Store {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let branch = ensure_branch(&tx, actor, scope, branch)?;
-        let attempt = record_attempt(&tx, &branch, view_epoch(&tx, actor, scope)?, None)?;
-        let mut inputs = CapturedInputs::new();
-        {
-            let mut candidate = tx.prepare(
-                "INSERT INTO attempt_candidates (attempt_id, position, requested_id)
-                 VALUES (?1, ?2, ?3)",
-            )?;
-            let mut selected = tx.prepare(
-                "INSERT INTO attempt_inputs (attempt_id, position, evidence_id) VALUES (?1, ?2, ?3)",
-            )?;
-            let mut payload = tx.prepare("SELECT payload FROM evidence WHERE id = ?1")?;
-            for (index, &id) in candidates.iter().enumerate() {
-                candidate.execute(params![attempt, index as i64, id])?;
-                if is_admitted(&tx, actor, scope, id)? {
-                    selected.execute(params![attempt, inputs.len() as i64, id])?;
-                    inputs.push((id, payload.query_row([id], |row| row.get(0))?));
-                }
-            }
-        }
+        let captured = capture_candidates(&tx, actor, scope, branch, candidates)?;
         tx.commit()?;
-        Ok((attempt, inputs))
+        Ok(captured)
     }
 
     /// Capture eligible accepted bytes and an explicit lineage edge in one
@@ -294,16 +321,9 @@ impl Store {
     /// must already be fixed at this boundary.
     pub fn record_dispatch(&mut self, attempt: i64, request: &[u8]) -> Result<()> {
         let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let completed: bool = tx.query_row(
-            "SELECT EXISTS(SELECT 1 FROM deliveries WHERE attempt_id = ?1)",
-            [attempt],
-            |row| row.get(0),
-        )?;
-        if completed {
-            return Err(invalid("cannot dispatch a settled attempt"));
-        }
-        if applicability(&tx, attempt)?.1 != Disposition::Accepted {
-            return Err(invalid("cannot dispatch a stale attempt"));
+        pending_branch(&tx, attempt)?;
+        if crate::model_reuse::is_opted_in(&tx, attempt)? {
+            return Err(invalid("use resolve_model_attempt for an opted-in model attempt"));
         }
         let identical: Option<bool> = tx
             .query_row(
@@ -352,6 +372,9 @@ impl Store {
             return Disposition::from_db(&disposition);
         }
 
+        if crate::model_reuse::unresolved(&tx, attempt)? {
+            return Err(invalid("resolve the model attempt before settling a delivery"));
+        }
         let (branch_id, disposition) = applicability(&tx, attempt)?;
         if disposition == Disposition::Accepted {
             accept(&tx, branch_id, attempt, output, usage)?;
