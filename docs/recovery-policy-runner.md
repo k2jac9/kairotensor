@@ -78,7 +78,7 @@ result as this frozen experiment. A change creates a new experiment version.
 
 The manual **Collect recovery policy traces** workflow defaults to fixture mode.
 Its `live` switch explicitly enables model installation and inference. The completed
-v1 one-shot push trigger has been removed; ordinary pushes cannot launch inference.
+pilots' one-shot push triggers have been removed; ordinary pushes cannot launch inference.
 The workflow defaults to v2 calibration only, with live inference disabled. It has no
 push or pull-request trigger. Private-repository Actions minutes may incur cost;
 check the available allowance or obtain approval before starting a live run.
@@ -106,10 +106,10 @@ complete/partial status and raw artifacts alongside every result. See the
 [policy protocol](recovery-policy-protocol.md) for the frozen selection and scoring
 rules. No live result is established merely by adding or testing this runner. The completed
 [v1 pilot](evaluations/recovery-policy-v1-2026-11-14.md) failed all held-out cases
-under the frozen contract; v2 has not yet been measured live.
+under the frozen contract; the [v2 pilot](evaluations/recovery-policy-v2-2026-11-14.md) also failed the frozen contract.
 
 
-## Version 2 preparation (not a measured improvement)
+## Version 2 and calibration isolation
 
 Version 1 remains the CLI default for reproducibility. Select v2 explicitly:
 
@@ -137,7 +137,8 @@ this is execution isolation, not access-controlled blinding. Deterministic tests
 better for Qwen. The new cases are fresh instances, not an independent external
 benchmark or a guarantee against broader task-family overlap.
 
-No second live run has been started. A full run remains bounded by ten cases,
+The explicitly approved v2 run has completed; see its linked report. Further
+live runs need appropriate approval. A full run remains bounded by ten cases,
 twenty model calls and a 30-minute hosted-job timeout. At the previously checked
 Linux list rate, that timeout corresponds to about US$0.18 nominal compute plus
 artifact storage. A calibration-only run is capped at eight calls but retains
@@ -146,3 +147,25 @@ PR CI is separate. Obtain approval for the chosen live scope before launching.
 Because this workflow is still only on the unmerged PR branch, manual dispatch
 may require default-branch registration. Do not merge or re-arm a push trigger
 just to run it without the required authorization.
+
+## Read-only bundle audit
+
+After extracting a trusted run artifact into a fresh directory, run:
+
+```sh
+python3 scripts/audit_recovery_bundle.py /path/to/extracted-bundle
+```
+
+The auditor opens SQLite read-only and reconciles exact captured requests,
+quotes, raw replies, reference validation, timings, charged usage and reservation
+snapshots with the paired trace. It performs no inference and does not modify
+input files. Complete supported bundles receive `verified_complete`; raw-only
+calibration, incomplete or unresolved bundles are explicitly not scored. Unknown
+or tampered event paths fail closed. This checks internal consistency, not the
+authenticity of model, source or hardware attestations. Preserve the original
+artifact hash and source commit alongside the bundle.
+
+Future collection steps have a 25-minute timeout under the 30-minute job limit.
+This leaves best-effort time to upload partial artifacts on a collection timeout,
+but does not guarantee upload if setup/build consumes more than five minutes.
+The completed v1/v2 runs used the original job-level timeout only.

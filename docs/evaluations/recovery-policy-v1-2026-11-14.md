@@ -4,7 +4,8 @@ Frozen source: `d72dcab9b12f431de309ab00487eb006ac2acddc`.
 [Run 43568726459](https://github.com/k2jac9/kairotensor/actions/runs/43568726459)
 completed on 2026-11-14. The
 [raw artifact](https://github.com/k2jac9/kairotensor/actions/runs/43568726459/artifacts/14102554902)
-is retained for 30 days. Its ZIP SHA256 is
+is retained for 30 days. A [durable copy](recovery-policy-v1-2026-11-14.zip)
+is archived beside this report. Its ZIP SHA256 is
 `067b7b00a8ecf725b11e900eb62ea81ec72c63616e994b3e62ddae4eafec57fa`.
 
 The collector made 20 live Qwen calls, charged 2,978 tokens (2,297 input,
