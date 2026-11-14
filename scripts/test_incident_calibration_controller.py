@@ -105,10 +105,57 @@ class ControllerTests(unittest.TestCase):
         self.out=Path(self.tmp.name)/'bad-usage';report=self.execute('wrong_usage')
         self.assertEqual(report['claimed_slots'],1);self.assertEqual(report['unresolved_hold_units'],269)
         self.assertEqual(report['known_receipt_units'],0);self.assertFalse(report['complete'])
+    def execute_late_receipt_at_fixed_clock(self,fault):
+        # Capture a real successful fixture manifest, then run the unchanged
+        # child, worker pipes, PreparedBridge, receipt and settlement logic with
+        # deterministic clock positions. The old +20ms delayed reply had only
+        # 130ms before the read cutoff, so host scheduling could turn this
+        # accounting test into a timeout/unknown-hold test instead.
+        from unittest.mock import patch
+        import incident_calibration_controller as controller
+        destination=self.out
+        self.out=destination.with_name(destination.name+'-seed')
+        seed=self.execute();self.assertTrue(seed['complete'],self.diagnostics(seed))
+        manifest=json.loads((self.out/'manifest.json').read_text())
+        self.out=destination;self.out.mkdir()
+        manifest.update(start_ns=0,work_deadline_ns=100_000_000,
+                        deadline_ns=1_000_000_000,fault=fault)
+        controller._durable_new(self.out/'manifest.json',manifest)
+        tick=[10_000_000]
+        workers=[];popen=controller.subprocess.Popen
+        def launch(*args,**kwargs):
+            worker=popen(*args,**kwargs);workers.append(worker);return worker
+        read=controller._Transport._line
+        def observed_reply(transport,deadline):
+            raw=read(transport,deadline)
+            if deadline==(manifest['deadline_ns']+manifest['work_deadline_ns'])//2:
+                # Generate was sent at tick10ms; its complete reply arrives at
+                # tick150ms, late for work but inside the550ms receipt window.
+                tick[0]=150_000_000
+            return raw
+        with patch.object(controller,'now_ns',lambda mode:tick[0]), \
+             patch.object(controller._Transport,'_line',observed_reply), \
+             patch.object(controller,'arm_parent_death',lambda parent:None), \
+             patch.object(controller.subprocess,'Popen',launch):
+            # Only the in-process test controller skips parent-death setup;
+            # its real spawned fixture worker retains the production safeguard.
+            try:controller._child(self.out,0)
+            finally:
+                # Production child exits after this path; the in-process test
+                # must explicitly close its inherited pipe handles instead.
+                for worker in workers:
+                    for stream in (worker.stdin,worker.stdout,worker.stderr):
+                        if stream is not None:stream.close()
+        report=audit_run(self.out)
+        self.assertEqual(report['claimed_slots'],1,self.diagnostics(report))
+        self.assertEqual(json.loads((self.out/'receipt-0.json').read_text())['observed_ns'],150_000_000)
+        return report
+
     def test_late_valid_reply_charged_and_audit_fsync_failure_not_zeroed(self):
-        report=self.execute('late_reply',1800)
-        self.assertFalse(report['complete']);self.assertEqual(report['ledger_charged_units'],180)
-        self.assertEqual(report['late_receipts'],1);self.assertEqual(report['unresolved_hold_units'],0)
+        report=self.execute_late_receipt_at_fixed_clock('late_reply')
+        diagnostic=self.diagnostics(report)
+        self.assertFalse(report['complete'],diagnostic);self.assertEqual(report['ledger_charged_units'],180,diagnostic)
+        self.assertEqual(report['late_receipts'],1,diagnostic);self.assertEqual(report['unresolved_hold_units'],0,diagnostic)
         self.out=Path(self.tmp.name)/'fsync';report=self.execute('receipt_fsync_failure')
         self.assertFalse(report['audit_complete']);self.assertEqual(report['ledger_charged_units'],180)
         self.assertEqual(report['unresolved_hold_units'],0)
@@ -122,9 +169,10 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(report['claimed_slots'],1);self.assertEqual(report['unresolved_hold_units'],269)
         self.assertEqual(report['known_receipt_units'],0)
     def test_late_fallback_receipt_retains_usage_and_timing(self):
-        report=self.execute('late_receipt_failure',1800)
-        self.assertFalse(report['complete']);self.assertEqual(report['late_receipts'],1)
-        self.assertEqual(report['known_receipt_units'],180);self.assertEqual(report['unresolved_hold_units'],269)
+        report=self.execute_late_receipt_at_fixed_clock('late_receipt_failure')
+        diagnostic=self.diagnostics(report)
+        self.assertFalse(report['complete'],diagnostic);self.assertEqual(report['late_receipts'],1,diagnostic)
+        self.assertEqual(report['known_receipt_units'],180,diagnostic);self.assertEqual(report['unresolved_hold_units'],269,diagnostic)
 
 class AuditAndLifetimeTests(unittest.TestCase):
     def setUp(self):
