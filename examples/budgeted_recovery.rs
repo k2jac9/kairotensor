@@ -183,6 +183,7 @@ struct Fixture {
     answers: std::collections::VecDeque<String>,
     requests: Vec<Vec<u8>>,
     lost: bool,
+    discards: usize,
 }
 impl Fixture {
     fn new(answers: &[&str]) -> Self {
@@ -190,6 +191,7 @@ impl Fixture {
             answers: answers.iter().map(|s| s.to_string()).collect(),
             requests: vec![],
             lost: false,
+            discards: 0,
         }
     }
 }
@@ -214,6 +216,7 @@ impl Backend for Fixture {
         Ok((text, input + bytes.len() as i64))
     }
     fn discard(&mut self, _: Self::Prepared) -> Result<()> {
+        self.discards += 1;
         Ok(())
     }
 }
@@ -377,14 +380,16 @@ mod tests {
 
     #[test]
     fn retry_budget_uses_the_larger_feedback_prompt() -> Result<()> {
-        // Enough for the initial prompt and cap, not the feedback retry.
-        let (mut store, budget, ids) = setup(600)?;
+        // First call costs 405. A stale original quote would reserve 452 and
+        // incorrectly fit at 900; the actual feedback quote needs 571.
+        let (mut store, budget, ids) = setup(900)?;
         let mut model = Fixture::new(&[BAD, GOOD]);
         let result = run(&mut store, budget, &ids, &mut model)?;
         assert_eq!(result.reason, "budget_denied");
         assert_eq!(result.dispatches, 1);
         assert_eq!(result.spent, model.requests[0].len() as i64 + 49);
         assert_eq!(result.reserved, 0);
+        assert_eq!(model.discards, 1);
         Ok(())
     }
 
@@ -428,6 +433,7 @@ mod tests {
         assert_eq!(result.spent, 0);
         assert_eq!(result.reserved, 0);
         assert!(model.requests.is_empty());
+        assert_eq!(model.discards, 1);
         Ok(())
     }
 
@@ -447,6 +453,7 @@ mod tests {
         )?;
         assert_eq!(result.reason, "deadline_expired_reserved");
         assert!(model.requests.is_empty());
+        assert_eq!(model.discards, 1);
         assert_eq!(result.spent, 0);
         assert!(result.reserved > 0);
         Ok(())
