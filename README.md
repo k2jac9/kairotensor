@@ -90,6 +90,9 @@ by default. Its automated checks use fake dependencies only; real calibration
 still requires provisioned assets and separately approved execution.
 The [proposed GitHub/NixOS comparison](docs/calibration-host-matrix.md) lists
 matching requirements, readiness gates and unapproved per-host bounds.
+The [offline Adaption adapter](docs/incident-adaption-backend.md) exercises a
+distinct hosted-response contract and synthetic accounting, without credentials,
+network requests, or live execution authority.
 
 ## Implemented contracts
 

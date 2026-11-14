@@ -200,7 +200,9 @@ class AuditAndLifetimeTests(unittest.TestCase):
             path=proc_for(pid)
             if path is None:return False
             try:return path.joinpath('stat').read_text().split()[2] not in ('Z','X')
-            except FileNotFoundError:return False
+            # procfs may report ENOENT or ESRCH when the process disappears
+            # between locating its entry and reading stat during teardown.
+            except (FileNotFoundError,ProcessLookupError):return False
         def children_of(pid):
             result=[]
             for path in Path('/proc').glob('[0-9]*'):
