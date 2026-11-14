@@ -2,7 +2,9 @@
 
 This lab prepares a small diagnostic experiment after the failed v1/v2 pilots.
 It does not alter their prompts, corpus, worker, validators or frozen scores.
-No new live result is implied by adding this code.
+The first approved live run is recorded in the
+[calibration results](evaluations/recovery-calibration-2026-11-14.md); offline tests
+alone do not establish model performance.
 
 ## Fixed scope
 
@@ -93,3 +95,23 @@ manifest, with one-day retention. Oversized or non-regular files are reported as
 omitted rather than silently uploaded. Stage/upload steps have separate one- and
 two-minute limits; job cancellation and queue delays still prevent an account-wide
 hard billing or wall-clock guarantee.
+
+## Deterministic verdict baseline
+
+For structured report data, the model-free path constructs the entire verdict
+from exactly one complete admitted report, including the pass/fail comparison:
+
+```sh
+printf '%s\n' '{"reports":[{"release":"cal-B","passed":11,"total":12}],"admitted":true}' | python3 scripts/recovery_verdict.py
+```
+
+It emits only `{"release":"cal-B","tests":"11/12","status":"fail"}`. The
+`derive_verdict` and `render_verdict` functions take evidence and an admission
+fact, never a reference label. Duplicate/multiple, conflicting, incomplete or
+unadmitted evidence is refused, as are invalid counts and malformed JSON. Inputs
+are not repaired or silently selected. Existing strict validation remains intact.
+
+This is a deterministic baseline/product route, not an improvement in model
+accuracy. It has no Store integration: the caller must obtain a trustworthy
+admission fact and enforce current evidence eligibility. It does not resolve
+conflicting evidence, bypass recovery accounting or change frozen pilot scores.
