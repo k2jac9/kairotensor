@@ -9,6 +9,8 @@ import hashlib
 import json
 from pathlib import Path
 
+# Resource guard independent of interpreter/JSON decoder recursion behavior.
+MAX_JSON_DEPTH = 64
 VERSION = 'incident-routing/1'
 ROOT = Path(__file__).resolve().parents[1] / 'workloads' / 'incident-routing-v1'
 FREEZE_SHA256 = 'f71732c193ff889f24709a11855b59820a657c21c2b43ec721cddfbff1ede2c8'
@@ -52,7 +54,36 @@ def _pairs(pairs):
     return result
 
 
+def _check_json_depth(raw):
+    # Count containers, not bracket characters inside strings. Backslash escapes
+    # consume exactly the next character, including escaped quotes/backslashes.
+    source = raw.decode('utf-8') if isinstance(raw, (bytes, bytearray)) else raw
+    require(type(source) is str, 'JSON text required')
+    depth = 0
+    quoted = False
+    escaped = False
+    for char in source:
+        if quoted:
+            if escaped:
+                escaped = False
+            elif char == chr(92):
+                escaped = True
+            elif char == '"':
+                quoted = False
+        elif char == '"':
+            quoted = True
+        elif char in '[{':
+            depth += 1
+            require(depth <= MAX_JSON_DEPTH, f'JSON nesting exceeds {MAX_JSON_DEPTH} containers')
+        elif char in ']}':
+            depth -= 1
+            require(depth >= 0, 'invalid JSON container nesting')
+    # Full syntax, matching delimiter types and string escapes remain the
+    # standard JSON decoder's responsibility; this is only a bounded-depth gate.
+
+
 def _loads(raw):
+    _check_json_depth(raw)
     def invalid_constant(_):
         raise ValueError('nonfinite JSON constant')
     try:

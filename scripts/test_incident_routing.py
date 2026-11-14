@@ -197,6 +197,32 @@ class IncidentRoutingTests(unittest.TestCase):
             path = Path(tmp) / 'deep.json'; path.write_text(raw)
             with self.assertRaises(ValueError): read_json(path)
 
+    def test_explicit_json_depth_boundary_is_interpreter_independent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'depth.json'
+            path.write_text('[' * 64 + '0' + ']' * 64)
+            value = read_json(path)
+            for _ in range(64): value = value[0]
+            self.assertEqual(value, 0)
+            path.write_text('[' * 65 + '0' + ']' * 65)
+            with self.assertRaisesRegex(ValueError, 'nesting.*64'): read_json(path)
+            path.write_text('[{"value":' * 32 + '0' + '}]' * 32)
+            self.assertIsInstance(read_json(path), list)
+            path.write_text('[{"value":' * 32 + '[0]' + '}]' * 32)
+            with self.assertRaisesRegex(ValueError, 'nesting.*64'): read_json(path)
+
+    def test_quoted_brackets_quotes_and_backslashes_do_not_count_as_depth(self):
+        value = {'text': ('[{}]"' + chr(92) + '"') * 1000,
+                 'escaped': chr(92) * 3 + '"[[[', 'unicode': 'λ'}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'quoted.json'
+            path.write_text(json.dumps(value, ensure_ascii=False))
+            self.assertEqual(read_json(path), value)
+            path.write_text('[' * 63 + json.dumps(value) + ']' * 63)
+            result = read_json(path)
+            for _ in range(63): result = result[0]
+            self.assertEqual(result, value)
+
     def test_malformed_metadata_shapes_never_escape_audit(self):
         bad_values = [None, [], {}, True, 0, 1.5]
         for key in self.response_fixture():
