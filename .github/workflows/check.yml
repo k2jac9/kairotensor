@@ -55,3 +55,6 @@ jobs:
 
       - name: Emit bounded prepared-request calibration proposal without inference
         run: python3 scripts/incident_preflight.py --out "$RUNNER_TEMP/incident-preflight-plan.json"
+
+      - name: Exercise bounded offline controller and durable accounting
+        run: python3 scripts/incident_calibration_controller.py fixture --out "$RUNNER_TEMP/incident-controller-fixture"

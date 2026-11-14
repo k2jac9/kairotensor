@@ -81,6 +81,9 @@ performance measurements, and declared evidence eligibility is not Store authent
 The [prepared-request bridge](docs/incident-prepared-bridge.md) connects these
 prompts to the existing worker protocol with offline lifecycle tests and emits a
 bounded, unexecuted calibration proposal. It does not grant Store send authority.
+The [offline calibration controller](docs/incident-calibration-controller.md)
+tests durable send claims, retained uncertain usage and independent process
+termination against fixed fake workers. It has no live model launch path.
 
 ## Implemented contracts
 
