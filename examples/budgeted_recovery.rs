@@ -2,7 +2,7 @@
 #[allow(dead_code)]
 #[path = "corrected_handoff/adapter.rs"]
 mod adapter;
-use kairotensor::{Disposition, Store};
+use kairotensor::{Disposition, RecoveryStart, Store};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::error::Error;
@@ -49,6 +49,24 @@ trait Backend {
     fn discard(&mut self, prepared: Self::Prepared) -> Result<()>;
 }
 
+fn prepare_or_cancel<B: Backend>(
+    store: &mut Store,
+    attempt: i64,
+    model: &mut B,
+    messages: Value,
+    cap: i64,
+) -> Result<(Vec<u8>, i64, B::Prepared)> {
+    match model.prepare(messages, cap) {
+        Ok(quote) => Ok(quote),
+        Err(error) => {
+            // Only the database can prove the slot is still unsent. If a competing
+            // claim has won, cancellation returns false and keeps its hold.
+            let _ = store.cancel_recovery_attempt(attempt);
+            Err(error)
+        }
+    }
+}
+
 fn recover<B: Backend>(
     store: &mut Store,
     budget: i64,
@@ -61,67 +79,146 @@ fn recover<B: Backend>(
     if cap <= 0 {
         return Err("output cap must be positive".into());
     }
+    let recovery = store.create_recovery(
+        &format!("budgeted-recovery-{budget}"),
+        budget,
+        ACTOR,
+        SCOPE,
+        BRANCH,
+    )?;
     let mut dispatches = 0;
-    let mut validation_error = None;
     let mut reason = "retry_exhausted";
     let mut success = false;
-    // An unresolved earlier send is not permission to retry after restart.
-    if store.token_budget_state(budget)?.reserved != 0 {
-        return finish(store, budget, "unknown_usage", dispatches, false);
-    }
     for _ in 0..2 {
         if elapsed() >= deadline {
             reason = "deadline_expired";
             break;
         }
-        // Recapture on every try; never inherit a rejected answer as evidence.
-        let (attempt, captured) = store.begin_from_candidates(ACTOR, SCOPE, BRANCH, candidates)?;
-        let report = if captured.len() == 1 {
-            serde_json::from_slice::<Report>(&captured[0].1).ok()
-        } else {
-            None
-        };
-        let Some(report) =
-            report.filter(|r| !r.release.is_empty() && r.total > 0 && r.passed <= r.total)
-        else {
-            reason = "insufficient_evidence";
-            break;
-        };
-        let source: Value = serde_json::from_slice(&captured[0].1)?;
-        let mut payload = json!({"ci_report":source});
-        if let Some(error) = &validation_error {
-            payload["validation_error"] = json!(error);
-        }
-        let messages = json!([
-            {"role":"system","content":"Read ci_report. Return only JSON string fields release, tests, status. Copy release. Format tests as passed/total. status is pass only when passed equals total; otherwise fail."},
-            {"role":"user","content":serde_json::to_string(&payload)?}
-        ]);
-        let (request, input, prepared) = model.prepare(messages, cap)?;
-        // Preflight can consume the remaining time. Do not reserve or send then.
+        let start = store.begin_recovery_attempt(recovery, candidates)?;
+        let (attempt, report, request, input, prepared, already_reserved, effective_cap) =
+            match start {
+                RecoveryStart::Finished => {
+                    reason = "recovery_finished";
+                    break;
+                }
+                RecoveryStart::Existing(attempt) => {
+                    let Some(saved) = store.recovery_reservation(attempt)? else {
+                        // A planned slot may still be owned by a preparing worker;
+                        // a sent slot is uncertain. Neither grants permission to send.
+                        reason = if store.token_budget_state(budget)?.reserved > 0 {
+                            "unknown_usage"
+                        } else {
+                            "existing_attempt"
+                        };
+                        break;
+                    };
+                    let envelope: Value = serde_json::from_slice(&saved.request)?;
+                    let messages = envelope["messages"].clone();
+                    let payload: Value = serde_json::from_str(
+                        messages[1]["content"]
+                            .as_str()
+                            .ok_or("missing saved report payload")?,
+                    )?;
+                    let report: Report = serde_json::from_value(payload["ci_report"].clone())?;
+                    // Worker handles do not survive restart. Re-prepare exactly the
+                    // saved request and verify the entire quote before claiming.
+                    let (request, input, prepared) =
+                        prepare_or_cancel(store, attempt, model, messages, saved.output_cap)?;
+                    if request != saved.request || input != saved.input_tokens {
+                        model.discard(prepared)?;
+                        store.cancel_recovery_attempt(attempt)?;
+                        reason = "quote_mismatch";
+                        break;
+                    }
+                    (
+                        attempt,
+                        report,
+                        request,
+                        input,
+                        prepared,
+                        true,
+                        saved.output_cap,
+                    )
+                }
+                RecoveryStart::New {
+                    attempt,
+                    inputs: captured,
+                    retry_reason,
+                } => {
+                    let report = if captured.len() == 1 {
+                        serde_json::from_slice::<Report>(&captured[0].1).ok()
+                    } else {
+                        None
+                    };
+                    let Some(report) = report
+                        .filter(|r| !r.release.is_empty() && r.total > 0 && r.passed <= r.total)
+                    else {
+                        store.cancel_recovery_attempt(attempt)?;
+                        reason = "insufficient_evidence";
+                        break;
+                    };
+                    let source: Value = serde_json::from_slice(&captured[0].1)?;
+                    let mut payload = json!({"ci_report":source});
+                    if let Some(error) = retry_reason {
+                        payload["validation_error"] = json!(error);
+                    }
+                    let messages = json!([
+                        {"role":"system","content":"Read ci_report. Return only JSON string fields release, tests, status. Copy release. Format tests as passed/total. status is pass only when passed equals total; otherwise fail."},
+                        {"role":"user","content":serde_json::to_string(&payload)?}
+                    ]);
+                    let (request, input, prepared) =
+                        prepare_or_cancel(store, attempt, model, messages, cap)?;
+                    (attempt, report, request, input, prepared, false, cap)
+                }
+            };
         if elapsed() >= deadline {
             model.discard(prepared)?;
+            store.cancel_recovery_attempt(attempt)?;
             reason = "deadline_expired";
             break;
         }
-        let reserved = store.reserve_dispatch(budget, attempt, &request, input, cap);
-        match reserved {
-            Ok(true) => {}
-            Ok(false) => {
+        if !already_reserved {
+            match store.reserve_recovery_attempt(attempt, &request, input, effective_cap) {
+                Ok(true) => {}
+                Ok(false) => {
+                    model.discard(prepared)?;
+                    reason = "budget_denied";
+                    break;
+                }
+                Err(error) => {
+                    let _ = store.cancel_recovery_attempt(attempt);
+                    let _ = model.discard(prepared);
+                    return Err(error.into());
+                }
+            }
+        }
+        if elapsed() >= deadline {
+            model.discard(prepared)?;
+            reason = if store.cancel_recovery_attempt(attempt)? {
+                "deadline_expired_cancelled"
+            } else {
+                "claim_lost"
+            };
+            break;
+        }
+        match store.claim_recovery_dispatch(attempt) {
+            Ok(Some(claimed)) if claimed == request => {}
+            Ok(_) => {
                 model.discard(prepared)?;
-                reason = "budget_denied";
+                reason = "claim_lost";
                 break;
             }
             Err(error) => {
-                model.discard(prepared)?;
+                let _ = store.cancel_recovery_attempt(attempt);
+                let _ = model.discard(prepared);
                 return Err(error.into());
             }
         }
-        // SQLite can wait for another writer. A reservation is not permission to
-        // start inference after the deadline. There is no cancellation API yet;
-        // conservatively retain this known-unsent hold and expose it in the result.
+        // Claim is deliberately before I/O. A crash here retains the hold; no
+        // later process can infer the request was unsent and release or resend it.
         if elapsed() >= deadline {
             model.discard(prepared)?;
-            reason = "deadline_expired_reserved";
+            reason = "deadline_expired_claimed";
             break;
         }
         dispatches += 1;
@@ -156,7 +253,6 @@ fn recover<B: Backend>(
         }
         let error = "Return complete JSON matching the captured release, passed/total count, and pass/fail status.";
         store.reject_invalid(attempt, output.as_bytes(), usage, VALIDATOR, error)?;
-        validation_error = Some(error);
         // A second invalid answer falls out of the bounded loop, never a third call.
     }
     finish(store, budget, reason, dispatches, success)
@@ -184,6 +280,7 @@ struct Fixture {
     requests: Vec<Vec<u8>>,
     lost: bool,
     discards: usize,
+    fail_prepare: bool,
 }
 impl Fixture {
     fn new(answers: &[&str]) -> Self {
@@ -192,12 +289,16 @@ impl Fixture {
             requests: vec![],
             lost: false,
             discards: 0,
+            fail_prepare: false,
         }
     }
 }
 impl Backend for Fixture {
     type Prepared = (Vec<u8>, i64);
     fn prepare(&mut self, messages: Value, cap: i64) -> Result<(Vec<u8>, i64, Self::Prepared)> {
+        if self.fail_prepare {
+            return Err("simulated preparation error".into());
+        }
         let request = serde_json::to_vec(
             &json!({"adapter":"byte-token-fixture/1","messages":messages,"cap":cap}),
         )?;
@@ -331,7 +432,28 @@ mod tests {
         assert_eq!(result.reason, "retry_exhausted");
         assert!(!result.success);
         assert_eq!(model.requests.len(), 2);
+        assert_eq!(
+            run(&mut store, budget, &ids, &mut model)?.reason,
+            "recovery_finished"
+        );
+        assert_eq!(model.requests.len(), 2);
         assert_eq!(store.read_current(ACTOR, SCOPE, BRANCH)?, Current::Empty);
+        Ok(())
+    }
+
+    #[test]
+    fn preparation_failure_closes_the_known_unsent_slot() -> Result<()> {
+        let (mut store, budget, ids) = setup(4096)?;
+        let mut worker = Fixture::new(&[GOOD]);
+        worker.fail_prepare = true;
+        assert!(run(&mut store, budget, &ids, &mut worker).is_err());
+        worker.fail_prepare = false;
+        assert_eq!(
+            run(&mut store, budget, &ids, &mut worker)?.reason,
+            "recovery_finished"
+        );
+        assert!(worker.requests.is_empty());
+        assert_eq!(store.token_budget_state(budget)?.reserved, 0);
         Ok(())
     }
     #[test]
@@ -397,7 +519,7 @@ mod tests {
     fn late_valid_result_is_charged_but_not_a_success() -> Result<()> {
         let (mut store, budget, ids) = setup(4096)?;
         let mut model = Fixture::new(&[GOOD]);
-        let times = std::cell::RefCell::new([0, 0, 0, 61].into_iter());
+        let times = std::cell::RefCell::new([0, 0, 0, 0, 61].into_iter());
         let result = recover(
             &mut store,
             budget,
@@ -451,11 +573,11 @@ mod tests {
             Duration::from_secs(60),
             || Duration::from_secs(times.borrow_mut().next().unwrap()),
         )?;
-        assert_eq!(result.reason, "deadline_expired_reserved");
+        assert_eq!(result.reason, "deadline_expired_cancelled");
         assert!(model.requests.is_empty());
         assert_eq!(model.discards, 1);
         assert_eq!(result.spent, 0);
-        assert!(result.reserved > 0);
+        assert_eq!(result.reserved, 0);
         Ok(())
     }
 
@@ -478,6 +600,92 @@ mod tests {
         assert_eq!(
             result.spent,
             model.requests.iter().map(|r| r.len() as i64).sum::<i64>() + 2
+        );
+        Ok(())
+    }
+
+    fn stage_fixture(store: &mut Store, budget: i64, ids: &[i64], quote_delta: i64) -> Result<i64> {
+        let run = store.create_recovery(
+            &format!("budgeted-recovery-{budget}"),
+            budget,
+            ACTOR,
+            SCOPE,
+            BRANCH,
+        )?;
+        let RecoveryStart::New { attempt, .. } = store.begin_recovery_attempt(run, ids)? else {
+            panic!("new run")
+        };
+        let mut worker = Fixture::new(&[]);
+        let messages = json!([
+            {"role":"system","content":"Return a verdict."},
+            {"role":"user","content":json!({"ci_report":{"release":"R42","passed":11,"total":12}}).to_string()}
+        ]);
+        let (request, input, prepared) = worker.prepare(messages, 96)?;
+        assert!(store.reserve_recovery_attempt(attempt, &request, input + quote_delta, 96)?);
+        worker.discard(prepared)?;
+        Ok(attempt)
+    }
+
+    #[test]
+    fn replacement_worker_uses_saved_request_and_cap_before_claim() -> Result<()> {
+        let (mut store, budget, ids) = setup(4096)?;
+        let attempt = stage_fixture(&mut store, budget, &ids, 0)?;
+        let saved = store.recovery_reservation(attempt)?.unwrap();
+        let mut worker = Fixture::new(&[GOOD]);
+        // New caller's default cap is irrelevant to the already frozen request.
+        let result = recover(
+            &mut store,
+            budget,
+            &ids,
+            &mut worker,
+            1,
+            Duration::from_secs(60),
+            || Duration::ZERO,
+        )?;
+        assert!(result.success);
+        assert_eq!(worker.requests, vec![saved.request]);
+        assert_eq!(result.reserved, 0);
+        assert_eq!(store.claim_recovery_dispatch(attempt)?, None);
+        Ok(())
+    }
+
+    #[test]
+    fn changed_tokenizer_quote_cancels_without_generation() -> Result<()> {
+        let (mut store, budget, ids) = setup(4096)?;
+        let attempt = stage_fixture(&mut store, budget, &ids, 1)?;
+        let mut worker = Fixture::new(&[GOOD]);
+        let result = run(&mut store, budget, &ids, &mut worker)?;
+        assert_eq!(result.reason, "quote_mismatch");
+        assert_eq!(result.reserved, 0);
+        assert_eq!(result.spent, 0);
+        assert_eq!(worker.discards, 1);
+        assert!(worker.requests.is_empty());
+        assert_eq!(store.claim_recovery_dispatch(attempt)?, None);
+        Ok(())
+    }
+
+    #[test]
+    fn deadline_during_claim_never_releases_potentially_sent_hold() -> Result<()> {
+        let (mut store, budget, ids) = setup(4096)?;
+        let mut worker = Fixture::new(&[GOOD]);
+        let times = std::cell::RefCell::new([0, 0, 0, 60].into_iter());
+        let result = recover(
+            &mut store,
+            budget,
+            &ids,
+            &mut worker,
+            96,
+            Duration::from_secs(60),
+            || Duration::from_secs(times.borrow_mut().next().unwrap()),
+        )?;
+        assert_eq!(result.reason, "deadline_expired_claimed");
+        assert_eq!(result.dispatches, 0);
+        assert_eq!(result.spent, 0);
+        assert!(result.reserved > 0);
+        assert!(worker.requests.is_empty());
+        assert_eq!(
+            run(&mut store, budget, &ids, &mut worker)?.reason,
+            "unknown_usage"
         );
         Ok(())
     }

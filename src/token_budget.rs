@@ -20,12 +20,14 @@ pub(crate) fn has_decision(db: &Connection, attempt: i64) -> Result<bool> {
     )
 }
 
-fn budget_state(db: &Connection, budget: i64) -> Result<TokenBudgetState> {
+pub(crate) fn budget_state(db: &Connection, budget: i64) -> Result<TokenBudgetState> {
     db.query_row(
         "SELECT b.token_limit, COALESCE(SUM(d.usage), 0),
                 COALESCE(SUM(CASE WHEN d.attempt_id IS NULL THEN r.input_tokens + r.output_cap END), 0)
          FROM token_budgets b
          LEFT JOIN token_reservations r ON r.budget_id = b.id AND r.granted = 1
+           AND NOT EXISTS (SELECT 1 FROM recovery_attempts c
+                           WHERE c.attempt_id = r.attempt_id AND c.state = 'cancelled')
          LEFT JOIN deliveries d ON d.attempt_id = r.attempt_id
          WHERE b.id = ?1 GROUP BY b.id",
         [budget],
@@ -71,6 +73,9 @@ impl Store {
             .ok_or_else(|| invalid("token reservation exceeds the integer range"))?;
         let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         pending_branch(&tx, attempt)?;
+        if crate::recovery::is_managed(&tx, attempt)? {
+            return Err(invalid("use staged reservation for a recovery attempt"));
+        }
         if crate::model_reuse::is_opted_in(&tx, attempt)? {
             return Err(invalid("token reservations require an ordinary model attempt"));
         }

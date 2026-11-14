@@ -102,7 +102,7 @@ fn migration_from_v2_enables_dispatch_on_old_pending_attempts() -> Result<()> {
     drop(store);
     let audit = Connection::open(&file.0)?;
     let version: i32 = audit.pragma_query_value(None, "user_version", |row| row.get(0))?;
-    assert_eq!(version, 6);
+    assert_eq!(version, 7);
     let request: Vec<u8> = audit.query_row(
         "SELECT request FROM dispatches WHERE attempt_id = 1", [], |row| row.get(0),
     )?;

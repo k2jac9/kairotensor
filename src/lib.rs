@@ -4,6 +4,8 @@ mod attempts;
 mod model_reuse;
 mod support;
 mod token_budget;
+mod recovery;
+pub use recovery::{RecoveryReservation, RecoveryStart};
 pub use attempts::{CapturedInputs, Current, Disposition};
 pub use model_reuse::ModelAction;
 pub use support::{SupportRegistration, SupportRevision};
@@ -17,7 +19,7 @@ use std::time::Duration;
 
 // "KTSM", stored in the SQLite header.
 const APPLICATION_ID: i32 = 0x4b54_534d;
-const SCHEMA_VERSION: i32 = 6;
+const SCHEMA_VERSION: i32 = 7;
 const INSERT_OBSERVATION: &str = "INSERT INTO evidence(source, payload) VALUES (?1, ?2)";
 
 /// A local trusted runtime owns the database and supplies authenticated actor/scope names.
@@ -75,6 +77,9 @@ impl Store {
         }
         if version < 6 {
             tx.execute_batch(include_str!("token_budget.sql"))?;
+        }
+        if version < 7 {
+            tx.execute_batch(include_str!("recovery.sql"))?;
         }
         if version < SCHEMA_VERSION {
             tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;

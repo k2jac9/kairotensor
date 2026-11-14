@@ -1,77 +1,114 @@
-# Bounded recovery after validation failure
+# Durable bounded recovery
 
-`cargo run --example budgeted_recovery` exercises the next controller decision:
-after a verdict fails validation, spend at most one more call or abstain. It uses
-the existing SQLite attempt, evidence, dispatch and token-budget contracts; it
-does not change the public Store API or schema.
+`cargo run --example budgeted_recovery` connects a validation failure to one retry
+or abstention. Schema v7 makes the logical recovery identity, attempt slots,
+reservation decisions and single-use send claims persistent. The example uses
+these APIs with an in-memory store; the integration tests close and reopen actual
+SQLite files at each boundary and race independent connections.
 
-## What the example does
+## State and API contracts
 
-1. Capture the currently admitted report. Abstain unless exactly one well-formed
-   report supplies a nonempty release and consistent positive total/pass counts.
-2. Assemble and preflight the complete request. Check the deadline before and
-   after preparation, then atomically reserve input plus output cap.
-3. Recheck the deadline after reservation, because acquiring SQLite's writer
-   lock can take time. Generate only if budget and time permit.
-4. Validate the response against the captured report and settle its actual usage.
-   A rejected response is charged and cannot become the branch head.
-5. After the first invalid response only, recapture current evidence and include
-   validation feedback in a new request. Obtain a new quote, not the old prompt's
-   token count. A second invalid answer ends the invocation.
+| API | Contract |
+| --- | --- |
+| `create_recovery(key, budget, actor, scope, branch)` | Create or return the same logical operation. A reused key with different bindings fails. The caller must retain the key and budget identity across restarts. |
+| `begin_recovery_attempt(recovery, candidates)` | Atomically capture current evidence and allocate ordinal 0, or ordinal 1 only after the first invalid delivery. `New` returns captured bytes and the persisted retry reason. Concurrent/restarted callers receive `Existing(attempt)` for unfinished work or `Finished` for a terminal workflow. |
+| `reserve_recovery_attempt(attempt, request, input, cap)` | Freeze exact request and quote, reserve capacity, and record `reserved` or `denied` atomically. Does not authorize inference. Duplicate calls fail rather than replacing the quote. |
+| `recovery_reservation(attempt)` | Read the exact bytes, input count and cap of a still-reserved attempt. Read-only, no send permission. |
+| `claim_recovery_dispatch(attempt)` | Check current evidence/branch eligibility, change `reserved` to `sent`, and insert the dispatch in one transaction. Exactly one caller gets `Some(request)`. Non-reserved states return `None`; stale eligibility or database failures return errors. |
+| `cancel_recovery_attempt(attempt)` | Cancel `planned` or `reserved` work and release its hold without inventing usage. Works even with stale evidence. Repeated cancellation is true; sent or denied returns false. |
 
-The fixed prompt requests JSON string fields `release`, `tests`, and `status`.
-The user payload contains `ci_report` with `release`, `passed`, and `total`.
-The retry additionally includes `validation_error`: “Return complete JSON matching
-the captured release, passed/total count, and pass/fail status.” Rejected answer
-bytes are never inherited as evidence. Exact serialized requests are recorded
-by `reserve_dispatch`; this demonstration uses a fresh in-memory database.
+`planned → reserved → sent → measured delivery` is the normal path. Preparation
+can be cancelled before reservation; reserved work can be cancelled before claim.
+Budget denial or cancellation terminates the latest slot. A first `invalid_output`
+delivery alone unlocks the retry. Once ordinal 1 exists, neither its cancellation
+nor denial can reopen ordinal 0. The database permits only ordinals 0 and 1.
+Accepted and stale deliveries terminate recovery without a retry.
+
+**Every transport must claim before sending, and send at most once after its own
+successful claim.** A caller must not treat `Existing`, a saved request, a missing
+delivery, or a duplicate claim as permission to send. The database does not
+control external model/network I/O. As elsewhere in Kairotensor, the local caller
+is trusted to obey these boundaries; creating a fresh recovery key intentionally
+starts a different operation.
+
+## Restart and concurrency
+
+A live worker's prepared tensors do not survive process death. For a still-reserved
+attempt, read `recovery_reservation`, prepare those exact saved bytes again, and
+compare request bytes, input count and output cap to the saved quote **before**
+claiming. The example does this; a changed quote cancels the unsent slot and never
+runs inference. If another worker or cancellation wins the claim, discard the
+local preparation. Never replace the reserved prompt or token counts.
+
+A crash after a committed claim is ambiguous even if it happened before the
+network call. The `sent` state and full hold survive restart. Another worker cannot
+claim again or cancel it. Reconcile only a known measured delivery, including a
+late valid, invalid, or stale response. Duplicate identical delivery charges once.
+No timeout-based release or automatic resend is provided. A crash while still
+`planned` returns `Existing`; a caller may explicitly cancel that unsent slot.
+Cancellation is terminal, not a way to reset the workflow's retry count.
+
+Claim/cancel, conflicting reservations, duplicate initial/retry allocation, and
+claim/claim all serialize under SQLite's immediate writer transaction. Deliveries
+for unclaimed recovery attempts are rejected by a database trigger, including
+ordinary `settle` calls that would otherwise publish a head. Legacy
+`record_dispatch` and `reserve_dispatch` reject recovery-owned attempts. Existing
+ordinary `reserve_dispatch` semantics stay conservative: those reservations may
+already have been sent, so migration never makes them cancellable.
+
+## Evidence, deadlines and validation
+
+Each new attempt captures current admitted evidence. The example requires exactly
+one consistent report (`release`, `passed`, positive `total`). The user payload
+is `ci_report`; retry payloads also contain the persisted `validation_error`:
+“Return complete JSON matching the captured release, passed/total count, and
+pass/fail status.” Rejected answer bytes are never inherited as evidence. Each
+changed prompt is freshly quoted. Returned JSON must have exactly the string
+fields `release`, `tests`, `status`, matching the captured evidence.
+
+Deadline checks occur before preparation, after preparation, after reservation,
+and after claim. Expiry after reservation cancels known-unsent work and returns
+`deadline_expired_cancelled` with no remaining hold. Expiry after claim returns
+`deadline_expired_claimed` without inference, but preserves the potentially-sent
+hold: the claim is intentionally the conservative uncertainty boundary. Missing
+input cancels a planned slot. Preparation/reservation/claim errors attempt safe
+cancellation; cancellation itself can never release a sent hold. If database
+cleanup fails, the original error is returned and the caller must inspect state.
+
+The deadline is an admission and receipt deadline, **not a hard process timeout**.
+In-flight generation is not interrupted. A correct late result is charged and may
+be stored, but is reported as `late_result`, not an on-time success. The database
+stores the retry bound, not the application's deadline policy; a resumed caller
+must supply the same end-to-end deadline rather than restarting its clock.
 
 ## Deterministic versus live execution
 
-The default adapter deliberately maps each UTF-8 byte to one fixture token. It
-returns an incorrect `11/12 → pass` verdict, followed by the correct `fail`
-verdict. It truncates at the cap and decodes incomplete UTF-8 with replacement.
-Its charges test accounting mechanics, **not Qwen token usage or performance**.
-The output explicitly identifies `deterministic_byte_token_fixture` and reports
-zero new model calls.
+The default adapter maps each UTF-8 byte to one fixture token. It returns an
+incorrect `11/12 → pass` response then `fail`, truncates at the cap, and decodes
+incomplete UTF-8 with replacement. Its charges test mechanics, **not Qwen usage
+or performance**. Output is marked `deterministic_byte_token_fixture` with zero
+new model calls. The demo creates a fresh in-memory budget; its recovery key is
+stable for that budget across calls to the controller.
 
-`cargo run --example budgeted_recovery -- --live` uses the existing pinned local
-Qwen worker, its actual prepared tensors, and measured usage. It needs the same
-Python/model dependencies as the [output-cap pilot](token-cap-results.md).
-The model can answer correctly on its first call; a retry is not forced. This
-change does not include a live-model evaluation or claim improved accuracy,
-latency, or token efficiency. The 96-token cap is conservative; the earlier
-64-token calibration did not test this different prompt with retry feedback.
+`cargo run --example budgeted_recovery -- --live` uses the existing pinned Qwen
+worker and actual prepared-token counts, with the same dependencies as the
+[output-cap pilot](token-cap-results.md). It may succeed on the first call. No
+live recovery experiment has been performed as part of this change, and no
+accuracy, latency or efficiency gain is claimed. The conservative cap remains
+96: the earlier 64-token calibration did not evaluate this feedback prompt.
 
-## Limits and failure handling
-
-- The two-call limit is **per invocation**, not a durable recovery workflow ID.
-  A caller must not restart a completed invocation to obtain more retries and
-  call that the same bounded recovery. Persistent retry lineage is future work.
-- An outstanding reservation causes this example to abstain, including on a
-  second invocation with the same Store/budget. A lost response is `unknown_usage`;
-  it retains the entire hold rather than guessing zero usage or sending again.
-- If the deadline expires during reservation, no generation starts. The result
-  is `deadline_expired_reserved`, with the conservative hold still outstanding.
-  There is currently no reservation cancellation API. The example does not free
-  such a hold by fabricating a delivery or charging zero tokens.
-- The deadline measures eligibility to start and receipt after committed
-  settlement. It is **not a hard process timeout**: in-flight generation is not
-  interrupted. A correct late result is charged and can be stored, but it is
-  reported as `late_result`, not a successful on-time completion.
-- Changes during preflight are rejected by the Store dispatch gate; changes
-  during generation are caught by settlement. A corrected report is recaptured
-  for the retry. Missing evidence produces abstention, not a speculative answer.
-- This is one synthetic scenario. A preregistered held-out comparison of always
-  stopping versus affordable retries versus evidence-gated retries is still
-  needed before drawing effectiveness conclusions. The historical 403/404
-  replay remains in `cargo run --example token_cap_eval` and is not relabeled as
-  a measurement of this new feedback prompt.
+A held-out comparison of always-stop, affordable-retry, and evidence-gated retry
+policies is still needed. The historical 403/404 boundary remains in
+`cargo run --example token_cap_eval`; its archived counts are not reused as
+measurements of this new prompt.
 
 ## Verification
 
-`cargo test --example budgeted_recovery` covers retry feedback and combined
-charges, a second invalid response, missing evidence, expired deadlines before
-and after preparation and reservation, unaffordable retries, unknown usage and
-re-entry, late charged output, and evidence replacement between attempts.
-`cargo test --all-targets` runs these alongside the existing Store contracts.
+`cargo test --test recovery` covers file reopen, one retry across processes,
+concurrent initial/retry allocation, claim/claim, claim/cancel, reserve/reserve,
+reserve/cancel, uncertain sends, late and duplicate replies, immutable binding,
+stale cancellation, preclaim settlement rejection, transaction rollback, and
+populated v6 migration. `cargo test --example budgeted_recovery` additionally
+checks feedback quotes, evidence correction, preparation cleanup, all deadline
+boundaries, reserved-worker replacement, quote mismatch, and repeated invocation.
+`cargo test --all-targets` runs both with existing contracts.

@@ -41,7 +41,7 @@ The second example asks whether a test run has a reproduction record. An origina
 
 The built-in rule checks **availability of declared witnesses**. The caller defines which observations qualify for the question. `unsupported` means every declared alternative lacks at least one admitted observation. Missing and withheld IDs have the same effect. The store never needs the payload bytes to answer this rule.
 
-SQLite updates the affected clause counts in the same transaction as admission or withdrawal. Reads and resumes check the verdict against the current view. In-flight opaque work still goes through the original epoch check. Opening a v1 through v5 database migrates it to schema v6. Existing heads and usage records retain their identities.
+SQLite updates the affected clause counts in the same transaction as admission or withdrawal. Reads and resumes check the verdict against the current view. In-flight opaque work still goes through the original epoch check. Opening a v1 through v6 database migrates it to schema v7. Existing heads and usage records retain their identities.
 
 Use `set_admitted_and_revise` when readers should see the membership update and all affected support heads in the same database snapshot. Any failure rolls back the entire edit. A witness that keeps the same verdict retains its head and cost. Repeating the desired membership while it is already current returns an empty change list. An intervening reversal makes a subsequent call a new edit. The original `set_admitted` and `revise_support` remain available for deferred revision.
 
@@ -65,11 +65,12 @@ The `token_cap_eval` example compares four output caps on synthetic reports and 
 
 ## Implemented contracts
 
-The [bounded recovery example](docs/budgeted-recovery.md) connects validation
-failure to one retry or abstention, with a new prompt quote, evidence recapture,
-and budget/deadline gates. Run `cargo run --example budgeted_recovery` for the
-deterministic fixture, or add `--live` for the pinned Qwen worker. The fixture is
-not a live performance result or a persistent recovery workflow.
+The [durable recovery APIs and example](docs/budgeted-recovery.md) connect
+validation failure to one retry or abstention. Recovery IDs, retry slots,
+reservations and single-use send claims survive restart and serialize competing
+workers. Only proven-unsent work can be cancelled. Run
+`cargo run --example budgeted_recovery` for the deterministic fixture, or add
+`--live` for the pinned Qwen worker. The fixture is not a live performance result.
 
 | Operation | Behavior |
 | --- | --- |
@@ -80,6 +81,9 @@ not a live performance result or a persistent recovery workflow.
 | `record_dispatch` | Freeze the exact serialized adapter request for a still-eligible pending attempt. The request stays linked to the ordered source occurrences. |
 | `create_token_budget`, `token_budget_state` | Set a ceiling in input-plus-output tokens and read the amount spent and still reserved. |
 | `reserve_dispatch` | Atomically reserve the measured input plus the configured output cap and authorize dispatch. A denial records the decision and consumes no capacity. |
+| `create_recovery`, `begin_recovery_attempt` | Bind a stable operation key and allocate at most the original attempt plus one retry after invalid output. |
+| `reserve_recovery_attempt`, `recovery_reservation` | Stage exact request/quote and read an unsent reservation for verified re-preparation. |
+| `claim_recovery_dispatch`, `cancel_recovery_attempt` | Serialize send permission against cancellation; only one claimant can send, and only unclaimed work releases capacity. |
 | `settle` | Validate the captured branch and view, record the delivery and usage, and advance the head only on acceptance. Identical retries return the first disposition. Conflicting retries fail. |
 | `reject_invalid` | Record a dispatched response that failed validation, including the versioned validator, reason, exact returned bytes, and final usage. Keep the current branch head. |
 

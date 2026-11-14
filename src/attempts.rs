@@ -348,6 +348,9 @@ impl Store {
     pub fn record_dispatch(&mut self, attempt: i64, request: &[u8]) -> Result<()> {
         let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         pending_branch(&tx, attempt)?;
+        if crate::recovery::is_managed(&tx, attempt)? {
+            return Err(invalid("recovery dispatch requires the single-use send claim"));
+        }
         if crate::model_reuse::is_opted_in(&tx, attempt)? {
             return Err(invalid("use resolve_model_attempt for an opted-in model attempt"));
         }
