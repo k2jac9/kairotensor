@@ -413,3 +413,9 @@ mod tests {
         Ok(())
     }
 }
+
+mod recovery_runtime;
+pub use recovery_runtime::{ReplyValidation, MeasuredRecoveryReply, RecoveryRun};
+
+mod boot_clock;
+pub use boot_clock::LinuxBootClock;

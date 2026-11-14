@@ -84,7 +84,9 @@ The opt-in [deadline-aware recovery gate](docs/deadline-aware-recovery.md) binds
 the original clock domain and deadline to a runtime/calibration profile, checks
 remaining time after acquiring the writer lock, and refuses uncovered requests.
 Its offline example uses synthetic timing, not measured inference performance:
-`cargo run --example deadline_aware_recovery`.
+`cargo run --example deadline_aware_recovery`. The [runtime send boundary](docs/recovery-runtime.md)
+adds a concrete Linux boot clock and a final post-claim check before one backend
+invocation, without treating uncertain sends as free or retryable.
 
 The [recovery-policy evaluation protocol](docs/recovery-policy-protocol.md) defines
 an offline paired comparison with explicit accounting and deadline checks. Run
