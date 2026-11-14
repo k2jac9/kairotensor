@@ -65,6 +65,12 @@ The `token_cap_eval` example compares four output caps on synthetic reports and 
 
 ## Implemented contracts
 
+The [bounded recovery example](docs/budgeted-recovery.md) connects validation
+failure to one retry or abstention, with a new prompt quote, evidence recapture,
+and budget/deadline gates. Run `cargo run --example budgeted_recovery` for the
+deterministic fixture, or add `--live` for the pinned Qwen worker. The fixture is
+not a live performance result or a persistent recovery workflow.
+
 | Operation | Behavior |
 | --- | --- |
 | `observe`, `set_admitted` | Record a distinct observation occurrence and change visibility for one actor and scope. Repeating an admission leaves the view epoch unchanged. |
