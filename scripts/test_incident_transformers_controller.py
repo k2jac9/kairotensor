@@ -81,16 +81,62 @@ class PreparedControllerTests(unittest.TestCase):
         db=sqlite3.connect(self.out/'ledger.sqlite')
         self.assertEqual(db.execute("SELECT count(*) FROM events WHERE event='backend_received'").fetchone()[0],1);db.close()
     def test_delayed_persistence_does_not_relabel_receipt_late(self):
-        report=run_prepared(self.out,approval=InvocationApproval('offline_fake_dependencies'),fault='late_persistence',budget_ms=2500,audit_reserve_ms=700)
-        self.assertFalse(report['complete'],report);self.assertEqual(report['ledger_charged_units'],180,report)
-        self.assertEqual(report['late_receipts'],0,report)
-        raw=json.loads((self.out/'backend-receipt-0.json').read_text())
-        receipt=json.loads((self.out/'receipt-0.json').read_text())
-        self.assertEqual(raw['observed_ns'],receipt['observed_ns'])
-        db=sqlite3.connect(self.out/'ledger.sqlite')
-        tick=db.execute("SELECT observed_ns FROM events WHERE event='backend_received'").fetchone()[0];db.close()
-        cutoff=json.loads((self.out/'manifest.json').read_text())['work_deadline_ns']
-        self.assertLess(raw['observed_ns'],cutoff);self.assertGreaterEqual(tick,cutoff)
+        # First obtain a real new-backend fake-dependency envelope. Then exercise
+        # the same transport/SQLite receipt path with a synthetic clock, not a
+        # wall-clock sleep that races the independent process watchdog.
+        import base64
+        from unittest.mock import patch
+        import incident_transformers_controller as controller
+        import incident_calibration_controller as ledger
+        from incident_preflight import Ticket
+        from incident_routing import digest
+        seed=self.execute();self.assertTrue(seed['complete'],seed)
+        manifest=json.loads((self.out/'manifest.json').read_text())
+        ready=json.loads((self.out/'runtime-observed.json').read_text())
+        prepared=json.loads((self.out/'prepared-0.json').read_text())
+        raw_record=json.loads((self.out/'backend-receipt-0.json').read_text())
+        raw=base64.b64decode(raw_record['raw_base64'])
+        self.out=Path(self.temp.name)/'injected-clock';self.out.mkdir()
+        manifest.update(start_ns=0,work_deadline_ns=100,deadline_ns=1000,fault='none')
+        ledger._durable_new(self.out/'manifest.json',manifest)
+        tick=[10]
+        with patch.object(controller,'now_ns',lambda mode:tick[0]),patch.object(ledger,'now_ns',lambda mode:tick[0]):
+            db=ledger._initialize(self.out,manifest['plan'],manifest['clock_mode'])
+            try:
+                ledger._durable_new(self.out/'runtime-observed.json',ready)
+                ledger._durable_new(self.out/'prepared-0.json',prepared)
+                with db:
+                    ledger._event(db,'runtime_observed',None,{'artifact_sha256':digest(ready),'runtime_sha256':ready['runtime_sha256']},manifest['clock_mode'])
+                    ledger._event(db,'preparation_observed',0,{'artifact_sha256':digest(prepared),'prepared_sha256':prepared['observation']['prepared_sha256']},manifest['clock_mode'])
+                slot=manifest['plan']['schedule'][0];quote=prepared['reply']
+                ticket=Ticket(quote['handle'],slot['request_utf8'],slot['request_sha256'],quote['input_tokens'],quote['max_new_tokens'])
+                ledger._reserve(db,0,ticket,manifest);tick[0]=20
+                ledger._claim(db,0,ticket,manifest,manifest['runtime'])
+                transport=controller.Transport.__new__(controller.Transport)
+                transport.db=db;transport.out=self.out;transport.slot=0;transport.manifest=manifest
+                transport.fault='none';transport.errors=[];transport.runtime=ready['runtime_sha256']
+                transport.prepared={0:prepared['observation']};transport._write=lambda command:None
+                def read_reply(deadline):
+                    tick[0]=50
+                    return raw
+                transport._line=read_reply
+                durable=ledger._durable_new
+                def slow_persistence(path,payload,**kwargs):
+                    durable(path,payload,**kwargs)
+                    if path.name=='backend-receipt-0.json':tick[0]=150
+                with patch.object(ledger,'_durable_new',slow_persistence):
+                    reply=transport({'op':'generate','handle':ticket.handle,'input_tokens':ticket.input_tokens,'max_new_tokens':ticket.output_cap})
+                with db:
+                    units=reply['input_tokens']+reply['output_tokens']
+                    db.execute("UPDATE slots SET state='settled',charged_units=? WHERE slot=0",(units,))
+                    ledger._event(db,'settled',0,{'charged_units':units},manifest['clock_mode'])
+                self.assertEqual(db.execute('SELECT receipt_ns,late,charged_units FROM slots WHERE slot=0').fetchone(),(50,0,180))
+                self.assertEqual(db.execute("SELECT observed_ns FROM events WHERE event='backend_received'").fetchone()[0],150)
+            finally:db.close()
+        report=audit_prepared(self.out)
+        self.assertTrue(report['audit_complete'],report);self.assertFalse(report['complete'],report)
+        self.assertEqual(report['ledger_charged_units'],180,report);self.assertEqual(report['late_receipts'],0,report)
+        self.assertEqual(json.loads((self.out/'receipt-0.json').read_text())['observed_ns'],50)
     def test_worker_load_failure_and_hang(self):
         report=self.execute('load_failure')
         self.assertEqual(report['claimed_slots'],0,report);self.assertEqual(report['ledger_charged_units'],0,report)
