@@ -8,6 +8,8 @@ jobs:
   contracts:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      KAIROTENSOR_REQUIRE_LINUX_CLOCK: '1'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -19,6 +21,7 @@ jobs:
           cargo run --example withdrawal
           cargo run --example deterministic_verdict
           cargo run --example deadline_aware_recovery
+          cargo run --example runtime_recovery
           cargo run --example selective_revision
           cargo run --example corrected_handoff
           cargo run --example scoped_model_reuse
