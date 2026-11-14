@@ -88,6 +88,8 @@ The [versioned Transformers backend](docs/incident-transformers-backend.md)
 connects the bounded controller to pinned local-model APIs, with execution denied
 by default. Its automated checks use fake dependencies only; real calibration
 still requires provisioned assets and separately approved execution.
+The [proposed GitHub/NixOS comparison](docs/calibration-host-matrix.md) lists
+matching requirements, readiness gates and unapproved per-host bounds.
 
 ## Implemented contracts
 
