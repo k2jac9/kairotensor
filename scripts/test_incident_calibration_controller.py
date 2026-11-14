@@ -14,12 +14,19 @@ class ControllerTests(unittest.TestCase):
         self.out=Path(self.tmp.name)/'run'
     def run(self, result=None):
         return super().run(result)
-    def execute(self,fault='none',budget=3000):
+    def execute(self,fault='none',budget=30000):
         return run_fixture(self.out,approval=ExecutionApproval('offline_fixture'),budget_ms=budget,audit_reserve_ms=300,fault=fault)
+    def diagnostics(self,report):
+        details={'report':report}
+        for name in ('supervisor.json','controller-stderr.log'):
+            path=self.out/name
+            details[name]=path.read_text() if path.exists() else '<not created>'
+        return details
     def test_default_and_live_denied_before_files(self):
         for approval in [None,ExecutionApproval(),ExecutionApproval('live')]:
-            with self.assertRaises(PermissionError):run_fixture(self.out,approval=approval)
-            self.assertFalse(self.out.exists())
+            with self.subTest(approval=approval):
+                with self.assertRaises(PermissionError):run_fixture(self.out,approval=approval)
+                self.assertFalse(self.out.exists())
     def test_complete_eight_probe_ledger_and_no_replay(self):
         report=self.execute();self.assertTrue(report['complete']);self.assertEqual(report['claimed_slots'],8)
         self.assertEqual(report['settled_slots'],8);self.assertEqual(report['ledger_charged_units'],1592)
@@ -30,36 +37,71 @@ class ControllerTests(unittest.TestCase):
         rows=db.execute('select request_sha256, input_units, output_cap, state from slots order by slot').fetchall()
         self.assertEqual([r[1] for r in rows],[173]*4+[211]*4)
         self.assertTrue(all(r[2:]==(96,'settled') for r in rows));db.close()
+    def test_startup_deadline_expiry_does_not_invent_zero_accounting(self):
+        from unittest.mock import patch
+        import incident_calibration_controller as controller
+        original_launch=controller.subprocess.Popen
+        original_clock=controller.now_ns
+        # Keep parent setup on a deterministic injected pre-expiry tick. At
+        # launch, advance to the real clock; the fixed child also observes the
+        # already-expired original window and cannot initialize/claim work.
+        setup_tick=original_clock(controller._START_MODE)-1_000_000_000
+        launched=False
+        def launch_after_expiry(*args,**kwargs):
+            nonlocal launched
+            launched=True
+            return original_launch(*args,**kwargs)
+        def clock(mode):
+            return original_clock(mode) if launched else setup_tick
+        with patch('incident_calibration_controller.subprocess.Popen',launch_after_expiry), patch('incident_calibration_controller.now_ns',clock):
+            report=run_fixture(self.out,approval=ExecutionApproval('offline_fixture'),budget_ms=300,audit_reserve_ms=100,fault='wrong_quote')
+        self.assertFalse(report['complete'],report);self.assertFalse(report['audit_complete'],report)
+        self.assertIsNone(report['ledger_charged_units'],report)
+        self.assertIsNone(report['unresolved_hold_units'],report)
+        seal=json.loads((self.out/'supervisor.json').read_text())
+        self.assertTrue(seal['deadline_overrun']);self.assertTrue(seal['child_reaped'])
+        self.assertFalse(any(self.out.glob('receipt-*.json')))
+
     def test_plan_changes_refused_before_execution(self):
         for change in [lambda p:p.update(max_generation_calls=9),lambda p:p['schedule'][0].update(request_utf8='{}'),lambda p:p.update(max_total_quoted_tokens=99999)]:
-            p=calibration_plan();change(p)
-            with self.assertRaises(ValueError):run_fixture(self.out,approval=ExecutionApproval('offline_fixture'),plan=p)
-            self.assertFalse(self.out.exists())
+            with self.subTest(change=change):
+                p=calibration_plan();change(p)
+                with self.assertRaises(ValueError):run_fixture(self.out,approval=ExecutionApproval('offline_fixture'),plan=p)
+                self.assertFalse(self.out.exists())
     def test_crashes_before_and_after_claim_keep_conservative_holds(self):
         for fault,state,claimed in [('after_reserve','reserved',0),('after_claim','claimed',1)]:
             with self.subTest(fault=fault):
                 self.out=Path(self.tmp.name)/fault;report=self.execute(fault)
-                self.assertFalse(report['complete']);self.assertEqual(report['claimed_slots'],claimed)
-                self.assertEqual(report['unresolved_hold_units'],269);self.assertEqual(report['ledger_charged_units'],0)
-                self.assertEqual(report['slots'][0]['state'],state)
-                with self.assertRaises(FileExistsError):self.execute()
+                with self.subTest(**self.diagnostics(report)):
+                    self.assertFalse(report['complete']);self.assertEqual(report['claimed_slots'],claimed)
+                    self.assertEqual(report['unresolved_hold_units'],269);self.assertEqual(report['ledger_charged_units'],0)
+                    self.assertEqual(report['slots'][0]['state'],state)
+                    with self.assertRaises(FileExistsError):self.execute()
     def test_external_watchdog_bounds_child_and_generation_hangs(self):
         for fault in ['hang_before_worker','hang_generation','partial_line']:
-            self.out=Path(self.tmp.name)/fault;start=time.monotonic();report=self.execute(fault,1500)
-            self.assertLess(time.monotonic()-start,5);self.assertFalse(report['complete'])
-            if fault=='hang_generation':self.assertEqual(report['unresolved_hold_units'],269)
-            self.assertTrue(report['supervisor']['child_reaped'])
+            with self.subTest(fault=fault):
+                self.out=Path(self.tmp.name)/fault;start=time.monotonic();report=self.execute(fault,1500)
+                with self.subTest(**self.diagnostics(report)):
+                    self.assertLess(time.monotonic()-start,5);self.assertFalse(report['complete'])
+                    if fault=='hang_generation':self.assertEqual(report['unresolved_hold_units'],269)
+                    self.assertTrue(report['supervisor']['child_reaped'])
     def test_receipt_survives_crash_and_sqlite_failures_without_replay(self):
         for fault in ['after_receipt','hang_after_receipt','sqlite_receipt_failure','sqlite_settle_failure']:
-            self.out=Path(self.tmp.name)/fault;report=self.execute(fault,1500)
-            self.assertFalse(report['complete']);self.assertEqual(report['unresolved_hold_units'],269)
-            self.assertEqual(report['known_receipt_units'],180)
-            self.assertEqual(report['reconciliation'][0]['action'],'review_known_receipt_no_resend')
+            with self.subTest(fault=fault):
+                self.out=Path(self.tmp.name)/fault
+                report=self.execute(fault,1500 if fault=='hang_after_receipt' else 30000)
+                with self.subTest(**self.diagnostics(report)):
+                    self.assertFalse(report['complete']);self.assertEqual(report['unresolved_hold_units'],269)
+                    self.assertEqual(report['known_receipt_units'],180)
+                    self.assertEqual(report['reconciliation'][0]['action'],'review_known_receipt_no_resend')
     def test_wrong_quote_runtime_and_malformed_usage_fail_closed(self):
         for fault in ['wrong_quote','runtime_mismatch','oversized_reply']:
-            self.out=Path(self.tmp.name)/fault;report=self.execute(fault)
-            self.assertFalse(report['complete']);self.assertEqual(report['claimed_slots'],0)
-            self.assertEqual(report['ledger_charged_units'],0)
+            with self.subTest(fault=fault):
+                self.out=Path(self.tmp.name)/fault;report=self.execute(fault)
+                diagnostic=json.dumps(self.diagnostics(report),sort_keys=True)
+                self.assertFalse(report['complete'],diagnostic)
+                self.assertEqual(report['claimed_slots'],0,diagnostic)
+                self.assertEqual(report['ledger_charged_units'],0,diagnostic)
         self.out=Path(self.tmp.name)/'bad-usage';report=self.execute('wrong_usage')
         self.assertEqual(report['claimed_slots'],1);self.assertEqual(report['unresolved_hold_units'],269)
         self.assertEqual(report['known_receipt_units'],0);self.assertFalse(report['complete'])
