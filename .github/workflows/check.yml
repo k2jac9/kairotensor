@@ -49,3 +49,6 @@ jobs:
 
       - name: Exercise offline timed runtime through the fixture Adapter
         run: cargo run --example timed_recovery_runner -- --out "$RUNNER_TEMP/timed-recovery-runner"
+
+      - name: Prepare frozen semantic calibration requests without inference
+        run: python3 scripts/incident_routing.py prepare --out "$RUNNER_TEMP/incident-routing-calibration"

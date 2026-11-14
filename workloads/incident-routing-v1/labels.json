@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "version": "incident-routing/1",
+  "labels": [
+    {
+      "case_id": "cal-01",
+      "expected": {
+        "decision": "route",
+        "owner": "oriole",
+        "reason": "diagnosed_component",
+        "evidence_ids": [
+          "e01",
+          "e02"
+        ]
+      }
+    },
+    {
+      "case_id": "cal-02",
+      "expected": {
+        "decision": "abstain",
+        "owner": null,
+        "reason": "undetermined_cause",
+        "evidence_ids": [
+          "e01"
+        ]
+      }
+    },
+    {
+      "case_id": "cal-03",
+      "expected": {
+        "decision": "route",
+        "owner": "cedar",
+        "reason": "diagnosed_component",
+        "evidence_ids": [
+          "e02",
+          "e04"
+        ]
+      }
+    },
+    {
+      "case_id": "cal-04",
+      "expected": {
+        "decision": "abstain",
+        "owner": null,
+        "reason": "conflicting_diagnoses",
+        "evidence_ids": [
+          "e01",
+          "e02"
+        ]
+      }
+    },
+    {
+      "case_id": "hold-01",
+      "expected": {
+        "decision": "route",
+        "owner": "river",
+        "reason": "diagnosed_component",
+        "evidence_ids": [
+          "e01",
+          "e03"
+        ]
+      }
+    },
+    {
+      "case_id": "hold-02",
+      "expected": {
+        "decision": "route",
+        "owner": "maple",
+        "reason": "diagnosed_component",
+        "evidence_ids": [
+          "e01",
+          "e04"
+        ]
+      }
+    },
+    {
+      "case_id": "hold-03",
+      "expected": {
+        "decision": "abstain",
+        "owner": null,
+        "reason": "undetermined_cause",
+        "evidence_ids": [
+          "e01"
+        ]
+      }
+    },
+    {
+      "case_id": "hold-04",
+      "expected": {
+        "decision": "abstain",
+        "owner": null,
+        "reason": "owner_not_unique",
+        "evidence_ids": [
+          "e01",
+          "e02",
+          "e03"
+        ]
+      }
+    },
+    {
+      "case_id": "hold-05",
+      "expected": {
+        "decision": "abstain",
+        "owner": null,
+        "reason": "owner_not_unique",
+        "evidence_ids": [
+          "e01",
+          "e02"
+        ]
+      }
+    },
+    {
+      "case_id": "hold-06",
+      "expected": {
+        "decision": "route",
+        "owner": "quartz",
+        "reason": "diagnosed_component",
+        "evidence_ids": [
+          "e02",
+          "e04"
+        ]
+      }
+    },
+    {
+      "case_id": "hold-07",
+      "expected": {
+        "decision": "abstain",
+        "owner": null,
+        "reason": "undetermined_cause",
+        "evidence_ids": [
+          "e01"
+        ]
+      }
+    },
+    {
+      "case_id": "hold-08",
+      "expected": {
+        "decision": "abstain",
+        "owner": null,
+        "reason": "conflicting_diagnoses",
+        "evidence_ids": [
+          "e01",
+          "e02"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "version": "incident-routing/1",
+  "mode": "synthetic_smoke_corpus",
+  "calibration_cases": 4,
+  "heldout_cases": 8,
+  "new_model_calls": 0,
+  "construction": "Authored offline before any run on this version; freeze is integrity metadata, not independent proof of blind construction.",
+  "sha256": {
+    "contract.json": "41edfb5dd77d058e576fa8ee989cc35004a9bd68a66df2fd62b272f4793638b3",
+    "prompt.json": "c204fce9fac0ce21c42fb9f32b2c2e51019f106531729458e328d01a3c4c0651",
+    "cases.json": "676ca2cdc564a9cb2be9b8f0e8049076e5f796aca661492942b1bd6e88f70658",
+    "labels.json": "84d6270a46e2eafdb5b9def29b329461027a3f5ba763155a6a83017d750ca07d"
+  }
+}

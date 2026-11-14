@@ -1,0 +1,346 @@
+{
+  "schema_version": 1,
+  "version": "incident-routing/1",
+  "cases": [
+    {
+      "case_id": "cal-01",
+      "split": "calibration",
+      "family_id": "downstream-visible-fault",
+      "question": "Which team should own this incident investigation now?",
+      "owner_ids": [
+        "cedar",
+        "maple",
+        "oriole",
+        "quartz",
+        "river",
+        "sable"
+      ],
+      "evidence": [
+        {
+          "id": "e01",
+          "text": "Billing endpoints timed out. The investigation established exhausted connections in the pool manager as the cause; the billing service only exposed the symptom."
+        },
+        {
+          "id": "e02",
+          "text": "The pool manager is owned by team oriole."
+        },
+        {
+          "id": "e03",
+          "text": "The billing service is owned by team sable."
+        }
+      ]
+    },
+    {
+      "case_id": "cal-02",
+      "split": "calibration",
+      "family_id": "ruled-out-hypothesis",
+      "question": "Which team should own this incident investigation now?",
+      "owner_ids": [
+        "cedar",
+        "maple",
+        "oriole",
+        "quartz",
+        "river",
+        "sable"
+      ],
+      "evidence": [
+        {
+          "id": "e01",
+          "text": "The message broker was initially suspected. A replay ruled that hypothesis out. The cause of the stalled deliveries remains undetermined."
+        },
+        {
+          "id": "e02",
+          "text": "The message broker belongs to team quartz."
+        }
+      ]
+    },
+    {
+      "case_id": "cal-03",
+      "split": "calibration",
+      "family_id": "explicit-retraction",
+      "question": "Which team should own this incident investigation now?",
+      "owner_ids": [
+        "cedar",
+        "maple",
+        "oriole",
+        "quartz",
+        "river",
+        "sable"
+      ],
+      "evidence": [
+        {
+          "id": "e01",
+          "text": "Initial diagnosis: a corrupted cache caused the search failures."
+        },
+        {
+          "id": "e02",
+          "text": "Correction to the initial diagnosis: the cache is healthy. We retract that finding; the confirmed fault is in the schema adapter."
+        },
+        {
+          "id": "e03",
+          "text": "The cache is maintained by team river."
+        },
+        {
+          "id": "e04",
+          "text": "The schema adapter belongs to team cedar."
+        }
+      ]
+    },
+    {
+      "case_id": "cal-04",
+      "split": "calibration",
+      "family_id": "parallel-incompatible-conclusions",
+      "question": "Which team should own this incident investigation now?",
+      "owner_ids": [
+        "cedar",
+        "maple",
+        "oriole",
+        "quartz",
+        "river",
+        "sable"
+      ],
+      "evidence": [
+        {
+          "id": "e01",
+          "text": "Investigation A concludes that the routing table corruption caused this incident and that the storage index was healthy."
+        },
+        {
+          "id": "e02",
+          "text": "Investigation B concludes that the storage index corruption caused this same incident and that the routing table was healthy. Neither investigation retracts its conclusion."
+        },
+        {
+          "id": "e03",
+          "text": "Team maple owns the routing table."
+        },
+        {
+          "id": "e04",
+          "text": "Team sable owns the storage index."
+        }
+      ]
+    },
+    {
+      "case_id": "hold-01",
+      "split": "heldout",
+      "family_id": "negated-network-cause",
+      "question": "Which team should own this incident investigation now?",
+      "owner_ids": [
+        "cedar",
+        "maple",
+        "oriole",
+        "quartz",
+        "river",
+        "sable"
+      ],
+      "evidence": [
+        {
+          "id": "e01",
+          "text": "This was not a resolver fault. DNS responses were correct throughout. The diagnosed cause was a certificate loader that discarded the new trust bundle."
+        },
+        {
+          "id": "e02",
+          "text": "Team quartz owns the resolver."
+        },
+        {
+          "id": "e03",
+          "text": "The certificate loader is assigned to team river."
+        }
+      ]
+    },
+    {
+      "case_id": "hold-02",
+      "split": "heldout",
+      "family_id": "upstream-compilation-defect",
+      "question": "Which team should own this incident investigation now?",
+      "owner_ids": [
+        "cedar",
+        "maple",
+        "oriole",
+        "quartz",
+        "river",
+        "sable"
+      ],
+      "evidence": [
+        {
+          "id": "e01",
+          "text": "Checkout appeared broken because invoice workers rejected their generated mappings. The defect was isolated to the mapping compiler; the workers and checkout handlers behaved as specified."
+        },
+        {
+          "id": "e02",
+          "text": "Checkout handlers belong to team cedar."
+        },
+        {
+          "id": "e03",
+          "text": "Invoice workers belong to team oriole."
+        },
+        {
+          "id": "e04",
+          "text": "The mapping compiler is owned by team maple."
+        }
+      ]
+    },
+    {
+      "case_id": "hold-03",
+      "split": "heldout",
+      "family_id": "tentative-only-assessment",
+      "question": "Which team should own this incident investigation now?",
+      "owner_ids": [
+        "cedar",
+        "maple",
+        "oriole",
+        "quartz",
+        "river",
+        "sable"
+      ],
+      "evidence": [
+        {
+          "id": "e01",
+          "text": "A queue scheduler defect is one possibility, but the team has not reproduced it or selected it over the other hypotheses. No causal component has been established."
+        },
+        {
+          "id": "e02",
+          "text": "The queue scheduler belongs to team sable."
+        }
+      ]
+    },
+    {
+      "case_id": "hold-04",
+      "split": "heldout",
+      "family_id": "conflicting-directory-assignments",
+      "question": "Which team should own this incident investigation now?",
+      "owner_ids": [
+        "cedar",
+        "maple",
+        "oriole",
+        "quartz",
+        "river",
+        "sable"
+      ],
+      "evidence": [
+        {
+          "id": "e01",
+          "text": "The failing replay established the payload normalizer as the incident cause."
+        },
+        {
+          "id": "e02",
+          "text": "The payload normalizer is owned by team river. This is a current ownership record."
+        },
+        {
+          "id": "e03",
+          "text": "The payload normalizer is owned by team cedar. This is also a current ownership record; no precedence rule or replacement is recorded."
+        }
+      ]
+    },
+    {
+      "case_id": "hold-05",
+      "split": "heldout",
+      "family_id": "explicitly-unassigned-component",
+      "question": "Which team should own this incident investigation now?",
+      "owner_ids": [
+        "cedar",
+        "maple",
+        "oriole",
+        "quartz",
+        "river",
+        "sable"
+      ],
+      "evidence": [
+        {
+          "id": "e01",
+          "text": "The final investigation identifies the archive hydrator as the source of the outage."
+        },
+        {
+          "id": "e02",
+          "text": "The complete current directory lists the archive hydrator as unassigned; no team owns it."
+        }
+      ]
+    },
+    {
+      "case_id": "hold-06",
+      "split": "heldout",
+      "family_id": "superseding-final-investigation",
+      "question": "Which team should own this incident investigation now?",
+      "owner_ids": [
+        "cedar",
+        "maple",
+        "oriole",
+        "quartz",
+        "river",
+        "sable"
+      ],
+      "evidence": [
+        {
+          "id": "e01",
+          "text": "The preliminary report attributed the rejected uploads to the object gateway."
+        },
+        {
+          "id": "e02",
+          "text": "Replace the preliminary finding: the object gateway was not at fault. The final replay conclusively identified the checksum translator as the causal component."
+        },
+        {
+          "id": "e03",
+          "text": "Team oriole owns the object gateway."
+        },
+        {
+          "id": "e04",
+          "text": "Team quartz owns the checksum translator."
+        }
+      ]
+    },
+    {
+      "case_id": "hold-07",
+      "split": "heldout",
+      "family_id": "recovered-without-diagnosis",
+      "question": "Which team should own this incident investigation now?",
+      "owner_ids": [
+        "cedar",
+        "maple",
+        "oriole",
+        "quartz",
+        "river",
+        "sable"
+      ],
+      "evidence": [
+        {
+          "id": "e01",
+          "text": "Latency returned to normal after the rollout was paused, but the investigation did not isolate a trigger or establish which component caused the incident."
+        },
+        {
+          "id": "e02",
+          "text": "Team maple owns the deployment coordinator; team sable owns the latency collector."
+        }
+      ]
+    },
+    {
+      "case_id": "hold-08",
+      "split": "heldout",
+      "family_id": "unresolved-exclusive-root-causes",
+      "question": "Which team should own this incident investigation now?",
+      "owner_ids": [
+        "cedar",
+        "maple",
+        "oriole",
+        "quartz",
+        "river",
+        "sable"
+      ],
+      "evidence": [
+        {
+          "id": "e01",
+          "text": "The first signed review attributes this outage solely to the lease allocator and explicitly excludes the shard monitor."
+        },
+        {
+          "id": "e02",
+          "text": "A second signed review attributes the same outage solely to the shard monitor and explicitly excludes the lease allocator. Both conclusions remain in force pending reconciliation."
+        },
+        {
+          "id": "e03",
+          "text": "Team cedar owns the lease allocator."
+        },
+        {
+          "id": "e04",
+          "text": "Team river owns the shard monitor."
+        }
+      ]
+    }
+  ]
+}

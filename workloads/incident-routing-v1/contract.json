@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "version": "incident-routing/1",
+  "task": "route the diagnosed causal component to its unique documented owner, or abstain",
+  "output_fields": [
+    "decision",
+    "owner",
+    "reason",
+    "evidence_ids"
+  ],
+  "decisions": [
+    "route",
+    "abstain"
+  ],
+  "reasons": [
+    "diagnosed_component",
+    "undetermined_cause",
+    "conflicting_diagnoses",
+    "owner_not_unique"
+  ],
+  "citation_semantics": "unordered exact minimal set; duplicates and extra citations invalid for scoring; route cites decisive diagnosis and ownership; abstention cites only the evidence establishing its reason; self-contained corrections replace superseded notes",
+  "protocol_validation": "schema, enum, supplied owner roster and citation IDs only; semantic labels used exclusively by offline scoring",
+  "score_metrics": [
+    "decision_owner_reason_exact",
+    "citation_set_exact",
+    "joint_exact",
+    "current_joint_success"
+  ],
+  "incomplete_policy": "no aggregate score when any selected record is missing or unknown; stale/refused receipts cannot contribute current success",
+  "split_policy": "case and family IDs unique; no family crosses calibration and heldout; exact evidence texts cannot cross splits",
+  "scope": "synthetic smoke corpus; no statistical model-performance claim"
+}
