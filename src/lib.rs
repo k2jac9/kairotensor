@@ -1,6 +1,7 @@
 //! Local versioned evidence memory with actor-scoped admission and atomic publication.
 
 mod attempts;
+mod report_verdict;
 mod model_reuse;
 mod support;
 mod token_budget;
@@ -19,7 +20,7 @@ use std::time::Duration;
 
 // "KTSM", stored in the SQLite header.
 const APPLICATION_ID: i32 = 0x4b54_534d;
-const SCHEMA_VERSION: i32 = 7;
+const SCHEMA_VERSION: i32 = 8;
 const INSERT_OBSERVATION: &str = "INSERT INTO evidence(source, payload) VALUES (?1, ?2)";
 
 /// A local trusted runtime owns the database and supplies authenticated actor/scope names.
@@ -80,6 +81,9 @@ impl Store {
         }
         if version < 7 {
             tx.execute_batch(include_str!("recovery.sql"))?;
+        }
+        if version < 8 {
+            tx.execute_batch(include_str!("report_verdict.sql"))?;
         }
         if version < SCHEMA_VERSION {
             tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
