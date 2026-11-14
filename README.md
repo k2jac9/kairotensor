@@ -72,6 +72,11 @@ workers. Only proven-unsent work can be cancelled. Run
 `cargo run --example budgeted_recovery` for the deterministic fixture, or add
 `--live` for the pinned Qwen worker. The fixture is not a live performance result.
 
+The [recovery-policy evaluation protocol](docs/recovery-policy-protocol.md) defines
+an offline paired comparison with explicit accounting and deadline checks. Run
+`python3 scripts/recovery_policy_eval.py --fixture` for synthetic contract cases,
+not model-performance measurements.
+
 | Operation | Behavior |
 | --- | --- |
 | `observe`, `set_admitted` | Record a distinct observation occurrence and change visibility for one actor and scope. Repeating an admission leaves the view epoch unchanged. |

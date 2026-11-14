@@ -97,8 +97,10 @@ live recovery experiment has been performed as part of this change, and no
 accuracy, latency or efficiency gain is claimed. The conservative cap remains
 96: the earlier 64-token calibration did not evaluate this feedback prompt.
 
-A held-out comparison of always-stop, affordable-retry, and evidence-gated retry
-policies is still needed. The historical 403/404 boundary remains in
+The [offline policy evaluator and comparison protocol](recovery-policy-protocol.md)
+now define always-stop, affordable-retry, and evidence-gated retry comparisons.
+Its synthetic checks are not a live held-out experiment; measured recovery
+trajectories are still needed. The historical 403/404 boundary remains in
 `cargo run --example token_cap_eval`; its archived counts are not reused as
 measurements of this new prompt.
 

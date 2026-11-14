@@ -30,3 +30,6 @@ jobs:
           python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Verify archived output-cap measurements
         run: python3 scripts/summarize_token_caps.py docs/evaluations/token-caps-*-2026-11-13.json
+
+      - name: Verify synthetic recovery policy comparison
+        run: python3 scripts/recovery_policy_eval.py --fixture
