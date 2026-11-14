@@ -41,7 +41,7 @@ The second example asks whether a test run has a reproduction record. An origina
 
 The built-in rule checks **availability of declared witnesses**. The caller defines which observations qualify for the question. `unsupported` means every declared alternative lacks at least one admitted observation. Missing and withheld IDs have the same effect. The store never needs the payload bytes to answer this rule.
 
-SQLite updates the affected clause counts in the same transaction as admission or withdrawal. Reads and resumes check the verdict against the current view. In-flight opaque work still goes through the original epoch check. Opening a v1 through v7 database migrates it to schema v8. Existing heads and usage records retain their identities.
+SQLite updates the affected clause counts in the same transaction as admission or withdrawal. Reads and resumes check the verdict against the current view. In-flight opaque work still goes through the original epoch check. Opening a v1 through v8 database migrates it to schema v9. Existing heads and usage records retain their identities.
 
 Use `set_admitted_and_revise` when readers should see the membership update and all affected support heads in the same database snapshot. Any failure rolls back the entire edit. A witness that keeps the same verdict retains its head and cost. Repeating the desired membership while it is already current returns an empty change list. An intervening reversal makes a subsequent call a new edit. The original `set_admitted` and `revise_support` remain available for deferred revision.
 
@@ -79,6 +79,12 @@ reservations and single-use send claims survive restart and serialize competing
 workers. Only proven-unsent work can be cancelled. Run
 `cargo run --example budgeted_recovery` for the deterministic fixture, or add
 `--live` for the pinned Qwen worker. The fixture is not a live performance result.
+
+The opt-in [deadline-aware recovery gate](docs/deadline-aware-recovery.md) binds
+the original clock domain and deadline to a runtime/calibration profile, checks
+remaining time after acquiring the writer lock, and refuses uncovered requests.
+Its offline example uses synthetic timing, not measured inference performance:
+`cargo run --example deadline_aware_recovery`.
 
 The [recovery-policy evaluation protocol](docs/recovery-policy-protocol.md) defines
 an offline paired comparison with explicit accounting and deadline checks. Run
