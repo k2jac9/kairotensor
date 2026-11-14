@@ -1,5 +1,8 @@
 name: Collect recovery policy traces
 on:
+  push:
+    branches: [feat/budgeted-recovery]
+    paths: [.github/workflows/recovery-policy.yml]
   workflow_dispatch:
     inputs:
       live:
@@ -11,6 +14,12 @@ permissions:
   contents: read
 jobs:
   collect:
+    # One approved push only: exact pre-launch head, and never an automatic rerun.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' &&
+       github.event.before == '51db79d1f141df1d56688d0ed1be1b3257d36911' &&
+       github.run_attempt == '1')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -26,7 +35,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install the pinned CPU runtime
-        if: inputs.live
+        if: github.event_name == 'push' || inputs.live
         run: |
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.6.0
           python -m pip install transformers==4.48.3 accelerate==1.3.0 huggingface_hub==0.34.4 safetensors==0.5.3 'numpy<2'
@@ -37,8 +46,9 @@ jobs:
           mkdir -p recovery-policy-run
           { git rev-parse HEAD; rustc --version; python --version; lscpu; } > recovery-policy-run/environment.txt
       - name: Collect trajectories
+        shell: bash
         env:
-          LIVE: ${{ inputs.live }}
+          LIVE: ${{ github.event_name == 'push' || inputs.live }}
         run: |
           args=()
           if [[ "$LIVE" == true ]]; then args+=(--live); fi
