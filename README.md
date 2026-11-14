@@ -86,7 +86,10 @@ remaining time after acquiring the writer lock, and refuses uncovered requests.
 Its offline example uses synthetic timing, not measured inference performance:
 `cargo run --example deadline_aware_recovery`. The [runtime send boundary](docs/recovery-runtime.md)
 adds a concrete Linux boot clock and a final post-claim check before one backend
-invocation, without treating uncertain sends as free or retryable.
+invocation, without treating uncertain sends as free or retryable. The
+[offline end-to-end runner](docs/timed-recovery-runner.md) joins this path to the
+existing fixture Adapter with durable audit files and fault scenarios; live mode
+is explicitly refused.
 
 The [recovery-policy evaluation protocol](docs/recovery-policy-protocol.md) defines
 an offline paired comparison with explicit accounting and deadline checks. Run
