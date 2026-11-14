@@ -71,6 +71,14 @@ candidate manifests and checks evidence freshness again at publication. Historic
 commit receipts are separate from current read eligibility. Run
 `cargo run --example deterministic_verdict` for the zero-model-call demonstration.
 
+## Frozen semantic workload (offline)
+
+The [incident-routing smoke workload](docs/incident-routing-workload.md) prepares
+versioned evidence-grounded routing requests and audits recorded responses against
+a strict frozen contract. Its 12 authored cases separate calibration from heldout
+scoring. Preparation performs no inference; synthetic fixture scores are not model
+performance measurements, and declared evidence eligibility is not Store authentication.
+
 ## Implemented contracts
 
 The [durable recovery APIs and example](docs/budgeted-recovery.md) connect
