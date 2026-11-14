@@ -110,12 +110,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ledger = store.token_budget_state(budget)?;
     assert_eq!(ledger.spent, 7);
     assert_eq!(ledger.reserved, 12);
+    let clock_probe = LinuxBootClock::sample();
+    let clock_unavailable_reason = clock_probe.as_ref().err().map(|e| e.to_string());
     println!(
         "{}",
         json!({"mode":"synthetic_runtime_boundary_fixture","new_model_calls":0,
         "fixture_backend_invocations":backend_calls,"synthetic_charged_tokens":ledger.spent,
         "postcommit_skip":"insufficient_time","claimed_hold_retained":ledger.reserved,
-        "linux_boottime_available":LinuxBootClock::sample().is_ok(),
+        "linux_boottime_available":clock_probe.is_ok(),
+        "linux_boottime_unavailable_reason":clock_unavailable_reason,
         "completion_guaranteed":false,"exactly_once_remote_transport_guaranteed":false})
     );
     Ok(())

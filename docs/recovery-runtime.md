@@ -11,8 +11,10 @@ The Linux clock provider uses `CLOCK_BOOTTIME`, which includes suspended time.
 Its domain identifies the machine, boot, current thread's active time namespace
 and boot-time offset. It checks identity around the clock sample. Boot identity
 alone is insufficient because Linux time namespaces can offset boot-time clocks.
-It requires the active and child time namespaces to match before interpreting
-`timens_offsets`, and refuses unavailable or ambiguous metadata.
+Linux exposes `timens_offsets` on the process-level procfs entry, not the
+thread-task entry. The provider reads `/proc/self/timens_offsets` only after
+verifying that both the current thread and process leader have matching active
+and child time namespaces. It refuses unavailable or ambiguous metadata.
 
 A normal process restart in the same supported clock domain can resume the
 original persisted window. Reboot, host/namespace changes, unavailable metadata,
@@ -84,4 +86,6 @@ backend failure, settlement success and settlement failure with retained reply.
 Run `cargo run --example runtime_recovery` for the zero-model synthetic example
 and `cargo test --all-targets` for the full suite. The concrete-clock subprocess
 smoke test prints an explicit unavailable outcome when required metadata is
-missing; this does not weaken the provider into a fallback clock.
+missing; this does not weaken the provider into a fallback clock. Ubuntu CI sets
+`KAIROTENSOR_REQUIRE_LINUX_CLOCK=1`, making unavailability a test failure rather
+than a skipped supported-host check.

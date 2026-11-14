@@ -40,22 +40,54 @@ fn bad() -> io::Error {
 }
 #[cfg(target_os = "linux")]
 fn read_identity() -> io::Result<String> {
-    use std::fs::{read_link, read_to_string};
-    let machine = read_to_string("/etc/machine-id")?;
-    let boot = read_to_string("/proc/sys/kernel/random/boot_id")?;
-    // thread-self is essential: a process's threads can have different namespaces.
-    let active = read_link("/proc/thread-self/ns/time")?;
-    let children = read_link("/proc/thread-self/ns/time_for_children")?;
-    // This proc file describes time_for_children, hence the equality requirement.
-    let offsets = read_to_string("/proc/thread-self/timens_offsets")?;
-    domain(
-        machine.trim(),
-        boot.trim(),
-        active.to_str().ok_or_else(bad)?,
-        children.to_str().ok_or_else(bad)?,
-        &offsets,
+    read_identity_with(
+        |path| std::fs::read_to_string(path),
+        |path| {
+            std::fs::read_link(path)?
+                .into_os_string()
+                .into_string()
+                .map_err(|_| bad())
+        },
     )
 }
+#[cfg(any(target_os = "linux", test))]
+fn metadata_error(label: &str, error: io::Error) -> io::Error {
+    // Report the operation and error category, never metadata contents/host IDs.
+    io::Error::new(
+        error.kind(),
+        format!("Linux boot clock: {label} unavailable ({:?})", error.kind()),
+    )
+}
+#[cfg(any(target_os = "linux", test))]
+fn read_identity_with<R, L>(mut text: R, mut link: L) -> io::Result<String>
+where
+    R: FnMut(&str) -> io::Result<String>,
+    L: FnMut(&str) -> io::Result<String>,
+{
+    let machine = text("/etc/machine-id").map_err(|e| metadata_error("machine identity", e))?;
+    let boot =
+        text("/proc/sys/kernel/random/boot_id").map_err(|e| metadata_error("boot identity", e))?;
+    let active = link("/proc/thread-self/ns/time")
+        .map_err(|e| metadata_error("thread active time namespace", e))?;
+    let children = link("/proc/thread-self/ns/time_for_children")
+        .map_err(|e| metadata_error("thread child time namespace", e))?;
+    // timens_offsets exists in the kernel's tgid table, not the task/TID table.
+    // Use the leader's offset file only when all four namespace identities match.
+    let leader_active = link("/proc/self/ns/time")
+        .map_err(|e| metadata_error("leader active time namespace", e))?;
+    let leader_children = link("/proc/self/ns/time_for_children")
+        .map_err(|e| metadata_error("leader child time namespace", e))?;
+    if active != children || active != leader_active || active != leader_children {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Linux boot clock: thread and leader time namespaces differ",
+        ));
+    }
+    let offsets =
+        text("/proc/self/timens_offsets").map_err(|e| metadata_error("leader time offsets", e))?;
+    domain(machine.trim(), boot.trim(), &active, &children, &offsets)
+}
+
 fn domain(
     machine: &str,
     boot: &str,
@@ -240,5 +272,58 @@ mod tests {
             || Err(io::Error::other("clock failed"))
         )
         .is_err());
+    }
+    fn fixture_text(path: &str) -> io::Result<String> {
+        match path {
+            "/etc/machine-id" => Ok(MACHINE.into()),
+            "/proc/sys/kernel/random/boot_id" => Ok(BOOT.into()),
+            "/proc/self/timens_offsets" => Ok(OFFSETS.into()),
+            _ => Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "fixture has no thread offsets file",
+            )),
+        }
+    }
+    #[test]
+    fn offsets_use_leader_path_only_after_namespace_match() {
+        let result = read_identity_with(fixture_text, |_| Ok("time:[42]".into())).unwrap();
+        assert_eq!(
+            result,
+            domain(MACHINE, BOOT, "time:[42]", "time:[42]", OFFSETS).unwrap()
+        );
+    }
+    #[test]
+    fn leader_thread_divergence_refuses_before_offsets_read() {
+        for different in [
+            "/proc/self/ns/time",
+            "/proc/self/ns/time_for_children",
+            "/proc/thread-self/ns/time_for_children",
+        ] {
+            let result = read_identity_with(
+                |path| {
+                    assert_ne!(path, "/proc/self/timens_offsets");
+                    fixture_text(path)
+                },
+                |path| {
+                    Ok(if path == different {
+                        "time:[43]"
+                    } else {
+                        "time:[42]"
+                    }
+                    .into())
+                },
+            );
+            assert!(result.is_err());
+        }
+    }
+    #[test]
+    fn metadata_error_labels_operation_without_leaking_contents() {
+        let error = read_identity_with(fixture_text, |_| {
+            Err(io::Error::new(io::ErrorKind::NotFound, "SECRET-HOST-ID"))
+        })
+        .unwrap_err();
+        assert!(error.to_string().contains("thread active time namespace"));
+        assert!(!error.to_string().contains("SECRET-HOST-ID"));
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
     }
 }

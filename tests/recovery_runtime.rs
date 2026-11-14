@@ -374,6 +374,11 @@ fn linux_clock_process_restart_smoke() {
     let first = match kairotensor::LinuxBootClock::sample() {
         Ok(c) => c,
         Err(e) => {
+            assert!(
+                std::env::var_os("KAIROTENSOR_REQUIRE_LINUX_CLOCK").as_deref()
+                    != Some(std::ffi::OsStr::new("1")),
+                "required Linux boot clock unavailable: {e}"
+            );
             eprintln!("Linux boot clock unavailable (fail closed): {e}");
             return;
         }
