@@ -78,6 +78,9 @@ versioned evidence-grounded routing requests and audits recorded responses again
 a strict frozen contract. Its 12 authored cases separate calibration from heldout
 scoring. Preparation performs no inference; synthetic fixture scores are not model
 performance measurements, and declared evidence eligibility is not Store authentication.
+The [prepared-request bridge](docs/incident-prepared-bridge.md) connects these
+prompts to the existing worker protocol with offline lifecycle tests and emits a
+bounded, unexecuted calibration proposal. It does not grant Store send authority.
 
 ## Implemented contracts
 

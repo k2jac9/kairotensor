@@ -52,3 +52,6 @@ jobs:
 
       - name: Prepare frozen semantic calibration requests without inference
         run: python3 scripts/incident_routing.py prepare --out "$RUNNER_TEMP/incident-routing-calibration"
+
+      - name: Emit bounded prepared-request calibration proposal without inference
+        run: python3 scripts/incident_preflight.py --out "$RUNNER_TEMP/incident-preflight-plan.json"
