@@ -84,6 +84,10 @@ bounded, unexecuted calibration proposal. It does not grant Store send authority
 The [offline calibration controller](docs/incident-calibration-controller.md)
 tests durable send claims, retained uncertain usage and independent process
 termination against fixed fake workers. It has no live model launch path.
+The [versioned Transformers backend](docs/incident-transformers-backend.md)
+connects the bounded controller to pinned local-model APIs, with execution denied
+by default. Its automated checks use fake dependencies only; real calibration
+still requires provisioned assets and separately approved execution.
 
 ## Implemented contracts
 

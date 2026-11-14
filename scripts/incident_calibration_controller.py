@@ -40,10 +40,17 @@ def _sources():
             for name in ('incident_calibration_controller.py', 'incident_preflight.py', 'incident_calibration_process.py')}
 
 
+# Explicit trusted PR16 source identity, not an artifact-provided allowlist.
+_LEGACY_V1_SOURCES = {
+    'incident_calibration_controller.py':'3ec8c274c42a86e51c2daa1de1eba200fc3779b1d4cbdf7fcad308cafd362c49',
+    'incident_preflight.py':'f0955476e7db0d0fe56052c7042ce2820e9630eb6c95b22f34c0b4b328e295e4',
+    'incident_calibration_process.py':'92575eeb9f71869bc51009031a05ed4a2a4c6e0a136e8ffedaeb52ff14629962',
+}
+
 def _validate_manifest(m):
     require(type(m) is dict and m['version'] == 'incident-calibration-controller/1', 'manifest version')
     require(m['mode'] == 'offline_protocol_fixture' and type(m['new_model_calls']) is int and m['new_model_calls'] == 0, 'offline manifest required')
-    require(m['runtime'] == profile() and m['sources'] == _sources(), 'runtime/source binding mismatch')
+    require(m['runtime'] == profile() and m['sources'] in (_sources(), _LEGACY_V1_SOURCES), 'runtime/source binding mismatch')
     require(canonical(m['plan']) == canonical(calibration_plan()), 'frozen plan mismatch')
     require(m['clock_mode'] in ('linux_boottime', 'fixture_monotonic'), 'clock mode')
     require(all(type(m[k]) is int for k in ('start_ns','work_deadline_ns','deadline_ns')), 'clock integer required')
@@ -147,8 +154,12 @@ def _claim(db, slot, ticket, manifest, actual_profile):
         db.rollback(); raise
 
 
-def _receipt(db, out, slot, raw, manifest, fault, errors):
-    observed = now_ns(manifest['clock_mode'])
+def _receipt(db, out, slot, raw, manifest, fault, errors, *, observed_ns=None):
+    sampled = now_ns(manifest['clock_mode'])
+    observed = sampled if observed_ns is None else observed_ns
+    require(type(observed) is int and 0 <= observed <= sampled, 'receipt observation invalid')
+    claimed = db.execute("SELECT max(observed_ns) FROM events WHERE event='claimed' AND slot=?", (slot,)).fetchone()[0]
+    require(type(claimed) is int and observed >= claimed, 'receipt precedes claim')
     request_sha = manifest['plan']['schedule'][slot]['request_sha256']
     record = {'slot': slot, 'request_sha256': request_sha, 'raw_reply_base64': base64.b64encode(raw).decode(), 'observed_ns': observed}
     # Independent raw artifact precedes parsing/protocol checks and ledger settle.
@@ -289,7 +300,7 @@ def _valid_receipt(raw, input_units, cap):
     except (ValueError, TypeError, KeyError, UnicodeError): return None
 
 
-def audit_run(out):
+def audit_run(out, *, _manifest_validator=None, _event_validator=None):
     """Read-only consistency audit, not source authentication or replay permission."""
     out = Path(out)
     empty = {'mode': 'offline_calibration_diagnostic', 'new_model_calls': 0, 'profile_exported': False,
@@ -298,7 +309,7 @@ def audit_run(out):
              'late_receipts': 0, 'slots': [], 'reconciliation': [], 'supervisor': {}, 'snapshot_only': True}
     result = copy.deepcopy(empty)
     try:
-        manifest = _loads((out / 'manifest.json').read_bytes()); _validate_manifest(manifest)
+        manifest = _loads((out / 'manifest.json').read_bytes()); (_manifest_validator or _validate_manifest)(manifest)
         if (out / 'supervisor.json').exists():
             seal = _loads((out / 'supervisor.json').read_bytes())
             require(seal['manifest_sha256'] == digest(manifest) and seal['deadline_ns'] == manifest['deadline_ns'], 'supervisor binding')
@@ -321,6 +332,8 @@ def audit_run(out):
         require([r[0] for r in rows] == list(range(8)), 'exact planned slot set required')
         require(events and events[0][0:2] == ('planned', None), 'initial event missing')
         require(_loads(events[0][2]) == {'plan_sha256': manifest['plan']['plan_sha256'], 'manifest_sha256': digest(manifest)}, 'ledger manifest binding')
+        if _event_validator is not None:
+            events = _event_validator(out, manifest, rows, events, result['supervisor'])
         previous = manifest['start_ns']; chains = {i: [] for i in range(8)}; finished = False; audits_ok = True
         for index, (name, slot, payload, tick) in enumerate(events):
             require(type(tick) is int and tick >= previous, 'event clock regression'); previous = tick
@@ -388,26 +401,9 @@ def audit_run(out):
         result = copy.deepcopy(empty); result['audit_error'] = str(error)
     return result
 
-def run_fixture(out, *, approval=None, budget_ms=1200000, audit_reserve_ms=5000, fault='none', plan=None, _origin=None):
-    mode = _START_MODE; start = now_ns(mode) if _origin is None else _origin
-    if type(approval) is not ExecutionApproval or approval.kind != 'offline_fixture':
-        raise PermissionError('execution denied: only explicit offline fixture approval exists; live is structurally unavailable')
-    require(sys.platform.startswith('linux') and hasattr(os, 'waitid'), 'Linux owned process-group watchdog required')
-    expected = calibration_plan(); selected = expected if plan is None else plan
-    require(canonical(selected) == canonical(expected), 'exact frozen calibration plan required')
-    require(type(budget_ms) is int and 0 < budget_ms <= 1200000, 'invalid lowered fixture time budget')
-    require(type(audit_reserve_ms) is int and 0 < audit_reserve_ms < budget_ms, 'audit reserve required')
-    require(fault in FAULTS, 'unknown fixture fault')
-    deadline = start + budget_ms * 1_000_000
-    out = Path(out); out.mkdir(mode=0o700)
-    manifest = {'version': 'incident-calibration-controller/1', 'mode': 'offline_protocol_fixture', 'new_model_calls': 0,
-                'start_ns': start, 'deadline_ns': deadline, 'work_deadline_ns': deadline-audit_reserve_ms*1_000_000,
-                'sources': _sources(), 'clock_mode': mode, 'plan': selected, 'runtime': profile(), 'fault': fault,
-                'accounting': 'fake_tensor_protocol_units_not_model_tokens', 'no_resume': True}
-    _durable_new(out / 'manifest.json', manifest)
-    require(now_ns(mode) < manifest['work_deadline_ns'], 'setup consumed execution budget')
+def _supervise(out, command, deadline, mode, manifest):
     with (out / 'controller-stderr.log').open('xb') as stderr:
-        child = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), '_child', str(out), str(os.getpid())],
+        child = subprocess.Popen(command,
                                  start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=stderr)
         timed_out = False
         try:
@@ -426,6 +422,27 @@ def run_fixture(out, *, approval=None, budget_ms=1200000, audit_reserve_ms=5000,
     observed_finish = now_ns(mode)
     _durable_new(out / 'supervisor.json', {'timed_out': timed_out, 'deadline_overrun': observed_finish >= deadline, 'child_reaped': True, 'exit_code': child.returncode,
                                           'finished_ns': observed_finish, 'deadline_ns': deadline, 'manifest_sha256': digest(manifest), 'group_terminated': True})
+
+
+def run_fixture(out, *, approval=None, budget_ms=1200000, audit_reserve_ms=5000, fault='none', plan=None, _origin=None):
+    mode = _START_MODE; start = now_ns(mode) if _origin is None else _origin
+    if type(approval) is not ExecutionApproval or approval.kind != 'offline_fixture':
+        raise PermissionError('execution denied: only explicit offline fixture approval exists; live is structurally unavailable')
+    require(sys.platform.startswith('linux') and hasattr(os, 'waitid'), 'Linux owned process-group watchdog required')
+    expected = calibration_plan(); selected = expected if plan is None else plan
+    require(canonical(selected) == canonical(expected), 'exact frozen calibration plan required')
+    require(type(budget_ms) is int and 0 < budget_ms <= 1200000, 'invalid lowered fixture time budget')
+    require(type(audit_reserve_ms) is int and 0 < audit_reserve_ms < budget_ms, 'audit reserve required')
+    require(fault in FAULTS, 'unknown fixture fault')
+    deadline = start + budget_ms * 1_000_000
+    out = Path(out); out.mkdir(mode=0o700)
+    manifest = {'version': 'incident-calibration-controller/1', 'mode': 'offline_protocol_fixture', 'new_model_calls': 0,
+                'start_ns': start, 'deadline_ns': deadline, 'work_deadline_ns': deadline-audit_reserve_ms*1_000_000,
+                'sources': _sources(), 'clock_mode': mode, 'plan': selected, 'runtime': profile(), 'fault': fault,
+                'accounting': 'fake_tensor_protocol_units_not_model_tokens', 'no_resume': True}
+    _durable_new(out / 'manifest.json', manifest)
+    require(now_ns(mode) < manifest['work_deadline_ns'], 'setup consumed execution budget')
+    _supervise(out, [sys.executable, str(Path(__file__).resolve()), '_child', str(out), str(os.getpid())], deadline, mode, manifest)
     return audit_run(out)  # Read-only recovery reporting, not resumed calibration.
 
 
