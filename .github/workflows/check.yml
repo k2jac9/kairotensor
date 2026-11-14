@@ -58,3 +58,6 @@ jobs:
 
       - name: Exercise bounded offline controller and durable accounting
         run: python3 scripts/incident_calibration_controller.py fixture --out "$RUNNER_TEMP/incident-controller-fixture"
+
+      - name: Exercise prepared backend with fake dependencies only
+        run: python3 scripts/incident_transformers_controller.py fixture --out "$RUNNER_TEMP/incident-transformers-fixture"
