@@ -1,0 +1,74 @@
+name: Collect recovery policy traces
+on:
+  workflow_dispatch:
+    inputs:
+      live:
+        description: 'Run the pinned CPU model (may consume billable Actions minutes)'
+        required: true
+        type: boolean
+        default: false
+      corpus_version:
+        description: 'Frozen corpus and prompt version'
+        required: true
+        type: choice
+        options: [v1, v2]
+        default: v2
+      split:
+        description: 'Calibration emits raw audit data only; all includes fresh held-out evaluation'
+        required: true
+        type: choice
+        options: [calibration, all]
+        default: calibration
+permissions:
+  contents: read
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HF_HUB_DISABLE_XET: '1'
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      OMP_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.11'
+      - name: Install the pinned CPU runtime
+        if: inputs.live
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.6.0
+          python -m pip install transformers==4.48.3 accelerate==1.3.0 huggingface_hub==0.34.4 safetensors==0.5.3 'numpy<2'
+      - name: Build collector
+        run: cargo build --release --example recovery_policy_eval
+      - name: Record execution environment
+        run: |
+          mkdir -p recovery-policy-run
+          { git rev-parse HEAD; rustc --version; python --version; lscpu; } > recovery-policy-run/environment.txt
+      - name: Collect trajectories
+        # Best-effort headroom for always-upload; the whole job still caps at 30m.
+        timeout-minutes: 25
+        shell: bash
+        env:
+          LIVE: ${{ inputs.live }}
+          CORPUS_VERSION: ${{ inputs.corpus_version }}
+          SPLIT: ${{ inputs.split }}
+        run: |
+          args=(--corpus-version "$CORPUS_VERSION" --split "$SPLIT")
+          if [[ "$LIVE" == true ]]; then args+=(--live); fi
+          target/release/examples/recovery_policy_eval --trace recovery-policy-run/trace.json "${args[@]}" \
+            2> >(tee recovery-policy-run/stderr.log >&2) | tee recovery-policy-run/stdout.log
+      - name: Score paired trajectories
+        if: inputs.split == 'all'
+        run: python scripts/recovery_policy_eval.py recovery-policy-run/trace.json > recovery-policy-run/summary.json
+      - name: Preserve traces and durable ledger, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: recovery-policy-${{ github.run_id }}-${{ github.run_attempt }}
+          path: recovery-policy-run/
+          if-no-files-found: warn
+          retention-days: 30

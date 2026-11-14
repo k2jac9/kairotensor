@@ -17,11 +17,13 @@ jobs:
       - name: Run the revision and model handoff examples
         run: |
           cargo run --example withdrawal
+          cargo run --example deterministic_verdict
           cargo run --example selective_revision
           cargo run --example corrected_handoff
           cargo run --example scoped_model_reuse
           cargo run --example scoped_model_reuse -- --replay-invalid
           cargo run --example token_cap_eval
+          cargo run --example budgeted_recovery
       - name: Check the original reference contracts
         run: |
           python3 -m unittest discover -s reference -p test_memory.py
@@ -29,3 +31,14 @@ jobs:
           python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Verify archived output-cap measurements
         run: python3 scripts/summarize_token_caps.py docs/evaluations/token-caps-*-2026-11-13.json
+
+      - name: Verify synthetic recovery policy comparison
+        run: python3 scripts/recovery_policy_eval.py --fixture
+      - name: Collect and score Store-backed synthetic recovery trajectories
+        run: |
+          cargo run --example recovery_policy_eval -- --trace "$RUNNER_TEMP/recovery-policy-trace.json"
+          python3 scripts/recovery_policy_eval.py "$RUNNER_TEMP/recovery-policy-trace.json"
+          KAIROTENSOR_RECOVERY_RUNNER="$PWD/target/debug/examples/recovery_policy_eval" python3 -m unittest discover -s scripts -p test_recovery_policy_runner.py
+          KAIROTENSOR_RECOVERY_RUNNER="$PWD/target/debug/examples/recovery_policy_eval" python3 -m unittest discover -s scripts -p test_audit_recovery_bundle.py
+      - name: Exercise bounded calibration without model inference
+        run: python3 scripts/recovery_calibration.py --output "$RUNNER_TEMP/recovery-calibration.json"

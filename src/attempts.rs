@@ -116,7 +116,7 @@ pub(crate) fn record_attempt(
     Ok(tx.last_insert_rowid())
 }
 
-fn record_delivery(
+pub(crate) fn record_delivery(
     tx: &Transaction<'_>,
     attempt: i64,
     disposition: Disposition,
@@ -132,7 +132,7 @@ fn record_delivery(
 
 // Both settlement paths identify redelivery by the original output, usage and
 // declared validation decision. Applicability is determined only on first delivery.
-fn existing_disposition(
+pub(crate) fn existing_disposition(
     tx: &Transaction<'_>,
     attempt: i64,
     output: &[u8],
@@ -218,8 +218,21 @@ pub(crate) fn capture_candidates(
     Ok((attempt, inputs))
 }
 
+// A separate complete-selection contract: existing candidate subset APIs keep
+// their intentional filtering behavior. Callers must retain the transaction so
+// any unavailable occurrence rolls back the whole provisional capture.
+pub(crate) fn capture_complete_candidates(
+    tx: &Transaction<'_>, actor: &str, scope: &str, branch: &str, candidates: &[i64],
+) -> Result<(i64, CapturedInputs)> {
+    let captured = capture_candidates(tx, actor, scope, branch, candidates)?;
+    if captured.1.len() != candidates.len() {
+        return Err(invalid("candidate evidence is incomplete or unavailable"));
+    }
+    Ok(captured)
+}
+
 // Called under the same writer lock as the dispatch record or final publication.
-fn applicability(db: &Connection, attempt: i64) -> Result<(i64, Disposition)> {
+pub(crate) fn applicability(db: &Connection, attempt: i64) -> Result<(i64, Disposition)> {
     let (branch_id, actor, scope, captured_epoch, parent_matches) = db.query_row(
         "SELECT b.id, b.actor, b.scope, a.view_epoch,
                 (a.parent IS b.head AND a.branch_revision = b.revision)
@@ -348,6 +361,9 @@ impl Store {
     pub fn record_dispatch(&mut self, attempt: i64, request: &[u8]) -> Result<()> {
         let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         pending_branch(&tx, attempt)?;
+        if crate::recovery::is_managed(&tx, attempt)? {
+            return Err(invalid("recovery dispatch requires the single-use send claim"));
+        }
         if crate::model_reuse::is_opted_in(&tx, attempt)? {
             return Err(invalid("use resolve_model_attempt for an opted-in model attempt"));
         }
@@ -384,6 +400,9 @@ impl Store {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if crate::report_verdict::is_bound(&tx, attempt)? {
+            return Err(invalid("deterministic attempts require commit_report_verdict"));
+        }
         if let Some(prior) = existing_disposition(&tx, attempt, output, usage, None, None)? {
             return Ok(prior);
         }

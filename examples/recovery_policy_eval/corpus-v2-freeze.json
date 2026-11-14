@@ -1,0 +1,14 @@
+{
+  "artifact_version": 1,
+  "stage": "fresh_heldout_constructed_after_prompt_freeze",
+  "prompt_sha256": "3a4ad7632c017871402dd83c7a5b1458acdd466de855ad834df9d9ab34cba95e",
+  "corpus_sha256": "6c0c3ef7667f140983a8058e1c5313eed9e1b314a8ef8c7cd46e25ca9a983171",
+  "constructed_at_utc": "2026-11-14T07:16:58.838222+00:00",
+  "prompt_frozen_at_utc": "2026-11-14T07:16:25.246199+00:00",
+  "calibration_case_count": 4,
+  "fresh_heldout_case_count": 6,
+  "retained_calibration_exactly": true,
+  "old_heldout_replies_used": false,
+  "live_calls_during_construction": 0,
+  "method": "Constructed six fresh report inputs after freezing prompt-v2.json. Case IDs, family IDs, and exact evidence reports checked against static v1 inputs for collisions; no v1 heldout response inspected."
+}
