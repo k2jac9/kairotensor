@@ -426,7 +426,7 @@ fn v7_migration_preserves_accepted_usage_and_unknown_reservations() -> Result<()
     let db = Connection::open(&file.0)?;
     assert_eq!(
         db.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))?,
-        8
+        9
     );
     assert_eq!(
         db.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |r| r

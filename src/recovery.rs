@@ -1,6 +1,6 @@
 //! Durable, bounded recovery and a claim-before-send dispatch fence.
 use crate::{
-    attempts::{capture_candidates, pending_branch},
+    attempts::{capture_candidates, capture_complete_candidates, pending_branch},
     invalid,
     token_budget::budget_state,
     CapturedInputs, Store,
@@ -62,6 +62,11 @@ impl Store {
             )
             .optional()?;
         if let Some((id, matches)) = existing {
+            if crate::timed_recovery::is_timed_run(&tx, id)? {
+                return Err(invalid(
+                    "timed recovery requires exact timed creation bindings",
+                ));
+            }
             if !matches {
                 return Err(invalid("recovery key is already bound to different inputs"));
             }
@@ -107,7 +112,11 @@ impl Store {
             }
             Some(_) => return Ok(RecoveryStart::Finished),
         };
-        let (attempt, inputs) = capture_candidates(&tx, &actor, &scope, &branch, candidates)?;
+        let (attempt, inputs) = if crate::timed_recovery::is_timed_run(&tx, recovery)? {
+            capture_complete_candidates(&tx, &actor, &scope, &branch, candidates)?
+        } else {
+            capture_candidates(&tx, &actor, &scope, &branch, candidates)?
+        };
         tx.execute("INSERT INTO recovery_attempts(recovery_id,ordinal,attempt_id,state) VALUES (?1,?2,?3,'planned')",
                    params![recovery,ordinal,attempt])?;
         tx.commit()?;
@@ -176,6 +185,9 @@ impl Store {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if crate::timed_recovery::is_timed_attempt(&tx, attempt)? {
+            return Err(invalid("timed recovery requires deadline-aware claim"));
+        }
         let (state, request): (String, Option<Vec<u8>>) = tx.query_row(
             "SELECT state,request FROM recovery_attempts WHERE attempt_id=?1",
             [attempt],

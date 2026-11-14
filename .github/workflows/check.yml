@@ -18,6 +18,7 @@ jobs:
         run: |
           cargo run --example withdrawal
           cargo run --example deterministic_verdict
+          cargo run --example deadline_aware_recovery
           cargo run --example selective_revision
           cargo run --example corrected_handoff
           cargo run --example scoped_model_reuse
