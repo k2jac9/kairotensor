@@ -93,6 +93,9 @@ matching requirements, readiness gates and unapproved per-host bounds.
 The [offline Adaption adapter](docs/incident-adaption-backend.md) exercises a
 distinct hosted-response contract and synthetic accounting, without credentials,
 network requests, or live execution authority.
+The [one-request hosted runner](docs/incident-hosted-runner.md) adds fixed-origin
+HTTPS code and a bounded child process, tested only with mocked HTTP and canned
+receipts. Live use requires separate approval and a verified billing bound.
 
 ## Implemented contracts
 

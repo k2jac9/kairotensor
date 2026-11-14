@@ -8,6 +8,11 @@ fixture transport. `live_admissible` remains false.
 `OfflineApproval` is a fake-only caller marker, not user permission or a security
 capability.
 
+The subsequent [one-request hosted runner](incident-hosted-runner.md) supplies
+separate HTTPS and process-control code, tested offline only. The contract and
+synthetic ledger described here remain unchanged; they cannot launch that runner
+or supply live authority.
+
 This is separate from the [local Transformers backend](incident-transformers-backend.md).
 Freezing an HTTP request body does not retain the provider's tokenized inputs,
 measure its exact input count, pin a model deployment revision, or enforce its
@@ -129,7 +134,7 @@ retries, redirects, retrieval, or retransmission are implemented.
 - Obtain explicit approval for the selected service/model, transmitted data,
   call count, total currency limit, and timeout/uncertainty handling. Supply
   credentials through an approved secure mechanism only after that decision.
-- Implement and review the real transport and bounded controller separately.
+- Review the separate real transport and bounded controller for the approved run.
   Freeze the final source/request configuration, preserve partial receipts, and
   never treat a local timeout as permission to release a hold or resend.
 

@@ -66,3 +66,8 @@ jobs:
         run: |
           python3 scripts/incident_hosted_controller.py fixture --out "$RUNNER_TEMP/incident-hosted-fixture"
           python3 scripts/incident_hosted_controller.py audit "$RUNNER_TEMP/incident-hosted-fixture"
+
+      - name: Exercise bounded hosted process runner without network access
+        run: |
+          python3 scripts/incident_hosted_runner.py fixture --out "$RUNNER_TEMP/incident-hosted-runner"
+          python3 scripts/incident_hosted_runner.py audit "$RUNNER_TEMP/incident-hosted-runner"
