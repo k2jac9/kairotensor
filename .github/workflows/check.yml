@@ -22,6 +22,7 @@ jobs:
           cargo run --example scoped_model_reuse
           cargo run --example scoped_model_reuse -- --replay-invalid
           cargo run --example token_cap_eval
+          cargo run --example budgeted_recovery
       - name: Check the original reference contracts
         run: |
           python3 -m unittest discover -s reference -p test_memory.py
