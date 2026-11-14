@@ -46,3 +46,6 @@ jobs:
           KAIROTENSOR_RECOVERY_RUNNER="$PWD/target/debug/examples/recovery_policy_eval" python3 -m unittest discover -s scripts -p test_audit_recovery_bundle.py
       - name: Exercise bounded calibration without model inference
         run: python3 scripts/recovery_calibration.py --output "$RUNNER_TEMP/recovery-calibration.json"
+
+      - name: Exercise offline timed runtime through the fixture Adapter
+        run: cargo run --example timed_recovery_runner -- --out "$RUNNER_TEMP/timed-recovery-runner"
