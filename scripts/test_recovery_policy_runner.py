@@ -5,6 +5,8 @@ KAIROTENSOR_RECOVERY_RUNNER to its executable and run unittest discovery.
 These tests never invoke cargo, install dependencies, or request live inference.
 """
 import json
+import hashlib
+from datetime import datetime
 import os
 from pathlib import Path
 import sqlite3
@@ -19,11 +21,14 @@ RUNNER = os.environ.get('KAIROTENSOR_RECOVERY_RUNNER')
 
 @unittest.skipUnless(RUNNER, 'set KAIROTENSOR_RECOVERY_RUNNER to a precompiled fixture collector')
 class RecoveryPolicyRunnerTests(unittest.TestCase):
+    collector_args = ()
+    corpus_id = 'ci-report-recovery-v1'
+    expected_cases = 10
     @classmethod
     def setUpClass(cls):
         cls.directory = tempfile.TemporaryDirectory()
         cls.trace_path = Path(cls.directory.name, 'trace.json')
-        cls.command = [str(Path(RUNNER).resolve()), '--trace', str(cls.trace_path)]
+        cls.command = [str(Path(RUNNER).resolve()), '--trace', str(cls.trace_path), *cls.collector_args]
         completed = subprocess.run(cls.command, text=True, capture_output=True, timeout=120)
         if completed.returncode:
             cls.directory.cleanup()
@@ -47,7 +52,7 @@ class RecoveryPolicyRunnerTests(unittest.TestCase):
         self.assertEqual(self.trace['schema_version'], 2)
         self.assertEqual(self.report['mode'], 'synthetic_policy_fixture')
         self.assertEqual(self.report['new_model_calls'], 0)
-        self.assertEqual(len(self.trace['cases']), 10)
+        self.assertEqual(len(self.trace['cases']), self.expected_cases)
         rows = [r for r in self.report['cases'] if r['policy'] == 'affordable_retry']
         with self.database() as db:
             self.assertEqual(sum(r['attempts'] for r in rows), db.execute('SELECT COUNT(*) FROM dispatches').fetchone()[0])
@@ -110,7 +115,10 @@ class RecoveryPolicyRunnerTests(unittest.TestCase):
         self.assertIsNone(manifest['model'])
         self.assertIsNone(manifest['model_revision'])
         self.assertIsNone(manifest['tokenizer_revision'])
-        self.assertEqual(manifest['corpus']['corpus_id'], 'ci-report-recovery-v1')
+        self.assertEqual(manifest['corpus']['corpus_id'], self.corpus_id)
+        if self.corpus_id == 'ci-report-recovery-v1':
+            self.assertEqual(manifest['system_prompt'], 'Read ci_reports. Return only JSON string fields release, tests, status. Use a report only when exactly one complete report is present. Copy release. Format tests as passed/total. status is pass only when passed equals total; otherwise fail. Do not invent a verdict for conflicting or incomplete reports.')
+            self.assertEqual(manifest['feedback_prompt'], 'Return only complete JSON matching the current admitted reports: release, passed/total tests, and pass/fail status. Do not choose between conflicting reports.')
         self.assertEqual({c['case_id'] for c in manifest['corpus']['cases']},
                          {c['case_id'] for c in self.trace['cases']})
         events = self.raw['events']
@@ -126,7 +134,7 @@ class RecoveryPolicyRunnerTests(unittest.TestCase):
                 binding = db.execute('SELECT budget_id,recovery_key FROM recovery_runs WHERE id=?',
                                      (start['recovery_id'],)).fetchone()
                 self.assertEqual(binding['budget_id'], start['budget_id'])
-                self.assertEqual(binding['recovery_key'], 'ci-report-recovery-v1/' + case['case_id'])
+                self.assertEqual(binding['recovery_key'], self.corpus_id + '/' + case['case_id'])
                 spent, held = 0, 0
                 previous_receipt_ns = 0
                 phases = {}
@@ -174,12 +182,160 @@ class RecoveryPolicyRunnerTests(unittest.TestCase):
                 self.assertEqual(charged, spent)
                 self.assertEqual(held, 0)
 
+    def test_validator_matches_independent_reference_without_relaxation(self):
+        manifest = self.raw['manifest']
+        self.assertEqual(manifest['validator_version'], 'independent-report-verdict/1')
+        self.assertEqual(manifest['corpus']['validator_version'], 'independent-report-verdict/1')
+        definitions = {c['case_id']: c for c in manifest['corpus']['cases']}
+        with self.database() as db:
+            for event in self.raw['events']:
+                if event['phase'] != 'settled':
+                    continue
+                row = db.execute("""SELECT r.ordinal,d.output,d.disposition FROM recovery_attempts r
+                    JOIN deliveries d ON d.attempt_id=r.attempt_id WHERE r.attempt_id=?""",
+                    (event['attempt_id'],)).fetchone()
+                reference_key = 'initial_reference' if row['ordinal'] == 0 else 'retry_reference'
+                expected = definitions[event['case_id']][reference_key]
+                try:
+                    parsed = json.loads(row['output'])
+                except (ValueError, UnicodeError):
+                    parsed = None
+                correct = (expected is not None and type(parsed) is dict
+                           and set(parsed) == {'release', 'tests', 'status'}
+                           and all(type(v) is str for v in parsed.values()) and parsed == expected)
+                self.assertEqual(event['attempt']['correct'], correct)
+                self.assertEqual(row['disposition'] == 'accepted', correct)
+
     def test_same_destination_refused_without_mutating_existing_artifacts(self):
         paths = [self.trace_path, self.raw_path, self.db_path]
         before = [path.read_bytes() for path in paths]
         result = subprocess.run(self.command, text=True, capture_output=True, timeout=120)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual([path.read_bytes() for path in paths], before)
+
+
+@unittest.skipUnless(RUNNER, 'set KAIROTENSOR_RECOVERY_RUNNER to a precompiled fixture collector')
+class RecoveryPolicyV2RunnerTests(RecoveryPolicyRunnerTests):
+    collector_args = ('--corpus-version', 'v2')
+    corpus_id = 'ci-report-recovery-v2'
+
+    def test_v2_provenance_and_fresh_heldout_identity(self):
+        manifest = self.raw['manifest']
+        self.assertEqual(manifest['corpus']['prompt_version'], 'report-bundle/2')
+        self.assertIn(self.corpus_id, self.trace['provenance'])
+        old = json.loads((Path(__file__).resolve().parents[1] / 'examples/recovery_policy_eval/corpus-v1.json').read_text())
+        old_heldout_ids = {c['case_id'] for c in old['cases'] if c['split'] == 'heldout'}
+        old_heldout_families = {c['family'] for c in old['cases'] if c['split'] == 'heldout'}
+        new_heldout = [c for c in manifest['corpus']['cases'] if c['split'] == 'heldout']
+        self.assertTrue(new_heldout)
+        self.assertTrue(old_heldout_ids.isdisjoint(c['case_id'] for c in new_heldout))
+        self.assertTrue(old_heldout_families.isdisjoint(c['family'] for c in new_heldout))
+
+
+@unittest.skipUnless(RUNNER, 'set KAIROTENSOR_RECOVERY_RUNNER to a precompiled fixture collector')
+class RecoveryPolicySelectionTests(unittest.TestCase):
+    def test_invalid_cli_is_rejected_before_output_files_or_directories(self):
+        invalid = [('--corpus-version', 'v3'), ('--split', 'heldout'),
+                   ('--corpus-version', 'v1', '--corpus-version', 'v2'),
+                   ('--split', 'all', '--split', 'calibration'),
+                   ('--unknown',), ('--corpus-version',), ('--split',)]
+        with tempfile.TemporaryDirectory() as root:
+            for index, args in enumerate(invalid):
+                parent = Path(root, str(index))
+                target = parent / 'trace.json'
+                result = subprocess.run([str(Path(RUNNER).resolve()), '--trace', str(target), *args],
+                                        text=True, capture_output=True, timeout=30)
+                with self.subTest(args=args):
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertFalse(parent.exists(), 'argument validation must precede output creation')
+
+    def test_v2_calibration_only_excludes_heldout_execution_and_corpus_inputs(self):
+        with tempfile.TemporaryDirectory() as root:
+            trace = Path(root, 'trace.json')
+            result = subprocess.run([str(Path(RUNNER).resolve()), '--trace', str(trace),
+                '--corpus-version', 'v2', '--split', 'calibration'],
+                text=True, capture_output=True, timeout=120)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            summary = json.loads(result.stdout)
+            self.assertEqual(summary['status'], 'complete')
+            self.assertEqual(summary['artifact_kind'], 'calibration_only')
+            self.assertIsNone(summary['trace'])
+            self.assertEqual(summary['cases'], 4)
+            self.assertFalse(trace.exists(), 'calibration collection must not emit a complete policy trace')
+            raw = json.loads(Path(str(trace) + '.raw.json').read_text())
+            self.assertEqual(raw['status'], 'complete')
+            self.assertEqual(raw['manifest']['selection'], dict(split='calibration', corpus_version='v2', case_count=4))
+            self.assertEqual(raw['new_model_calls'], 0)
+            self.assertEqual(raw['mode'], 'deterministic_byte_token_fixture')
+            selected = raw['manifest']['corpus']['cases']
+            self.assertEqual(len(selected), 4)
+            self.assertTrue(all(c['split'] == 'calibration' for c in selected))
+            self.assertEqual(json.loads(raw['manifest']['corpus_utf8']), raw['manifest']['corpus'])
+            full_corpus = json.loads((Path(__file__).resolve().parents[1] / 'examples/recovery_policy_eval/corpus-v2.json').read_text())
+            serialized = json.dumps(raw)
+            for heldout in (c for c in full_corpus['cases'] if c['split'] == 'heldout'):
+                self.assertNotIn(heldout['case_id'], serialized)
+                self.assertNotIn(heldout['family'], serialized)
+                for report in heldout['reports'] + (heldout['retry_reports'] or []):
+                    self.assertNotIn(report['release'], serialized)
+            ids = {c['case_id'] for c in selected}
+            self.assertEqual({c['case_id'] for c in raw['completed_cases']}, ids)
+            self.assertTrue(all(e['case_id'] in ids for e in raw['events']))
+            with sqlite3.connect(f'{Path(str(trace) + ".sqlite").as_uri()}?mode=ro', uri=True) as db:
+                keys = [r[0] for r in db.execute('SELECT recovery_key FROM recovery_runs')]
+                self.assertEqual(set(keys), {'ci-report-recovery-v2/' + c for c in ids})
+                calls = db.execute('SELECT COUNT(*) FROM dispatches').fetchone()[0]
+                self.assertEqual(raw['actual_backend_calls'], calls)
+            # A calibration subset must not weaken the scorer's full split guard.
+            document = dict(schema_version=2, mode='synthetic_policy_fixture', provenance='calibration-only fixture',
+                            cases=raw['completed_cases'])
+            with self.assertRaisesRegex(ValueError, 'both calibration and heldout'):
+                evaluate(document)
+
+
+class RecoveryPolicyFreezeTests(unittest.TestCase):
+    def test_frozen_prompt_and_corpus_hashes_and_declared_order_match_files(self):
+        folder = Path(__file__).resolve().parents[1] / 'examples/recovery_policy_eval'
+        prompt_bytes = (folder / 'prompt-v2.json').read_bytes()
+        corpus_bytes = (folder / 'corpus-v2.json').read_bytes()
+        prompt = json.loads(prompt_bytes)
+        corpus = json.loads(corpus_bytes)
+        prompt_freeze = json.loads((folder / 'prompt-v2-freeze.json').read_text())
+        corpus_freeze = json.loads((folder / 'corpus-v2-freeze.json').read_text())
+        digest = hashlib.sha256(prompt_bytes).hexdigest()
+        self.assertEqual(prompt_freeze['prompt_sha256'], digest)
+        self.assertEqual(corpus_freeze['prompt_sha256'], digest)
+        self.assertEqual(corpus_freeze['corpus_sha256'], hashlib.sha256(corpus_bytes).hexdigest())
+        self.assertEqual(prompt_freeze['frozen_at_utc'], corpus_freeze['prompt_frozen_at_utc'])
+        frozen = datetime.fromisoformat(prompt_freeze['frozen_at_utc'])
+        constructed = datetime.fromisoformat(corpus_freeze['constructed_at_utc'])
+        self.assertIsNotNone(frozen.utcoffset())
+        self.assertIsNotNone(constructed.utcoffset())
+        self.assertLess(frozen, constructed)
+        self.assertEqual(prompt['prompt_version'], prompt_freeze['prompt_version'])
+        self.assertEqual(corpus['prompt_version'], prompt['prompt_version'])
+        self.assertEqual(prompt['validator_version'], 'independent-report-verdict/1')
+        self.assertEqual(corpus['validator_version'], prompt['validator_version'])
+        self.assertFalse(prompt_freeze['validator_change'])
+
+    def test_v2_retains_exact_calibration_records_and_frozen_limits(self):
+        folder = Path(__file__).resolve().parents[1] / 'examples/recovery_policy_eval'
+        v1 = json.loads((folder / 'corpus-v1.json').read_text())
+        v2 = json.loads((folder / 'corpus-v2.json').read_text())
+        prompt_freeze = json.loads((folder / 'prompt-v2-freeze.json').read_text())
+        corpus_freeze = json.loads((folder / 'corpus-v2-freeze.json').read_text())
+        original = [case for case in v1['cases'] if case['split'] == 'calibration']
+        current = [case for case in v2['cases'] if case['split'] == 'calibration']
+        self.assertEqual(current, original)
+        self.assertEqual(len(current), 4)
+        self.assertEqual([case['case_id'] for case in current], prompt_freeze['calibration_case_ids'])
+        self.assertEqual(corpus_freeze['calibration_case_count'], 4)
+        self.assertEqual(corpus_freeze['fresh_heldout_case_count'], 6)
+        self.assertEqual(sum(case['split'] == 'heldout' for case in v2['cases']), 6)
+        for key, value in [('budget_tokens', 4096), ('output_cap', 96), ('deadline_ms', 60000)]:
+            self.assertEqual(v1[key], value)
+            self.assertEqual(v2[key], value)
+            self.assertEqual(prompt_freeze[key], value)
 
 
 if __name__ == '__main__':

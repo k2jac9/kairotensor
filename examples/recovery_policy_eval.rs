@@ -21,6 +21,10 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 const CORPUS: &str = include_str!("recovery_policy_eval/corpus-v1.json");
+const CORPUS_V2: &str = include_str!("recovery_policy_eval/corpus-v2.json");
+const PROMPT_V2: &str = include_str!("recovery_policy_eval/prompt-v2.json");
+const PROMPT_V2_FREEZE: &str = include_str!("recovery_policy_eval/prompt-v2-freeze.json");
+const CORPUS_V2_FREEZE: &str = include_str!("recovery_policy_eval/corpus-v2-freeze.json");
 const ACTOR: &str = "recovery-policy-eval";
 const SCOPE: &str = "ci-report";
 const BRANCH: &str = "verdict";
@@ -69,6 +73,53 @@ struct Corpus {
     cases: Vec<Case>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Prompt {
+    schema_version: i64,
+    prompt_version: String,
+    validator_version: String,
+    system_prompt: String,
+    feedback_prompt: String,
+}
+fn load_prompt(version: &str) -> Result<Prompt> {
+    let prompt = match version {
+        "report-bundle/1" => Prompt {
+            schema_version: 1,
+            prompt_version: version.into(),
+            validator_version: VALIDATOR.into(),
+            system_prompt: SYSTEM.into(),
+            feedback_prompt: FEEDBACK.into(),
+        },
+        "report-bundle/2" => serde_json::from_str(PROMPT_V2)?,
+        _ => return Err("unknown prompt version".into()),
+    };
+    if prompt.schema_version != 1
+        || prompt.validator_version != VALIDATOR
+        || prompt.prompt_version != version
+    {
+        return Err("incompatible frozen prompt".into());
+    }
+    Ok(prompt)
+}
+fn corpus_source(version: &str) -> Result<&'static str> {
+    match version {
+        "v1" => Ok(CORPUS),
+        "v2" => Ok(CORPUS_V2),
+        _ => Err("corpus version must be v1 or v2".into()),
+    }
+}
+fn selected_corpus(version: &str, split: &str) -> Result<Corpus> {
+    if !matches!(split, "all" | "calibration") {
+        return Err("split must be all or calibration".into());
+    }
+    let mut corpus = load_corpus_version(version)?;
+    if split == "calibration" {
+        corpus.cases.retain(|case| case.split == "calibration");
+    }
+    Ok(corpus)
+}
+
 fn reference_for(reports: &[Report]) -> Option<Verdict> {
     let [report] = reports else { return None };
     if report.release.is_empty() || report.total == 0 || report.passed > report.total {
@@ -90,12 +141,21 @@ fn validate_answer(output: &str, reference: Option<&Verdict>) -> bool {
         serde_json::from_str::<Verdict>(output).ok().as_ref() == Some(expected)
     })
 }
+#[cfg(test)]
 fn load_corpus() -> Result<Corpus> {
-    let corpus: Corpus = serde_json::from_str(CORPUS)?;
+    load_corpus_version("v1")
+}
+fn load_corpus_version(version: &str) -> Result<Corpus> {
+    let corpus: Corpus = serde_json::from_str(corpus_source(version)?)?;
     if corpus.schema_version != 1
         || corpus.validator_version != VALIDATOR
-        || corpus.corpus_id != "ci-report-recovery-v1"
-        || corpus.prompt_version != "report-bundle/1"
+        || corpus.corpus_id != format!("ci-report-recovery-{version}")
+        || corpus.prompt_version
+            != match version {
+                "v1" => "report-bundle/1",
+                "v2" => "report-bundle/2",
+                _ => unreachable!(),
+            }
         || corpus.output_cap != 96
         || corpus.budget_tokens != 4096
         || corpus.deadline_ms != 60000
@@ -288,7 +348,7 @@ fn admit(store: &mut Store, scope: &str, reports: &[Report]) -> Result<Vec<i64>>
     let entries: Vec<_> = bytes.iter().map(|b| ("ci-report", b.as_slice())).collect();
     Ok(store.observe_and_admit_many(ACTOR, scope, &entries)?)
 }
-fn messages(inputs: &CapturedInputs, reason: Option<&str>) -> Result<Value> {
+fn messages(inputs: &CapturedInputs, reason: Option<&str>, system: &str) -> Result<Value> {
     let reports: Vec<Value> = inputs
         .iter()
         .map(|(_, bytes)| serde_json::from_slice(bytes))
@@ -298,7 +358,7 @@ fn messages(inputs: &CapturedInputs, reason: Option<&str>) -> Result<Value> {
         payload["validation_error"] = json!(reason);
     }
     Ok(
-        json!([{"role":"system","content":SYSTEM},{"role":"user","content":serde_json::to_string(&payload)?}]),
+        json!([{"role":"system","content":system},{"role":"user","content":serde_json::to_string(&payload)?}]),
     )
 }
 
@@ -311,6 +371,8 @@ struct Operation<'a> {
     case_id: &'a str,
     deadline_ms: i64,
     cap: i64,
+    system_prompt: &'a str,
+    feedback_prompt: &'a str,
 }
 fn collect_attempt<B: Backend>(
     store: &mut Store,
@@ -354,7 +416,7 @@ fn collect_attempt<B: Backend>(
         .map(|(_, bytes)| serde_json::from_slice(bytes))
         .collect::<std::result::Result<_, _>>()?;
     let consistent = reference_for(&reports).is_some();
-    let payload = messages(&inputs, reason.as_deref())?;
+    let payload = messages(&inputs, reason.as_deref(), operation.system_prompt)?;
     let (request, input, prepared) = match backend.prepare(payload, operation.cap) {
         Ok(quote) => quote,
         Err(error) => {
@@ -502,7 +564,7 @@ fn collect_attempt<B: Backend>(
             response.text.as_bytes(),
             usage,
             VALIDATOR,
-            FEEDBACK,
+            operation.feedback_prompt,
         )?
     };
     // reject_invalid preserves the validation disposition even if its separate
@@ -567,7 +629,7 @@ fn collect_attempt<B: Backend>(
         json!({"phase":"settled","case_id":operation.case_id,"attempt_id":attempt_id,
         "context":context,"attempt":attempt,"admission_ns":admission_ns,"receipt_ns":receipt_ns,
         "stored_delivery":{"disposition":store_disposition,"applicability":applicability,
-            "validator":if correct {None} else {Some(VALIDATOR)},"reason":if correct {None} else {Some(FEEDBACK)}},
+            "validator":if correct {None} else {Some(VALIDATOR)},"reason":if correct {None} else {Some(operation.feedback_prompt)}},
         "ledger":ledger(store, operation.budget)?}),
     )?;
     Ok(Cell {
@@ -601,6 +663,7 @@ fn collect_case<B: Backend>(
     case: &Case,
 ) -> Result<Value> {
     let start = Instant::now();
+    let prompt = load_prompt(&corpus.prompt_version)?;
     let scope = format!("{SCOPE}/{}", case.case_id);
     let mut candidates = admit(store, &scope, &case.reports)?;
     let budget = store.create_token_budget(corpus.budget_tokens)?;
@@ -620,6 +683,8 @@ fn collect_case<B: Backend>(
         case_id: &case.case_id,
         deadline_ms: corpus.deadline_ms,
         cap: corpus.output_cap,
+        system_prompt: &prompt.system_prompt,
+        feedback_prompt: &prompt.feedback_prompt,
     };
     journal.event(json!({"phase":"case_started","case_id":case.case_id,"budget_id":budget,"recovery_id":recovery,
         "ledger":ledger(store,budget)?}))?;
@@ -725,11 +790,35 @@ fn make_journal(
         .filter(|o| o.status.success())
         .and_then(|o| String::from_utf8(o.stdout).ok())
         .map(|s| s.trim().to_owned());
+    let version = match corpus.corpus_id.as_str() {
+        "ci-report-recovery-v1" => "v1",
+        "ci-report-recovery-v2" => "v2",
+        _ => return Err("unknown corpus identity".into()),
+    };
+    let split = if corpus.cases.iter().all(|case| case.split == "calibration") {
+        "calibration"
+    } else {
+        "all"
+    };
+    let prompt = load_prompt(&corpus.prompt_version)?;
+    // Calibration-only artifacts contain no heldout inputs, outputs or references,
+    // even inside embedded source snapshots or the corpus_utf8 field.
+    let corpus_utf8 = if split == "all" {
+        corpus_source(version)?.to_owned()
+    } else {
+        serde_json::to_string_pretty(corpus)?
+    };
     let mut journal = Journal {
         path,
         value: json!({"artifact_version":1,"status":"running","events":[],"completed_cases":[],
         "actual_backend_calls":0,"mode":if live {"live_qwen"} else {"deterministic_byte_token_fixture"},
-        "manifest": {"corpus":corpus,"corpus_utf8":CORPUS,"validator_version":VALIDATOR,"system_prompt":SYSTEM,"feedback_prompt":FEEDBACK,
+        "manifest": {"corpus":corpus,"corpus_utf8":corpus_utf8,"validator_version":VALIDATOR,"system_prompt":prompt.system_prompt,"feedback_prompt":prompt.feedback_prompt,
+            "selection":{"split":split,"corpus_version":version,"case_count":corpus.cases.len()},
+            "corpus_encoding":if split=="all" {"exact_frozen_source"} else {"selected_cases_only"},
+            "prompt_definition":prompt,
+            "prompt_definition_utf8":if version=="v2" {Some(PROMPT_V2)} else {None},
+            "prompt_freeze":if version=="v2" {Some(serde_json::from_str::<Value>(PROMPT_V2_FREEZE)?)} else {None},
+            "corpus_freeze":if version=="v2" {Some(serde_json::from_str::<Value>(CORPUS_V2_FREEZE)?)} else {None},
             "model":if live {Some(MODEL)} else {None},"model_revision":if live {Some(REVISION)} else {None},
             "tokenizer_revision":if live {Some(REVISION)} else {None},
             "generation":if live {json!({"do_sample":false,"num_beams":1,"max_new_tokens":corpus.output_cap,"dtype":"bfloat16"})} else {Value::Null},
@@ -754,19 +843,33 @@ fn make_journal(
     Ok(journal)
 }
 
+#[cfg(test)]
 fn execute(trace: &Path, live: bool) -> Result<()> {
+    execute_selected(trace, live, "v1", "all")
+}
+fn execute_selected(trace: &Path, live: bool, version: &str, split: &str) -> Result<()> {
     if live {
-        execute_backend(trace, true, || adapter::Adapter::new(true))
+        execute_selected_backend(trace, true, version, split, || adapter::Adapter::new(true))
     } else {
-        execute_backend(trace, false, || Ok(Fixture))
+        execute_selected_backend(trace, false, version, split, || Ok(Fixture))
     }
 }
+#[cfg(test)]
 fn execute_backend<B: Backend>(
     trace: &Path,
     live: bool,
     initialize: impl FnOnce() -> Result<B>,
 ) -> Result<()> {
-    let corpus = load_corpus()?;
+    execute_selected_backend(trace, live, "v1", "all", initialize)
+}
+fn execute_selected_backend<B: Backend>(
+    trace: &Path,
+    live: bool,
+    version: &str,
+    split: &str,
+    initialize: impl FnOnce() -> Result<B>,
+) -> Result<()> {
+    let corpus = selected_corpus(version, split)?;
     if let Some(parent) = trace.parent().filter(|p| !p.as_os_str().is_empty()) {
         fs::create_dir_all(parent)?;
     }
@@ -774,10 +877,19 @@ fn execute_backend<B: Backend>(
     let database = suffix(trace, ".sqlite");
     // Reserve the output path first. A failed collection leaves this empty marker,
     // never a misleading complete replay. All destinations are exclusively created.
-    let mut output = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(trace)?;
+    let mut output = if split == "all" {
+        Some(
+            OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(trace)?,
+        )
+    } else {
+        if trace.try_exists()? {
+            return Err("calibration destination already contains a trace".into());
+        }
+        None
+    };
     let _raw_guard = OpenOptions::new().write(true).create_new(true).open(&raw)?;
     let _db_guard = OpenOptions::new()
         .write(true)
@@ -800,12 +912,15 @@ fn execute_backend<B: Backend>(
                 json!(0)
             };
             journal.persist()?;
-            output.write_all(&serde_json::to_vec_pretty(&document)?)?;
-            output.write_all(b"\n")?;
-            output.sync_all()?;
+            if let Some(output) = output.as_mut() {
+                output.write_all(&serde_json::to_vec_pretty(&document)?)?;
+                output.write_all(b"\n")?;
+                output.sync_all()?;
+            }
             println!(
                 "{}",
-                json!({"status":"complete","trace":trace,"raw":raw,"database":database,
+                json!({"status":"complete","trace":if split=="all" {Some(trace)} else {None},"raw":raw,"database":database,
+                "artifact_kind":if split=="all" {"complete_policy_trace"} else {"calibration_only"},"split":split,"corpus_version":version,
                 "cases":corpus.cases.len(),"new_model_calls":journal.value["new_model_calls"],
                 "actual_backend_calls":journal.value["actual_backend_calls"],"mode":journal.value["mode"]})
             );
@@ -834,20 +949,58 @@ fn execute_backend<B: Backend>(
         }
     }
 }
-fn main() -> Result<()> {
-    let mut args = std::env::args().skip(1);
-    let mut live = false;
-    let mut trace = PathBuf::from("recovery-policy-run/trace.json");
-    let mut explicit_trace = false;
+#[derive(Debug, PartialEq, Eq)]
+struct Options {
+    trace: PathBuf,
+    live: bool,
+    corpus_version: String,
+    split: String,
+}
+fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Options> {
+    let mut args = args.into_iter();
+    let mut options = Options {
+        trace: "recovery-policy-run/trace.json".into(),
+        live: false,
+        corpus_version: "v1".into(),
+        split: "all".into(),
+    };
+    let mut seen = BTreeSet::new();
     while let Some(arg) = args.next() {
+        if !seen.insert(arg.clone()) {
+            return Err(format!("duplicate option: {arg}").into());
+        }
+        if arg == "--live" {
+            options.live = true;
+            continue;
+        }
+        if !matches!(arg.as_str(), "--trace" | "--corpus-version" | "--split") {
+            return Err(format!("unknown option: {arg}").into());
+        }
+        let value = args
+            .next()
+            .filter(|value| !value.is_empty() && !value.starts_with("--"))
+            .ok_or_else(|| format!("{arg} requires a value"))?;
         match arg.as_str() {
-            "--live" if !live => live = true,
-            "--trace" if !explicit_trace => {
-                trace = args.next().ok_or("--trace requires a path")?.into();
-                explicit_trace = true;
-            }
-            _ => return Err("usage: recovery_policy_eval [--trace PATH] [--live]".into()),
+            "--trace" => options.trace = value.into(),
+            "--corpus-version" => options.corpus_version = value,
+            "--split" => options.split = value,
+            _ => unreachable!(),
         }
     }
-    execute(&trace, live)
+    if !matches!(options.corpus_version.as_str(), "v1" | "v2") {
+        return Err("--corpus-version must be v1 or v2".into());
+    }
+    if !matches!(options.split.as_str(), "all" | "calibration") {
+        return Err("--split must be all or calibration".into());
+    }
+    Ok(options)
+}
+fn main() -> Result<()> {
+    let options = parse_args(std::env::args().skip(1))?;
+    execute_selected(
+        &options.trace,
+        options.live,
+        &options.corpus_version,
+        &options.split,
+    )
 }

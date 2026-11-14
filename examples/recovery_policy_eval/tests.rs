@@ -325,6 +325,8 @@ fn unadmitted_candidates_are_not_dispatched_despite_reference() -> Result<()> {
         case_id: &case.case_id,
         deadline_ms: 60000,
         cap: 96,
+        system_prompt: SYSTEM,
+        feedback_prompt: FEEDBACK,
     };
     let mut journal = journal();
     let cell = collect_attempt(
@@ -434,6 +436,8 @@ fn stale_valid_and_invalid_deliveries_never_unlock_replay_retry() -> Result<()> 
             case_id: &case.case_id,
             deadline_ms: 60000,
             cap: 96,
+            system_prompt: SYSTEM,
+            feedback_prompt: FEEDBACK,
         };
         let mut journal = journal();
         journal.value["manifest"] = json!({"database":path});
@@ -532,5 +536,185 @@ fn failed_collection_preserves_raw_error_database_and_withholds_replay() -> Resu
             fs::remove_file(file)?;
         }
     }
+    Ok(())
+}
+
+#[test]
+fn frozen_v2_prompt_is_explicit_without_weakening_validator() -> Result<()> {
+    let prompt = load_prompt("report-bundle/2")?;
+    assert!(prompt.system_prompt.contains("raw JSON object"));
+    assert!(prompt.system_prompt.contains("No Markdown, code fences"));
+    assert!(prompt.system_prompt.contains("2/3"));
+    assert!(prompt.system_prompt.contains("exactly these three keys"));
+    assert!(prompt.system_prompt.contains("passed equals total"));
+    assert!(!prompt.system_prompt.contains("passed/total"));
+    assert!(prompt.feedback_prompt.contains("2/3"));
+    assert_eq!(prompt.validator_version, VALIDATOR);
+    let reference = load_corpus()?.cases[0].initial_reference.clone().unwrap();
+    let valid = serde_json::to_string(&reference)?;
+    assert!(!validate_answer(
+        &format!("```json\n{valid}\n```"),
+        Some(&reference)
+    ));
+    Ok(())
+}
+
+#[test]
+fn v2_retains_calibration_exactly_and_uses_fresh_heldout_inputs() -> Result<()> {
+    let v1 = load_corpus_version("v1")?;
+    let v2 = load_corpus_version("v2")?;
+    assert_eq!(v2.cases.len(), 10);
+    assert_eq!(v2.prompt_version, "report-bundle/2");
+    let cal1: Vec<_> = v1
+        .cases
+        .iter()
+        .filter(|c| c.split == "calibration")
+        .map(serde_json::to_value)
+        .collect::<std::result::Result<_, _>>()?;
+    let cal2: Vec<_> = v2
+        .cases
+        .iter()
+        .filter(|c| c.split == "calibration")
+        .map(serde_json::to_value)
+        .collect::<std::result::Result<_, _>>()?;
+    assert_eq!(cal1, cal2);
+    let old_ids: BTreeSet<_> = v1.cases.iter().map(|c| &c.case_id).collect();
+    let old_families: BTreeSet<_> = v1.cases.iter().map(|c| &c.family).collect();
+    let old_reports: BTreeSet<_> = v1
+        .cases
+        .iter()
+        .flat_map(|c| c.reports.iter().chain(c.retry_reports.iter().flatten()))
+        .map(serde_json::to_string)
+        .collect::<std::result::Result<_, _>>()?;
+    for case in v2.cases.iter().filter(|c| c.split == "heldout") {
+        assert!(!old_ids.contains(&case.case_id));
+        assert!(!old_families.contains(&case.family));
+        for report in case
+            .reports
+            .iter()
+            .chain(case.retry_reports.iter().flatten())
+        {
+            assert!(!old_reports.contains(&serde_json::to_string(report)?));
+        }
+    }
+    assert_eq!(
+        (v2.budget_tokens, v2.output_cap, v2.deadline_ms),
+        (4096, 96, 60000)
+    );
+    assert_eq!(load_prompt("report-bundle/1")?.system_prompt, SYSTEM);
+    assert_eq!(load_prompt("report-bundle/1")?.feedback_prompt, FEEDBACK);
+    Ok(())
+}
+
+#[test]
+fn v2_runner_uses_frozen_prompt_and_feedback_without_oracle_injection() -> Result<()> {
+    let corpus = load_corpus_version("v2")?;
+    let prompt = load_prompt(&corpus.prompt_version)?;
+    let mut store = Store::in_memory()?;
+    let mut journal = journal();
+    let document = collect(&mut store, &mut Fixture, &mut journal, &corpus, false)?;
+    assert_eq!(journal.value["actual_backend_calls"], 18);
+    for case in document["cases"].as_array().unwrap() {
+        let request: Value =
+            serde_json::from_str(case["initial_context"]["request"].as_str().unwrap())?;
+        assert_eq!(request["messages"][0]["content"], prompt.system_prompt);
+        let user: Value =
+            serde_json::from_str(request["messages"][1]["content"].as_str().unwrap())?;
+        assert_eq!(user.as_object().unwrap().len(), 1);
+        assert!(user.get("ci_reports").is_some());
+        let retry = &case["retries"]["affordable_retry"];
+        if !retry.is_null() {
+            let request: Value =
+                serde_json::from_str(retry["context"]["request"].as_str().unwrap())?;
+            let user: Value =
+                serde_json::from_str(request["messages"][1]["content"].as_str().unwrap())?;
+            assert_eq!(user.as_object().unwrap().len(), 2);
+            assert_eq!(user["validation_error"], prompt.feedback_prompt);
+            assert_eq!(request["messages"][0]["content"], prompt.system_prompt);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn calibration_only_is_raw_and_ledger_without_heldout_snapshots_or_trace() -> Result<()> {
+    for version in ["v1", "v2"] {
+        let path = temporary_path(&format!("{version}-calibration"));
+        execute_selected(&path, false, version, "calibration")?;
+        assert!(!path.exists());
+        let bytes = fs::read(suffix(&path, ".raw.json"))?;
+        let raw: Value = serde_json::from_slice(&bytes)?;
+        assert_eq!(raw["status"], "complete");
+        assert_eq!(
+            raw["manifest"]["selection"],
+            json!({"split":"calibration","corpus_version":version,"case_count":4})
+        );
+        assert_eq!(raw["completed_cases"].as_array().unwrap().len(), 4);
+        assert_eq!(raw["actual_backend_calls"], 7);
+        assert_eq!(raw["new_model_calls"], 0);
+        let corpus: Value = serde_json::from_str(raw["manifest"]["corpus_utf8"].as_str().unwrap())?;
+        assert_eq!(corpus, raw["manifest"]["corpus"]);
+        assert_eq!(corpus["cases"].as_array().unwrap().len(), 4);
+        let source = String::from_utf8(bytes)?;
+        for case in load_corpus_version(version)?
+            .cases
+            .iter()
+            .filter(|case| case.split == "heldout")
+        {
+            assert!(!source.contains(&case.case_id));
+            for report in &case.reports {
+                assert!(!source.contains(&report.release));
+            }
+        }
+        for event in raw["events"].as_array().unwrap() {
+            assert!(event["case_id"].as_str().unwrap().starts_with("cal-"));
+        }
+        let db = rusqlite::Connection::open(suffix(&path, ".sqlite"))?;
+        assert_eq!(
+            db.query_row("SELECT count(*) FROM recovery_runs", [], |r| r
+                .get::<_, i64>(0))?,
+            4
+        );
+        drop(db);
+        assert!(execute_selected(&path, false, version, "calibration").is_err());
+        for file in [suffix(&path, ".raw.json"), suffix(&path, ".sqlite")] {
+            fs::remove_file(file)?;
+        }
+    }
+    Ok(())
+}
+#[test]
+fn cli_defaults_preserve_v1_and_reject_unknown_or_duplicate_selections() -> Result<()> {
+    let defaults = parse_args(Vec::<String>::new())?;
+    assert_eq!(defaults.corpus_version, "v1");
+    assert_eq!(defaults.split, "all");
+    assert!(!defaults.live);
+    for args in [
+        vec!["--corpus-version"],
+        vec!["--corpus-version", "v3"],
+        vec!["--split", "heldout"],
+        vec!["--split", "all", "--split", "calibration"],
+        vec!["--live", "--live"],
+        vec!["--trace", "--live"],
+        vec!["--unknown"],
+        vec!["--corpus-version", "v2", "--corpus-version", "v1"],
+    ] {
+        assert!(parse_args(args.into_iter().map(str::to_string)).is_err());
+    }
+    let selected = parse_args(
+        [
+            "--corpus-version",
+            "v2",
+            "--split",
+            "calibration",
+            "--trace",
+            "fresh.json",
+        ]
+        .into_iter()
+        .map(str::to_string),
+    )?;
+    assert_eq!(selected.corpus_version, "v2");
+    assert_eq!(selected.split, "calibration");
+    assert_eq!(selected.trace, PathBuf::from("fresh.json"));
     Ok(())
 }

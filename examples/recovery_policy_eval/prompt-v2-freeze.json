@@ -1,0 +1,31 @@
+{
+  "artifact_version": 1,
+  "stage": "prompt_frozen_before_fresh_heldout_construction",
+  "prompt_version": "report-bundle/2",
+  "prompt_sha256": "3a4ad7632c017871402dd83c7a5b1458acdd466de855ad834df9d9ab34cba95e",
+  "frozen_at_utc": "2026-11-14T07:16:25.246199+00:00",
+  "calibration_source_run": "43568726459",
+  "calibration_case_ids": [
+    "cal-pass",
+    "cal-repair",
+    "cal-exhaust",
+    "cal-conflict"
+  ],
+  "calibration_findings": {
+    "deliveries": 8,
+    "markdown_fenced_deliveries": 8,
+    "literal_count_label_deliveries": 3,
+    "wrong_status_deliveries_on_consistent_evidence": 3,
+    "object_tests_deliveries": 1,
+    "output_cap_hits": 0
+  },
+  "old_heldout_replies_inspected_for_this_change": false,
+  "fresh_heldout_constructed_at_freeze": false,
+  "validator_change": false,
+  "budget_tokens": 4096,
+  "output_cap": 96,
+  "deadline_ms": 60000,
+  "model": "Qwen/Qwen2.5-1.5B-Instruct",
+  "revision": "989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+  "method": "Prompt frozen after inspecting only calibration cases/replies from the approved prior raw artifact. Fresh heldout inputs are constructed afterward. No new inference or tuning pass was run."
+}

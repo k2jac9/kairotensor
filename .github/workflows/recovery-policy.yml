@@ -1,8 +1,5 @@
 name: Collect recovery policy traces
 on:
-  push:
-    branches: [feat/budgeted-recovery]
-    paths: [.github/workflows/recovery-policy.yml]
   workflow_dispatch:
     inputs:
       live:
@@ -10,16 +7,22 @@ on:
         required: true
         type: boolean
         default: false
+      corpus_version:
+        description: 'Frozen corpus and prompt version'
+        required: true
+        type: choice
+        options: [v1, v2]
+        default: v2
+      split:
+        description: 'Calibration emits raw audit data only; all includes fresh held-out evaluation'
+        required: true
+        type: choice
+        options: [calibration, all]
+        default: calibration
 permissions:
   contents: read
 jobs:
   collect:
-    # One approved push only: exact pre-launch head, and never an automatic rerun.
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' &&
-       github.event.before == '51db79d1f141df1d56688d0ed1be1b3257d36911' &&
-       github.run_attempt == '1')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -35,7 +38,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install the pinned CPU runtime
-        if: github.event_name == 'push' || inputs.live
+        if: inputs.live
         run: |
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.6.0
           python -m pip install transformers==4.48.3 accelerate==1.3.0 huggingface_hub==0.34.4 safetensors==0.5.3 'numpy<2'
@@ -48,13 +51,16 @@ jobs:
       - name: Collect trajectories
         shell: bash
         env:
-          LIVE: ${{ github.event_name == 'push' || inputs.live }}
+          LIVE: ${{ inputs.live }}
+          CORPUS_VERSION: ${{ inputs.corpus_version }}
+          SPLIT: ${{ inputs.split }}
         run: |
-          args=()
+          args=(--corpus-version "$CORPUS_VERSION" --split "$SPLIT")
           if [[ "$LIVE" == true ]]; then args+=(--live); fi
           target/release/examples/recovery_policy_eval --trace recovery-policy-run/trace.json "${args[@]}" \
             2> >(tee recovery-policy-run/stderr.log >&2) | tee recovery-policy-run/stdout.log
       - name: Score paired trajectories
+        if: inputs.split == 'all'
         run: python scripts/recovery_policy_eval.py recovery-policy-run/trace.json > recovery-policy-run/summary.json
       - name: Preserve traces and durable ledger, including failures
         if: always()

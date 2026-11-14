@@ -1,0 +1,302 @@
+{
+  "schema_version": 1,
+  "corpus_id": "ci-report-recovery-v2",
+  "validator_version": "independent-report-verdict/1",
+  "prompt_version": "report-bundle/2",
+  "budget_tokens": 4096,
+  "output_cap": 96,
+  "deadline_ms": 60000,
+  "cases": [
+    {
+      "case_id": "cal-pass",
+      "family": "cal-basic",
+      "split": "calibration",
+      "reports": [
+        {
+          "release": "cal-A",
+          "passed": 12,
+          "total": 12
+        }
+      ],
+      "retry_reports": null,
+      "initial_reference": {
+        "release": "cal-A",
+        "tests": "12/12",
+        "status": "pass"
+      },
+      "retry_reference": {
+        "release": "cal-A",
+        "tests": "12/12",
+        "status": "pass"
+      },
+      "fixture_outputs": [
+        "{\"release\":\"cal-A\",\"tests\":\"12/12\",\"status\":\"pass\"}",
+        "unused"
+      ]
+    },
+    {
+      "case_id": "cal-repair",
+      "family": "cal-basic",
+      "split": "calibration",
+      "reports": [
+        {
+          "release": "cal-B",
+          "passed": 11,
+          "total": 12
+        }
+      ],
+      "retry_reports": null,
+      "initial_reference": {
+        "release": "cal-B",
+        "tests": "11/12",
+        "status": "fail"
+      },
+      "retry_reference": {
+        "release": "cal-B",
+        "tests": "11/12",
+        "status": "fail"
+      },
+      "fixture_outputs": [
+        "{\"release\":\"cal-B\",\"tests\":\"11/12\",\"status\":\"pass\"}",
+        "{\"release\":\"cal-B\",\"tests\":\"11/12\",\"status\":\"fail\"}"
+      ]
+    },
+    {
+      "case_id": "cal-exhaust",
+      "family": "cal-contrast",
+      "split": "calibration",
+      "reports": [
+        {
+          "release": "cal-C",
+          "passed": 0,
+          "total": 4
+        }
+      ],
+      "retry_reports": null,
+      "initial_reference": {
+        "release": "cal-C",
+        "tests": "0/4",
+        "status": "fail"
+      },
+      "retry_reference": {
+        "release": "cal-C",
+        "tests": "0/4",
+        "status": "fail"
+      },
+      "fixture_outputs": [
+        "not JSON",
+        "{\"release\":\"cal-C\",\"tests\":\"4/4\",\"status\":\"pass\"}"
+      ]
+    },
+    {
+      "case_id": "cal-conflict",
+      "family": "cal-contrast",
+      "split": "calibration",
+      "reports": [
+        {
+          "release": "cal-D",
+          "passed": 7,
+          "total": 8
+        }
+      ],
+      "retry_reports": [
+        {
+          "release": "cal-D",
+          "passed": 7,
+          "total": 8
+        },
+        {
+          "release": "cal-D",
+          "passed": 8,
+          "total": 8
+        }
+      ],
+      "initial_reference": {
+        "release": "cal-D",
+        "tests": "7/8",
+        "status": "fail"
+      },
+      "retry_reference": null,
+      "fixture_outputs": [
+        "{}",
+        "{\"release\":\"cal-D\",\"tests\":\"8/8\",\"status\":\"pass\"}"
+      ]
+    },
+    {
+      "case_id": "v2-held-single-fail",
+      "family": "v2-held-tiny",
+      "split": "heldout",
+      "reports": [
+        {
+          "release": "fresh-301",
+          "passed": 0,
+          "total": 2
+        }
+      ],
+      "retry_reports": null,
+      "initial_reference": {
+        "release": "fresh-301",
+        "tests": "0/2",
+        "status": "fail"
+      },
+      "retry_reference": {
+        "release": "fresh-301",
+        "tests": "0/2",
+        "status": "fail"
+      },
+      "fixture_outputs": [
+        "{}",
+        "{\"release\":\"fresh-301\",\"tests\":\"0/2\",\"status\":\"fail\"}"
+      ]
+    },
+    {
+      "case_id": "v2-held-single-pass",
+      "family": "v2-held-tiny",
+      "split": "heldout",
+      "reports": [
+        {
+          "release": "fresh-302",
+          "passed": 9,
+          "total": 9
+        }
+      ],
+      "retry_reports": null,
+      "initial_reference": {
+        "release": "fresh-302",
+        "tests": "9/9",
+        "status": "pass"
+      },
+      "retry_reference": {
+        "release": "fresh-302",
+        "tests": "9/9",
+        "status": "pass"
+      },
+      "fixture_outputs": [
+        "{\"release\":\"fresh-302\",\"tests\":\"9/9\",\"status\":\"pass\"}",
+        "{\"release\":\"fresh-302\",\"tests\":\"9/9\",\"status\":\"pass\"}"
+      ]
+    },
+    {
+      "case_id": "v2-held-count-gap",
+      "family": "v2-held-counts",
+      "split": "heldout",
+      "reports": [
+        {
+          "release": "fresh-303",
+          "passed": 103,
+          "total": 137
+        }
+      ],
+      "retry_reports": null,
+      "initial_reference": {
+        "release": "fresh-303",
+        "tests": "103/137",
+        "status": "fail"
+      },
+      "retry_reference": {
+        "release": "fresh-303",
+        "tests": "103/137",
+        "status": "fail"
+      },
+      "fixture_outputs": [
+        "{}",
+        "{\"release\":\"fresh-303\",\"tests\":\"103/137\",\"status\":\"fail\"}"
+      ]
+    },
+    {
+      "case_id": "v2-held-release-copy",
+      "family": "v2-held-counts",
+      "split": "heldout",
+      "reports": [
+        {
+          "release": "candidate_5.4-rc2+sha7",
+          "passed": 62,
+          "total": 63
+        }
+      ],
+      "retry_reports": null,
+      "initial_reference": {
+        "release": "candidate_5.4-rc2+sha7",
+        "tests": "62/63",
+        "status": "fail"
+      },
+      "retry_reference": {
+        "release": "candidate_5.4-rc2+sha7",
+        "tests": "62/63",
+        "status": "fail"
+      },
+      "fixture_outputs": [
+        "{}",
+        "{\"release\":\"candidate_5.4-rc2+sha7\",\"tests\":\"62/63\",\"status\":\"fail\"}"
+      ]
+    },
+    {
+      "case_id": "v2-held-release-disagreement",
+      "family": "v2-held-disagreement",
+      "split": "heldout",
+      "reports": [
+        {
+          "release": "fresh-305",
+          "passed": 41,
+          "total": 41
+        }
+      ],
+      "retry_reports": [
+        {
+          "release": "fresh-305",
+          "passed": 41,
+          "total": 41
+        },
+        {
+          "release": "fresh-306",
+          "passed": 41,
+          "total": 41
+        }
+      ],
+      "initial_reference": {
+        "release": "fresh-305",
+        "tests": "41/41",
+        "status": "pass"
+      },
+      "retry_reference": null,
+      "fixture_outputs": [
+        "{}",
+        "{\"release\":\"fresh-305\",\"tests\":\"41/41\",\"status\":\"pass\"}"
+      ]
+    },
+    {
+      "case_id": "v2-held-count-disagreement",
+      "family": "v2-held-disagreement",
+      "split": "heldout",
+      "reports": [
+        {
+          "release": "fresh-307",
+          "passed": 18,
+          "total": 21
+        }
+      ],
+      "retry_reports": [
+        {
+          "release": "fresh-307",
+          "passed": 18,
+          "total": 21
+        },
+        {
+          "release": "fresh-307",
+          "passed": 21,
+          "total": 21
+        }
+      ],
+      "initial_reference": {
+        "release": "fresh-307",
+        "tests": "18/21",
+        "status": "fail"
+      },
+      "retry_reference": null,
+      "fixture_outputs": [
+        "{}",
+        "{\"release\":\"fresh-307\",\"tests\":\"18/21\",\"status\":\"fail\"}"
+      ]
+    }
+  ]
+}

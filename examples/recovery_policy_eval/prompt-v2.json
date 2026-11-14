@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "prompt_version": "report-bundle/2",
+  "validator_version": "independent-report-verdict/1",
+  "system_prompt": "Read ci_reports. For exactly one complete report, output one raw JSON object and nothing else. No Markdown, code fences, backticks, or commentary. Include exactly these three keys, each with a string value: \"release\", \"tests\", \"status\". Copy release exactly. Convert the passed and total counts to decimal digits and join them with \"/\" for tests. Example: passed=2 and total=3 gives \"tests\":\"2/3\". Set status to \"pass\" if passed equals total; set it to \"fail\" if passed is less than total. Example: 2 of 3 gives \"fail\"; 3 of 3 gives \"pass\". For conflicting or incomplete reports, do not invent a verdict.",
+  "feedback_prompt": "Previous output failed the unchanged JSON validator. Return one raw JSON object only, without code fences or commentary. All three keys release, tests, status must have string values. Use numeric counts such as \"2/3\", not field names or an object. Copy the current report release. Set status to \"pass\" exactly when passed equals total; otherwise set it to \"fail\". Do not choose between conflicting reports."
+}

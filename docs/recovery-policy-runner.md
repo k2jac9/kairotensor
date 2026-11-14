@@ -77,7 +77,9 @@ model or change settings after examining held-out outcomes while presenting the
 result as this frozen experiment. A change creates a new experiment version.
 
 The manual **Collect recovery policy traces** workflow defaults to fixture mode.
-Its `live` switch explicitly enables model installation and inference. It has no
+Its `live` switch explicitly enables model installation and inference. The completed
+v1 one-shot push trigger has been removed; ordinary pushes cannot launch inference.
+The workflow defaults to v2 calibration only, with live inference disabled. It has no
 push or pull-request trigger. Private-repository Actions minutes may incur cost;
 check the available allowance or obtain approval before starting a live run.
 The workflow preserves the bundle and execution-environment description as a
@@ -102,4 +104,45 @@ labels or model identity. A small synthetic-report corpus is not a production
 reliability guarantee. Report collection mode, corpus version, exact source commit,
 complete/partial status and raw artifacts alongside every result. See the
 [policy protocol](recovery-policy-protocol.md) for the frozen selection and scoring
-rules. No live result is established merely by adding or testing this runner.
+rules. No live result is established merely by adding or testing this runner. The completed
+[v1 pilot](evaluations/recovery-policy-v1-2026-11-14.md) failed all held-out cases
+under the frozen contract; v2 has not yet been measured live.
+
+
+## Version 2 preparation (not a measured improvement)
+
+Version 1 remains the CLI default for reproducibility. Select v2 explicitly:
+
+```sh
+cargo run --example recovery_policy_eval -- --corpus-version v2 --split calibration --trace /tmp/recovery-v2-cal/trace.json
+cargo run --example recovery_policy_eval -- --corpus-version v2 --split all --trace /tmp/recovery-v2-full/trace.json
+python3 scripts/recovery_policy_eval.py /tmp/recovery-v2-full/trace.json
+```
+
+Calibration mode collects only the four calibration cases and exports the raw
+manifest and SQLite ledger. It does **not** emit a complete policy trace or a
+held-out score. Its manifest includes only selected cases. This prevents an
+accidental calibration pass from executing the held-out set. The full mode
+contains the four calibration cases plus six fresh held-out inputs; old held-out
+outcomes are not reused as a new test set.
+
+The v2 prompt explicitly requires one raw JSON object without Markdown fences,
+three string fields, numerical counts separated by `/`, and `pass` only when
+passed equals total. The validator and scoring rules remain unchanged. Prompt
+wording was fixed from calibration observations before preparing fresh held-out
+cases. The [prompt freeze](../examples/recovery_policy_eval/prompt-v2-freeze.json)
+and [corpus freeze](../examples/recovery_policy_eval/corpus-v2-freeze.json) record
+the source hashes and ordering. Held-out source remains visible in the repository;
+this is execution isolation, not access-controlled blinding. Deterministic tests establish mechanics, not whether the wording works
+better for Qwen. The new cases are fresh instances, not an independent external
+benchmark or a guarantee against broader task-family overlap.
+
+No second live run has been started. A full run remains bounded by ten cases,
+twenty model calls and a 30-minute hosted-job timeout. At the previously checked
+Linux list rate, that timeout corresponds to about US$0.18 nominal compute plus
+artifact storage. A calibration-only run is capped at eight calls but retains
+the same job timeout; actual duration and billing cannot be guaranteed. Normal
+PR CI is separate. Obtain approval for the chosen live scope before launching.
+Because this workflow is still only on the unmerged PR branch, manual dispatch
+may require default-branch registration. Do not merge or re-arm a push trigger
+just to run it without the required authorization.
