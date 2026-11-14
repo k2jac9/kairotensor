@@ -1,6 +1,8 @@
 """Offline paired policy accounting, NOT a model runner or efficacy experiment.
 
-Schema v1 is illustrated completely by synthetic_fixture(). Exact request strings,
+Schema v1 is illustrated completely by synthetic_fixture(). Schema v2 also permits
+both retry cells to be null when the initial path cannot unlock a retry.
+Exact request strings,
 opaque evidence snapshot IDs, and token quotes must match their recorded outcomes.
 The producer must attest snapshot identity, eligibility, consistency and labels;
 this program cannot verify a tokenizer, actual evidence bytes, or model provenance.
@@ -69,7 +71,7 @@ def validate_attempt(attempt, context):
 
 def validate(document):
     fields(document, {'schema_version', 'mode', 'provenance', 'cases'}, 'document')
-    require(type(document['schema_version']) is int and document['schema_version'] == 1, 'unsupported schema version')
+    require(type(document['schema_version']) is int and document['schema_version'] in (1, 2), 'unsupported schema version')
     require(document['mode'] in MODES, 'unsupported mode')
     text(document['provenance'], 'provenance')
     require(type(document['cases']) is list and document['cases'], 'nonempty cases required')
@@ -89,6 +91,20 @@ def validate(document):
         integer(case['deadline_ms'], 'deadline_ms', 1)
         validate_attempt(case['initial'], case['initial_context'])
         fields(case['retries'], set(POLICIES[1:]), 'retries')
+        cells = list(case['retries'].values())
+        if any(cell is None for cell in cells):
+            require(document['schema_version'] == 2, 'null retry cells require schema v2')
+            require(all(cell is None for cell in cells), 'paired retry cells must both be null')
+            context, initial = case['initial_context'], case['initial']
+            initial_admitted = (context['admitted']
+                                and context['elapsed_ms'] < case['deadline_ms']
+                                and context['input_tokens'] + context['output_cap'] <= case['budget_tokens'])
+            if initial_admitted:
+                require(initial is not None, 'missing initial outcome')
+                retry_required = (initial['disposition'] == 'invalid_output'
+                                  and context['elapsed_ms'] + initial['elapsed_ms'] < case['deadline_ms'])
+                require(not retry_required, 'retry context required after initial invalid output')
+            continue
         for cell in case['retries'].values():
             fields(cell, {'context', 'attempt'}, 'retry cell')
             validate_attempt(cell['attempt'], cell['context'])
@@ -165,7 +181,7 @@ def evaluate(document):
                           successes_per_charged_token=(totals['success'] / totals['charged_tokens']
                               if totals['charged_tokens'] and not totals['reserved_tokens'] else None))
             summary[split][policy] = totals
-    return dict(schema_version=1, mode=document['mode'], provenance=document['provenance'],
+    return dict(schema_version=document['schema_version'], mode=document['mode'], provenance=document['provenance'],
                 new_model_calls=0, policy_version='frozen-v1', cases=rows, summary=summary,
                 limitations='Synthetic fixtures demonstrate mechanics, not model efficacy. Recorded replay trusts producer attestations and only scores supplied exact-context outcomes; no counterfactual inference. Policy totals are separate hypothetical paths, not additive research expenditure. No calibration fitting or heldout tuning.')
 

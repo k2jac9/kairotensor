@@ -20,9 +20,14 @@ SQLite files at each boundary and race independent connections.
 `planned → reserved → sent → measured delivery` is the normal path. Preparation
 can be cancelled before reservation; reserved work can be cancelled before claim.
 Budget denial or cancellation terminates the latest slot. A first `invalid_output`
-delivery alone unlocks the retry. Once ordinal 1 exists, neither its cancellation
-nor denial can reopen ordinal 0. The database permits only ordinals 0 and 1.
-Accepted and stale deliveries terminate recovery without a retry.
+delivery unlocks one fresh capture, including when its
+separately recorded applicability is stale. This allows corrected evidence to be
+recaptured after an invalid answer without reusing the old report. Once ordinal 1
+exists, neither cancellation nor denial can reopen ordinal 0. The database permits
+only ordinals 0 and 1. Accepted and stale *validation-passing* deliveries terminate
+recovery without a retry. The evaluation protocol intentionally uses a stricter
+policy: it normalizes invalid-but-stale applicability to a terminal stale outcome.
+That experimental policy does not change the core recovery contract.
 
 **Every transport must claim before sending, and send at most once after its own
 successful claim.** A caller must not treat `Existing`, a saved request, a missing

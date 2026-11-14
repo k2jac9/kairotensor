@@ -194,6 +194,89 @@ class RecoveryPolicyTests(unittest.TestCase):
         run = subprocess.run([sys.executable, str(script), '--emit-fixture'], capture_output=True, text=True, check=True)
         self.assertEqual(json.loads(run.stdout), self.trace)
 
+    def test_v2_terminal_initial_allows_absent_retry_proposals(self):
+        for disposition in ('accepted', 'stale', 'uncertain'):
+            trace = copy.deepcopy(self.trace)
+            trace['schema_version'] = 2
+            case = trace['cases'][1]
+            case['initial'].update(disposition=disposition, correct=False)
+            if disposition == 'uncertain':
+                case['initial'].update(correct=None, charged_tokens=None)
+            case['retries'] = dict.fromkeys(case['retries'])
+            result = evaluate(trace)
+            self.assertEqual(result['schema_version'], 2)
+            row = self.row(result, 'repair', 'affordable_retry')
+            self.assertEqual((row['attempts'], row['reason']), (1, disposition))
+            self.assertEqual(row['reserved_tokens'], 12 if disposition == 'uncertain' else 0)
+
+    def test_v2_invalid_before_deadline_requires_retry_context_even_with_no_remaining_budget(self):
+        for budget in (30, 12):
+            trace = copy.deepcopy(self.trace)
+            trace['schema_version'] = 2
+            case = trace['cases'][1]
+            case['budget_tokens'] = budget
+            case['retries'] = dict.fromkeys(case['retries'])
+            with self.assertRaisesRegex(ValueError, 'retry context required'):
+                evaluate(trace)
+
+    def test_v2_one_sided_null_and_v1_null_remain_invalid(self):
+        for version, null_keys in ((1, ('affordable_retry', 'evidence_gated_retry')),
+                                   (2, ('affordable_retry',)), (2, ('evidence_gated_retry',))):
+            trace = copy.deepcopy(self.trace)
+            trace['schema_version'] = version
+            for key in null_keys:
+                trace['cases'][0]['retries'][key] = None
+            with self.subTest(version=version, keys=null_keys), self.assertRaises(ValueError):
+                evaluate(trace)
+
+    def test_v2_initial_admission_denial_allows_null_retry_cells(self):
+        for field, value, reason in [('admitted', False, 'ineligible_evidence'),
+                                     ('elapsed_ms', 100, 'deadline'),
+                                     ('input_tokens', 40, 'budget_denied')]:
+            trace = copy.deepcopy(self.trace)
+            trace['schema_version'] = 2
+            case = trace['cases'][1]
+            case['initial_context'][field] = value
+            case['initial'] = None
+            case['retries'] = dict.fromkeys(case['retries'])
+            row = self.row(evaluate(trace), 'repair', 'affordable_retry')
+            self.assertEqual((row['attempts'], row['charged_tokens'], row['reason']), (0, 0, reason))
+
+    def test_v2_null_retry_timing_uses_cumulative_receipt_and_exact_deadline(self):
+        for duration in (98, 99, 100):
+            trace = copy.deepcopy(self.trace)
+            trace['schema_version'] = 2
+            case = trace['cases'][1]
+            case['initial']['elapsed_ms'] = duration
+            case['retries'] = dict.fromkeys(case['retries'])
+            if duration == 98:  # 1 preparation + 98 receipt is before deadline.
+                with self.assertRaisesRegex(ValueError, 'retry context required'):
+                    evaluate(trace)
+            else:
+                row = self.row(evaluate(trace), 'repair', 'affordable_retry')
+                self.assertEqual((row['reason'], row['charged_tokens']), ('deadline', 7))
+                self.assertEqual(row['on_time'], duration == 99)
+
+    def test_v2_does_not_hide_missing_initial_outcome_or_weaken_paired_validation(self):
+        trace = copy.deepcopy(self.trace)
+        trace['schema_version'] = 2
+        trace['cases'][1]['initial'] = None
+        trace['cases'][1]['retries'] = dict.fromkeys(trace['cases'][1]['retries'])
+        with self.assertRaises(ValueError):
+            evaluate(trace)
+        trace = copy.deepcopy(self.trace)
+        trace['schema_version'] = 2
+        trace['cases'][1]['retries']['affordable_retry']['context']['consistent'] = False
+        with self.assertRaisesRegex(ValueError, 'paired retry contexts differ'):
+            evaluate(trace)
+
+    def test_v2_ordinary_replay_matches_v1_scores(self):
+        original = evaluate(self.trace)
+        self.trace['schema_version'] = 2
+        newer = evaluate(self.trace)
+        self.assertEqual(original['cases'], newer['cases'])
+        self.assertEqual(original['summary'], newer['summary'])
+
 
 if __name__ == '__main__':
     unittest.main()

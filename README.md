@@ -75,7 +75,8 @@ workers. Only proven-unsent work can be cancelled. Run
 The [recovery-policy evaluation protocol](docs/recovery-policy-protocol.md) defines
 an offline paired comparison with explicit accounting and deadline checks. Run
 `python3 scripts/recovery_policy_eval.py --fixture` for synthetic contract cases,
-not model-performance measurements.
+not model-performance measurements. The [Store-backed collector](docs/recovery-policy-runner.md)
+adds a versioned corpus, raw traces and a durable ledger; live collection is opt-in.
 
 | Operation | Behavior |
 | --- | --- |

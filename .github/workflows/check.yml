@@ -33,3 +33,8 @@ jobs:
 
       - name: Verify synthetic recovery policy comparison
         run: python3 scripts/recovery_policy_eval.py --fixture
+      - name: Collect and score Store-backed synthetic recovery trajectories
+        run: |
+          cargo run --example recovery_policy_eval -- --trace "$RUNNER_TEMP/recovery-policy-trace.json"
+          python3 scripts/recovery_policy_eval.py "$RUNNER_TEMP/recovery-policy-trace.json"
+          KAIROTENSOR_RECOVERY_RUNNER="$PWD/target/debug/examples/recovery_policy_eval" python3 -m unittest discover -s scripts -p test_recovery_policy_runner.py

@@ -91,8 +91,8 @@ synthetic paired cases with zero new model calls. Run
 accounting, matching, deadline and split regressions. A saved compatible document
 can be scored with `python3 scripts/recovery_policy_eval.py PATH.json`.
 
-The next experimental step is a separately reviewed, versioned corpus and an
-instrumented runner that collects matching policy trajectories through the durable
-Rust recovery APIs. Only after that, and approval for any required compute cost,
-should a live held-out comparison be run. Archived output-cap results do not
+The [Store-backed collector](recovery-policy-runner.md) now provides a versioned
+corpus and instruments matching trajectories through the durable Rust recovery
+APIs. A live held-out comparison still requires a completed measured run and
+approval for any required compute cost. Archived output-cap results do not
 measure the new feedback prompts and must not be presented as recovery results.

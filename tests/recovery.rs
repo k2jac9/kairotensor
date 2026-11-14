@@ -768,3 +768,56 @@ fn failing_reservation_insert_rolls_back_quote_and_leaves_planned_attempt_retrya
     assert_eq!(audit(&file)?, (1, 1));
     Ok(())
 }
+
+#[test]
+fn stale_invalid_reply_can_unlock_only_one_fresh_recapture_after_restart() -> Result<()> {
+    let file = Database::new();
+    let mut store = Store::open(&file.0)?;
+    let old = store.observe("old", b"obsolete report")?;
+    store.set_admitted(ACTOR, SCOPE, old, true)?;
+    let b = store.create_token_budget(30)?;
+    let r = store.create_recovery("stale-invalid-recapture", b, ACTOR, SCOPE, "plan")?;
+    let (first, _) = begin(&mut store, r, &[old])?;
+    assert!(store.reserve_recovery_attempt(first, REQUEST, 4, 8)?);
+    assert_eq!(
+        store.claim_recovery_dispatch(first)?,
+        Some(REQUEST.to_vec())
+    );
+    store.set_admitted(ACTOR, SCOPE, old, false)?;
+    let fresh = store.observe("new", b"corrected report")?;
+    store.set_admitted(ACTOR, SCOPE, fresh, true)?;
+    assert_eq!(reject(&mut store, first)?, Disposition::InvalidOutput);
+    drop(store);
+    let mut store = Store::open(&file.0)?;
+    assert_eq!(reject(&mut store, first)?, Disposition::InvalidOutput);
+    budget(&store, b, 30, 7, 0)?;
+    let db = Connection::open(&file.0)?;
+    let applicability: String = db.query_row(
+        "SELECT applicability FROM deliveries WHERE attempt_id=?",
+        [first],
+        |row| row.get(0),
+    )?;
+    assert_eq!(applicability, "stale_view");
+    // Core recovery may recapture after an invalid stale reply. A caller's
+    // stricter retry policy can stop instead; invalid bytes are never evidence.
+    let (second, inputs) = begin(&mut store, r, &[old, fresh])?;
+    assert_eq!(inputs, vec![(fresh, b"corrected report".to_vec())]);
+    assert_ne!(first, second);
+    assert!(store.reserve_recovery_attempt(second, b"fresh request", 4, 8)?);
+    assert_eq!(
+        store.claim_recovery_dispatch(second)?,
+        Some(b"fresh request".to_vec())
+    );
+    assert_eq!(reject(&mut store, second)?, Disposition::InvalidOutput);
+    drop(store);
+    let mut store = Store::open(&file.0)?;
+    assert_eq!(reject(&mut store, second)?, Disposition::InvalidOutput);
+    assert!(matches!(
+        store.begin_recovery_attempt(r, &[fresh])?,
+        RecoveryStart::Finished
+    ));
+    budget(&store, b, 30, 14, 0)?;
+    assert_eq!(store.charged_usage()?, 14);
+    assert_eq!(audit(&file)?, (2, 2));
+    Ok(())
+}
