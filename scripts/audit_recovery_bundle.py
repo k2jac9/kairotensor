@@ -7,6 +7,7 @@ never modified. This verifies internal consistency, not authenticity of model or
 hardware attestations. SQLite is opened mode=ro, with query_only enabled.
 """
 import argparse
+from contextlib import closing
 import json
 from pathlib import Path
 import sqlite3
@@ -257,7 +258,7 @@ def audit_bundle(directory):
     require(header[18:20] == b'\x01\x01' and not any(Path(str(db_path) + suffix).exists()
             for suffix in ('-wal', '-shm', '-journal')), 'WAL or journal sidecar bundle unsupported; not opened or scored')
     try:
-        with sqlite3.connect(db_path.as_uri() + '?mode=ro', uri=True) as db:
+        with closing(sqlite3.connect(db_path.as_uri() + '?mode=ro', uri=True)) as db, db:
             db.row_factory = sqlite3.Row
             db.execute('PRAGMA query_only=ON')
             db.execute('BEGIN')
