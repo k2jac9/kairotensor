@@ -115,7 +115,11 @@ not an assertion that current empirical policies improve performance.
 ### Task 2: Registry migration and immutable registration
 
 **Files:** create `src/policy_registry.sql`, `tests/policy_registry.rs`;
-modify `src/policy_registry.rs`, `src/policy_registry/types.rs`, `src/lib.rs`.
+modify `src/policy_registry.rs`, `src/policy_registry/types.rs`, `src/lib.rs`,
+`tests/dispatch.rs`, `tests/deterministic_verdict.rs`, `tests/timed_recovery.rs`,
+and `README.md`. The three legacy test edits are limited to the exact final
+schema-version expectation; preserve their fixtures and every data/accounting/FK
+assertion. README changes only its current migration-version sentence.
 
 Tables: policy_versions (version_id PK, actor, scope, purpose, evidence_id UNIQUE
 FK evidence, contract SHA, artifact SHA); policy_evaluations (evaluation_id PK,
@@ -151,8 +155,12 @@ valid evaluations may be stored but are never promotion eligible.
 - [ ] Inject failure after some DDL but before commit using a test-only migration
   hook; reopen and verify the old schema/rows remain intact. Reject unknown future
   versions. Keep original backup bytes; test recovery from that fixture backup.
-- [ ] Implement registration. Run `cargo test --locked --test policy_registry
-  --test recovery --test timed_recovery`; review and commit
+- [ ] Update the three existing migration tests to assert the newly allocated
+  exact final version, and update the README migration sentence. Do not replace
+  version equality with a permissive range or weaken old invariants.
+- [ ] Implement registration. Run `cargo test --locked --lib --test policy_registry
+  --test recovery --test timed_recovery --test dispatch --test deterministic_verdict`;
+  the lib run must execute the test-only interrupted-migration hook. Review and commit
   `feat: persist immutable scoped policy versions and evaluations`.
 
 **Done:** registry data is durable; nothing is active and no sends are authorized.
@@ -160,8 +168,10 @@ valid evaluations may be stored but are never promotion eligible.
 ### Task 3: Atomic bootstrap, promotion and rollback
 
 **Files:** modify `src/policy_registry.rs`, `src/policy_registry/types.rs`,
-`src/support.rs`, `src/lib.rs`, `tests/policy_registry.rs`;
-create `docs/policy-promotion.md`.
+`src/policy_registry/evaluation.rs`, `src/support.rs`, `src/lib.rs`,
+`tests/policy_registry.rs`; create `docs/policy-promotion.md`. The evaluation-module
+change is limited to extracting/exposing its existing strict manifest validator
+for reuse by bootstrap; do not duplicate the validator or change selection rules.
 
 ```rust
 Store::activate_policy(&mut self, request: &ActivationRequest)
