@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt;
+use std::io::{self, Write};
 
 const MAX_BYTES: usize = 1024 * 1024;
 const MAX_DEPTH: usize = 64;
@@ -103,6 +104,29 @@ impl IncidentContextV1 {
     }
 
     fn validate(&self) -> Result<(), Error> {
+        // Borrowed lower bounds reject unbounded caller inputs before text
+        // scanning, ID deduplication, or owned JSON intermediates are allocated.
+        let mut size = 0;
+        for text in [
+            &self.version,
+            &self.workload_version,
+            &self.freeze_sha256,
+            &self.prompt_sha256,
+            &self.validator_version,
+            &self.case_id,
+            &self.question,
+            &self.system_prompt,
+        ] {
+            add_size(&mut size, text.len())?;
+        }
+        for ids in [&self.owner_ids, &self.evidence_ids] {
+            // Each JSON array string needs two quotes and a separator, except
+            // the last separator is replaced by the array's closing bracket.
+            add_size(&mut size, ids.len().checked_mul(3).ok_or(Error::TooLarge)?)?;
+            for id in ids {
+                add_size(&mut size, id.len())?;
+            }
+        }
         if self.schema_version != 1 || self.version != "incident-store-context/1" {
             return Err(Error::UnknownVersion);
         }
@@ -163,6 +187,14 @@ pub fn render_incident_request(
     phase: IncidentPhase,
 ) -> Result<Vec<u8>, Error> {
     context.validate()?;
+    // Avoid allocating a JSON value from arbitrarily large report text. This
+    // lower bound is followed by the exact bounded serialization below.
+    let mut size = 0;
+    add_size(&mut size, reports.len())?;
+    for report in reports {
+        add_size(&mut size, report.external_id.len())?;
+        add_size(&mut size, report.text.len())?;
+    }
     if reports.len() != context.evidence_ids.len()
         || reports
             .iter()
@@ -238,14 +270,56 @@ fn unique_nonempty(ids: &[String]) -> bool {
     let mut seen = HashSet::new();
     !ids.is_empty() && ids.iter().all(|s| nonempty(s) && seen.insert(s))
 }
-fn canonical(value: &serde_json::Value) -> Result<Vec<u8>, Error> {
-    // serde_json's default Map is a BTreeMap: sorted keys, compact separators,
-    // literal UTF-8, and Python-compatible string escaping.
-    let raw = serde_json::to_vec(value).map_err(|_| Error::InvalidJson)?;
-    if raw.len() > MAX_BYTES {
+fn add_size(total: &mut usize, additional: usize) -> Result<(), Error> {
+    let next = total.checked_add(additional).ok_or(Error::TooLarge)?;
+    if next > MAX_BYTES {
         return Err(Error::TooLarge);
     }
-    Ok(raw)
+    *total = next;
+    Ok(())
+}
+
+#[derive(Default)]
+struct JsonBytes {
+    bytes: Vec<u8>,
+    exceeded: bool,
+}
+impl Write for JsonBytes {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        let mut next = self.bytes.len();
+        if add_size(&mut next, bytes.len()).is_err() {
+            self.exceeded = true;
+            return Err(io::Error::other("incident JSON size limit exceeded"));
+        }
+        if next > self.bytes.capacity() {
+            // Vec's normal geometric growth may exceed the byte cap. Reserve
+            // explicitly, capping both stored bytes and requested capacity.
+            let capacity = next
+                .max(self.bytes.capacity().saturating_mul(2))
+                .min(MAX_BYTES);
+            self.bytes.reserve_exact(capacity - self.bytes.len());
+        }
+        self.bytes.extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+fn canonical(value: &serde_json::Value) -> Result<Vec<u8>, Error> {
+    // The borrowed lower-bound preflights bound owned Value construction. This
+    // writer additionally bounds escaping expansion before buffer allocation.
+    // serde_json's default Map supplies sorted keys, compact UTF-8 JSON and
+    // Python-compatible escaping as before.
+    let mut output = JsonBytes::default();
+    if serde_json::to_writer(&mut output, value).is_err() {
+        return Err(if output.exceeded {
+            Error::TooLarge
+        } else {
+            Error::InvalidJson
+        });
+    }
+    Ok(output.bytes)
 }
 fn decode<'a, T: Deserialize<'a>>(raw: &'a [u8], invalid: Error) -> Result<T, Error> {
     if raw.len() > MAX_BYTES {
@@ -286,4 +360,35 @@ fn check_depth(source: &str) -> Result<(), Error> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod resource_tests {
+    use super::*;
+
+    #[test]
+    fn bounded_json_writer_accepts_cap_and_refuses_without_appending_or_growth() {
+        let mut output = JsonBytes::default();
+        output.write_all(&vec![b'x'; MAX_BYTES - 1]).unwrap();
+        output.write_all(b"y").unwrap();
+        assert_eq!(output.bytes.len(), MAX_BYTES);
+        assert!(output.bytes.capacity() <= MAX_BYTES);
+        let capacity = output.bytes.capacity();
+        assert!(output.write_all(b"rejected bytes").is_err());
+        assert!(output.exceeded);
+        assert_eq!(output.bytes.len(), MAX_BYTES);
+        assert_eq!(output.bytes.capacity(), capacity);
+        assert_eq!(output.bytes.last(), Some(&b'y'));
+    }
+
+    #[test]
+    fn preflight_size_rejects_overflow_and_cap_without_mutating_count() {
+        let mut size = 1;
+        assert_eq!(add_size(&mut size, usize::MAX), Err(Error::TooLarge));
+        assert_eq!(size, 1);
+        assert_eq!(add_size(&mut size, MAX_BYTES), Err(Error::TooLarge));
+        assert_eq!(size, 1);
+        add_size(&mut size, MAX_BYTES - 1).unwrap();
+        assert_eq!(size, MAX_BYTES);
+    }
 }

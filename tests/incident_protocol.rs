@@ -1,3 +1,55 @@
+// Observe only allocations on this test thread, after oversized caller inputs
+// have been constructed. Other parallel tests cannot affect the measurement.
+use std::alloc::{GlobalAlloc, Layout, System};
+use std::cell::Cell;
+
+thread_local! {
+    static MEASURE: Cell<bool> = const { Cell::new(false) };
+    static LARGEST: Cell<usize> = const { Cell::new(0) };
+}
+struct AllocationObserver;
+fn observe(size: usize) {
+    let _ = MEASURE.try_with(|active| {
+        if active.get() {
+            let _ = LARGEST.try_with(|largest| largest.set(largest.get().max(size)));
+        }
+    });
+}
+unsafe impl GlobalAlloc for AllocationObserver {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        observe(layout.size());
+        unsafe { System.alloc(layout) }
+    }
+    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+        observe(layout.size());
+        unsafe { System.alloc_zeroed(layout) }
+    }
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, size: usize) -> *mut u8 {
+        observe(size);
+        unsafe { System.realloc(ptr, layout, size) }
+    }
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        unsafe { System.dealloc(ptr, layout) }
+    }
+}
+#[global_allocator]
+static ALLOCATOR: AllocationObserver = AllocationObserver;
+
+fn largest_allocation_during<T>(f: impl FnOnce() -> T) -> (T, usize) {
+    struct Stop;
+    impl Drop for Stop {
+        fn drop(&mut self) {
+            MEASURE.with(|active| active.set(false));
+        }
+    }
+    LARGEST.with(|largest| largest.set(0));
+    MEASURE.with(|active| active.set(true));
+    let stop = Stop;
+    let result = f();
+    drop(stop);
+    (result, LARGEST.with(Cell::get))
+}
+
 use kairotensor::incident_protocol::{
     render_incident_request, validate_incident_output, IncidentContextV1, IncidentPhase,
     IncidentProtocolError as Error, IncidentReport,
@@ -389,4 +441,64 @@ fn python_strip_control_whitespace_is_empty_text() {
     let mut c = context();
     c.question = "\u{1c}\u{1d}\u{1e}\u{1f}".into();
     assert_eq!(c.to_json(), Err(Error::InvalidContext));
+}
+
+// Catch a late TooLarge check that first clones the caller's oversized String,
+// grows a serializer without a bound, or builds a large ID-deduplication table.
+#[test]
+fn direct_oversize_refuses_without_input_sized_intermediate_allocations() {
+    const LIMIT: usize = 1024 * 1024;
+    let mut c = context();
+    c.question = "x".repeat(8 * LIMIT);
+    for call in [0, 1, 2] {
+        let (result, largest) = largest_allocation_during(|| match call {
+            0 => c.to_json().map(|_| ()),
+            1 => render_incident_request(&c, &reports(), IncidentPhase::Initial).map(|_| ()),
+            _ => validate_incident_output(ROUTE, &c).map(|_| ()),
+        });
+        assert_eq!(result, Err(Error::TooLarge));
+        assert!(
+            largest <= LIMIT,
+            "context entry {call} allocated {largest} bytes before refusal"
+        );
+    }
+    let mut r = reports();
+    r[0].text = "x".repeat(8 * LIMIT);
+    let c = context();
+    let (result, largest) =
+        largest_allocation_during(|| render_incident_request(&c, &r, IncidentPhase::Initial));
+    assert_eq!(result, Err(Error::TooLarge));
+    assert!(
+        largest <= LIMIT,
+        "report allocated {largest} bytes before refusal"
+    );
+
+    let mut c = context();
+    c.question = "\0".repeat(LIMIT / 2);
+    let (result, largest) = largest_allocation_during(|| c.to_json());
+    assert_eq!(result, Err(Error::TooLarge));
+    assert!(
+        largest <= LIMIT,
+        "escaped context allocated {largest} bytes before refusal"
+    );
+
+    let mut r = reports();
+    r[0].text = "\0".repeat(LIMIT / 2);
+    let c = context();
+    let (result, largest) =
+        largest_allocation_during(|| render_incident_request(&c, &r, IncidentPhase::Initial));
+    assert_eq!(result, Err(Error::TooLarge));
+    assert!(
+        largest <= LIMIT,
+        "escaped report allocated {largest} bytes before refusal"
+    );
+
+    let mut c = context();
+    c.owner_ids = (0..65536).map(|i| format!("{i:032}")).collect();
+    let (result, largest) = largest_allocation_during(|| c.to_json());
+    assert_eq!(result, Err(Error::TooLarge));
+    assert!(
+        largest <= LIMIT,
+        "aggregate IDs allocated {largest} bytes before refusal"
+    );
 }
