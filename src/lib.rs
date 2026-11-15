@@ -2,6 +2,7 @@
 
 mod evidence_digest;
 pub mod incident_protocol;
+pub mod decision_bundle;
 
 mod attempts;
 mod eligibility;
