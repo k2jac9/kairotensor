@@ -224,14 +224,27 @@ def main():
     parser.add_argument('trace', nargs='?', type=Path)
     parser.add_argument('--fixture', action='store_true', help='evaluate deterministic synthetic mechanics only')
     parser.add_argument('--emit-fixture', action='store_true', help='print the full synthetic input schema example')
+    parser.add_argument('--convert-v2', action='store_true', help='explicit complete-attestation conversion; missing facts remain incomplete')
+    parser.add_argument('--comparison-v2', type=Path, help='matching complete v2 comparison attestation for --convert-v2')
     args = parser.parse_args()
+    if (args.comparison_v2 and not args.convert_v2) or (args.convert_v2 and args.emit_fixture):
+        parser.error('--comparison-v2 requires --convert-v2; conversion cannot emit a fixture')
     if sum((args.trace is not None, args.fixture, args.emit_fixture)) != 1:
         parser.error('choose exactly one of TRACE, --fixture, --emit-fixture')
     try:
         document = synthetic_fixture() if args.fixture or args.emit_fixture else json.loads(
             args.trace.read_text(), object_pairs_hook=unique_object,
             parse_constant=lambda value: (_ for _ in ()).throw(ValueError(f'nonfinite JSON value: {value}')))
-        print(json.dumps(document if args.emit_fixture else evaluate(document), indent=2, allow_nan=False))
+        if args.convert_v2:
+            from policy_evaluation_v2 import convert_legacy, parse_policy_evaluation, MAX_BYTES
+            comparison = None
+            if args.comparison_v2:
+                with args.comparison_v2.open('rb') as stream:
+                    comparison = parse_policy_evaluation(stream.read(MAX_BYTES + 1))
+            result = convert_legacy(document, comparison)
+        else:
+            result = document if args.emit_fixture else evaluate(document)
+        print(json.dumps(result, indent=2, allow_nan=False))
     except (ValueError, OSError, TypeError) as error:
         parser.exit(2, f'error: {error}\n')
 

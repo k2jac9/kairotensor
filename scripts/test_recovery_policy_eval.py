@@ -278,5 +278,20 @@ class RecoveryPolicyTests(unittest.TestCase):
         self.assertEqual(original['summary'], newer['summary'])
 
 
+class V2ConversionModeTests(unittest.TestCase):
+    def test_explicit_conversion_does_not_change_default_output(self):
+        path = Path(__file__).with_name('recovery_policy_eval.py')
+        default = subprocess.run([sys.executable, str(path), '--fixture'],
+                                 capture_output=True, text=True, check=True)
+        self.assertEqual(json.loads(default.stdout), evaluate(synthetic_fixture()))
+        converted = subprocess.run([sys.executable, str(path), '--fixture', '--convert-v2'],
+                                   capture_output=True, text=True)
+        self.assertEqual(converted.returncode, 0, converted.stderr)
+        result = json.loads(converted.stdout)
+        self.assertEqual(result['format'], 'policy-evaluation-conversion/2')
+        self.assertEqual(result['status'], 'Incomplete')
+        self.assertEqual(json.loads(default.stdout)['policy_version'], 'frozen-v1')
+
+
 if __name__ == '__main__':
     unittest.main()

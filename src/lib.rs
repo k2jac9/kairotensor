@@ -1,6 +1,7 @@
 //! Local versioned evidence memory with actor-scoped admission and atomic publication.
 
 mod evidence_digest;
+pub mod policy_registry;
 pub mod incident_protocol;
 pub mod decision_bundle;
 
