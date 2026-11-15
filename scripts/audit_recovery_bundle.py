@@ -274,8 +274,20 @@ def audit_bundle(directory):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('directory', type=Path)
+    parser.add_argument('directory', type=Path, nargs='?')
+    parser.add_argument('--decision-v1', type=Path, metavar='FILE')
     args = parser.parse_args()
+    if args.decision_v1 is not None:
+        if args.directory is not None:
+            parser.error('--decision-v1 FILE cannot be combined with a directory')
+        from decision_bundle_v1 import audit_file
+        try:
+            print(json.dumps(audit_file(args.decision_v1), indent=2, allow_nan=False))
+        except (OSError, ValueError) as error:
+            parser.exit(2, f'decision v1 audit failed: {error}\n')
+        return
+    if args.directory is None:
+        parser.error('directory is required unless --decision-v1 FILE is explicit')
     try:
         result = audit_bundle(args.directory)
         print(json.dumps(result, indent=2, allow_nan=False))

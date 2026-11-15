@@ -32,8 +32,15 @@ jobs:
         run: |
           python3 -m unittest discover -s reference -p test_memory.py
           python3 reference/belief_oracle.py
-          cargo build --locked --example recovery_policy_eval
-          KAIROTENSOR_RECOVERY_RUNNER="$PWD/target/debug/examples/recovery_policy_eval" python3 -m unittest discover -s scripts -p 'test_*.py'
+          cargo build --locked --offline --example recovery_policy_eval --example decision_replay
+          KAIROTENSOR_RECOVERY_RUNNER="$PWD/target/debug/examples/recovery_policy_eval" KAIROTENSOR_DECISION_REPLAY="$PWD/target/debug/examples/decision_replay" python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Export and replay a decision in separate offline processes
+        run: |
+          set -euo pipefail
+          cargo run --locked --offline --example decision_replay -- export-fixture "$RUNNER_TEMP/decision-v1.json"
+          cargo run --locked --offline --example decision_replay -- replay "$RUNNER_TEMP/decision-v1.json"
+          python3 scripts/audit_recovery_bundle.py --decision-v1 "$RUNNER_TEMP/decision-v1.json"
+
       - name: Verify archived output-cap measurements
         run: python3 scripts/summarize_token_caps.py docs/evaluations/token-caps-*-2026-11-13.json
 
