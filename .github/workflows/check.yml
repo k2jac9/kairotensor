@@ -15,19 +15,19 @@ jobs:
         with:
           persist-credentials: false
       - name: Test the Rust store, including the withdrawal example
-        run: cargo test --all-targets
+        run: cargo test --locked --all-targets
       - name: Run the revision and model handoff examples
         run: |
-          cargo run --example withdrawal
-          cargo run --example deterministic_verdict
-          cargo run --example deadline_aware_recovery
-          cargo run --example runtime_recovery
-          cargo run --example selective_revision
-          cargo run --example corrected_handoff
-          cargo run --example scoped_model_reuse
-          cargo run --example scoped_model_reuse -- --replay-invalid
-          cargo run --example token_cap_eval
-          cargo run --example budgeted_recovery
+          cargo run --locked --example withdrawal
+          cargo run --locked --example deterministic_verdict
+          cargo run --locked --example deadline_aware_recovery
+          cargo run --locked --example runtime_recovery
+          cargo run --locked --example selective_revision
+          cargo run --locked --example corrected_handoff
+          cargo run --locked --example scoped_model_reuse
+          cargo run --locked --example scoped_model_reuse -- --replay-invalid
+          cargo run --locked --example token_cap_eval
+          cargo run --locked --example budgeted_recovery
       - name: Check the original reference contracts
         run: |
           python3 -m unittest discover -s reference -p test_memory.py
@@ -40,7 +40,7 @@ jobs:
         run: python3 scripts/recovery_policy_eval.py --fixture
       - name: Collect and score Store-backed synthetic recovery trajectories
         run: |
-          cargo run --example recovery_policy_eval -- --trace "$RUNNER_TEMP/recovery-policy-trace.json"
+          cargo run --locked --example recovery_policy_eval -- --trace "$RUNNER_TEMP/recovery-policy-trace.json"
           python3 scripts/recovery_policy_eval.py "$RUNNER_TEMP/recovery-policy-trace.json"
           KAIROTENSOR_RECOVERY_RUNNER="$PWD/target/debug/examples/recovery_policy_eval" python3 -m unittest discover -s scripts -p test_recovery_policy_runner.py
           KAIROTENSOR_RECOVERY_RUNNER="$PWD/target/debug/examples/recovery_policy_eval" python3 -m unittest discover -s scripts -p test_audit_recovery_bundle.py
@@ -48,7 +48,7 @@ jobs:
         run: python3 scripts/recovery_calibration.py --output "$RUNNER_TEMP/recovery-calibration.json"
 
       - name: Exercise offline timed runtime through the fixture Adapter
-        run: cargo run --example timed_recovery_runner -- --out "$RUNNER_TEMP/timed-recovery-runner"
+        run: cargo run --locked --example timed_recovery_runner -- --out "$RUNNER_TEMP/timed-recovery-runner"
 
       - name: Prepare frozen semantic calibration requests without inference
         run: python3 scripts/incident_routing.py prepare --out "$RUNNER_TEMP/incident-routing-calibration"
