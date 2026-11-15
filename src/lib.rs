@@ -29,7 +29,7 @@ use std::time::Duration;
 
 // "KTSM", stored in the SQLite header.
 const APPLICATION_ID: i32 = 0x4b54_534d;
-const SCHEMA_VERSION: i32 = 9;
+const SCHEMA_VERSION: i32 = 10;
 const INSERT_OBSERVATION: &str = "INSERT INTO evidence(source, payload) VALUES (?1, ?2)";
 
 /// A local trusted runtime owns the database and supplies authenticated actor/scope names.
@@ -47,7 +47,18 @@ impl Store {
         Self::initialize(Connection::open_in_memory()?)
     }
 
-    fn initialize(mut conn: Connection) -> Result<Self> {
+    fn initialize(conn: Connection) -> Result<Self> {
+        Self::initialize_inner(
+            conn,
+            #[cfg(test)]
+            None,
+        )
+    }
+
+    fn initialize_inner(
+        mut conn: Connection,
+        #[cfg(test)] after_registry_ddl: Option<fn(&Transaction<'_>) -> Result<()>>,
+    ) -> Result<Self> {
         conn.busy_timeout(Duration::from_secs(5))?;
         conn.pragma_update(None, "foreign_keys", true)?;
         conn.pragma_update(None, "synchronous", "FULL")?;
@@ -96,6 +107,13 @@ impl Store {
         }
         if version < 9 {
             tx.execute_batch(include_str!("timed_recovery.sql"))?;
+        }
+        if version < 10 {
+            tx.execute_batch(include_str!("policy_registry.sql"))?;
+            #[cfg(test)]
+            if let Some(hook) = after_registry_ddl {
+                hook(&tx)?;
+            }
         }
         if version < SCHEMA_VERSION {
             tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
@@ -426,3 +444,222 @@ pub use recovery_runtime::{ReplyValidation, MeasuredRecoveryReply, RecoveryRun};
 
 mod boot_clock;
 pub use boot_clock::LinuxBootClock;
+
+#[cfg(test)]
+mod registry_migration_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn packet() -> PathBuf {
+        let root = std::env::var_os("KAIROTENSOR_D2_ARTIFACTS")
+            .map(PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir);
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = root.join(format!("registry-v9-{}-{stamp}", std::process::id()));
+        std::fs::create_dir_all(&path).unwrap();
+        path
+    }
+    // Build the actual historical layout, never a v10 file with a relabelled header.
+    fn populated_v9(path: &Path) -> Result<()> {
+        let conn = Connection::open(path)?;
+        conn.pragma_update(None, "foreign_keys", true)?;
+        for sql in [
+            include_str!("schema.sql"),
+            include_str!("attempts.sql"),
+            include_str!("support.sql"),
+            include_str!("dispatch.sql"),
+            include_str!("model_reuse.sql"),
+            include_str!("validation.sql"),
+            include_str!("token_budget.sql"),
+            include_str!("recovery.sql"),
+            include_str!("report_verdict.sql"),
+            include_str!("timed_recovery.sql"),
+        ] {
+            conn.execute_batch(sql)?;
+        }
+        conn.pragma_update(None, "application_id", APPLICATION_ID)?;
+        conn.pragma_update(None, "user_version", 9)?;
+        // Existing Store APIs populate the old schema without initializing/migrating it.
+        let mut store = Store { conn };
+        let evidence = store.observe("v9-fixture", b"old exact evidence\0\xff")?;
+        store.set_admitted("actor", "scope", evidence, true)?;
+        let budget = store.create_token_budget(100)?;
+        for (key, disposition) in [
+            ("accepted", Some(Disposition::Accepted)),
+            ("stale", Some(Disposition::StaleView)),
+            ("unresolved", None),
+        ] {
+            let run = store.create_recovery(key, budget, "actor", "scope", key)?;
+            let attempt = match store.begin_recovery_attempt(run, &[evidence])? {
+                RecoveryStart::New { attempt, .. } => attempt,
+                other => panic!("{other:?}"),
+            };
+            assert!(store.reserve_recovery_attempt(attempt, b"v9 exact request\0\xff", 4, 8)?);
+            assert_eq!(
+                store.claim_recovery_dispatch(attempt)?,
+                Some(b"v9 exact request\0\xff".to_vec())
+            );
+            if disposition == Some(Disposition::StaleView) {
+                store.set_admitted("actor", "scope", evidence, false)?;
+            }
+            if let Some(expected) = disposition {
+                assert_eq!(
+                    store.settle(attempt, b"v9 exact output\0\xff", 7)?,
+                    expected
+                );
+            }
+        }
+        assert_eq!(store.charged_usage()?, 14);
+        assert_eq!(
+            store.token_budget_state(budget)?,
+            TokenBudgetState {
+                limit: 100,
+                spent: 14,
+                reserved: 12
+            }
+        );
+        assert_eq!(store.epoch("actor", "scope")?, 2);
+        Ok(())
+    }
+    // Every old table, column, row and schema object, including dispatch receipts/holds.
+    fn snapshot(conn: &Connection) -> Result<Vec<(String, Vec<Vec<rusqlite::types::Value>>)>> {
+        let mut names = conn.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'policy_%' ORDER BY name")?;
+        let tables = names
+            .query_map([], |r| r.get::<_, String>(0))?
+            .collect::<Result<Vec<_>>>()?;
+        let mut result = Vec::new();
+        for table in tables {
+            let mut stmt = conn.prepare(&format!(
+                "SELECT * FROM \"{}\" ORDER BY {}",
+                table.replace('"', "\"\""),
+                (1..=conn
+                    .prepare(&format!("SELECT * FROM \"{}\"", table.replace('"', "\"\"")))?
+                    .column_count())
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ))?;
+            let cols = stmt.column_count();
+            let rows = stmt
+                .query_map([], |r| (0..cols).map(|i| r.get(i)).collect())?
+                .collect::<Result<Vec<_>>>()?;
+            result.push((table, rows));
+        }
+        let mut stmt = conn.prepare("SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name NOT LIKE 'policy_%' AND tbl_name NOT LIKE 'policy_%' ORDER BY type,name")?;
+        result.push((
+            "schema".into(),
+            stmt.query_map([], |r| (0..4).map(|i| r.get(i)).collect())?
+                .collect::<Result<Vec<_>>>()?,
+        ));
+        Ok(result)
+    }
+    #[test]
+    fn populated_v9_migration_reopen_and_backup_restore_preserve_every_old_row() -> Result<()> {
+        let packet = packet();
+        let backup = packet.join("original-v9.sqlite");
+        populated_v9(&backup)?;
+        let bytes = std::fs::read(&backup).unwrap();
+        let hash = crate::evidence_digest::sha256_hex(&bytes);
+        std::fs::write(packet.join("original-v9.sha256"), &hash).unwrap();
+        let before = snapshot(&Connection::open(&backup)?)?;
+        std::fs::write(packet.join("old-state.txt"), format!("{before:#?}")).unwrap();
+        for name in ["migrated.sqlite", "restored-from-backup.sqlite"] {
+            let copy = packet.join(name);
+            std::fs::copy(&backup, &copy).unwrap();
+            for _ in 0..2 {
+                let store = Store::open(&copy)?;
+                assert_eq!(
+                    store
+                        .conn
+                        .pragma_query_value(None, "user_version", |r| r.get::<_, i32>(0))?,
+                    10
+                );
+                assert_eq!(snapshot(&store.conn)?, before);
+                assert_eq!(store.charged_usage()?, 14);
+                assert_eq!(
+                    store.token_budget_state(1)?,
+                    TokenBudgetState {
+                        limit: 100,
+                        spent: 14,
+                        reserved: 12
+                    }
+                );
+                assert_eq!(store.epoch("actor", "scope")?, 2);
+                assert_eq!(
+                    store
+                        .conn
+                        .query_row("SELECT COUNT(*) FROM policy_versions", [], |r| r
+                            .get::<_, i64>(0))?,
+                    0
+                );
+                assert_eq!(
+                    store.conn.query_row(
+                        "SELECT COUNT(*) FROM pragma_foreign_key_check",
+                        [],
+                        |r| r.get::<_, i64>(0)
+                    )?,
+                    0
+                );
+            }
+        }
+        assert_eq!(std::fs::read(backup).unwrap(), bytes);
+        eprintln!(
+            "D2 v9 backup/restore evidence: {} sha256={hash}",
+            packet.display()
+        );
+        Ok(())
+    }
+    #[test]
+    fn interrupted_registry_migration_rolls_back_ddl_and_preserves_v9_backup() -> Result<()> {
+        let packet = packet();
+        let backup = packet.join("original-v9.sqlite");
+        populated_v9(&backup)?;
+        let bytes = std::fs::read(&backup).unwrap();
+        let hash = crate::evidence_digest::sha256_hex(&bytes);
+        std::fs::write(packet.join("original-v9.sha256"), &hash).unwrap();
+        let copy = packet.join("interrupted.sqlite");
+        std::fs::copy(&backup, &copy).unwrap();
+        let before = snapshot(&Connection::open(&copy)?)?;
+        let failure = Store::initialize_inner(
+            Connection::open(&copy)?,
+            Some(|tx| {
+                assert_eq!(
+                    tx.pragma_query_value(None, "user_version", |r| r.get::<_, i32>(0))?,
+                    9
+                );
+                assert_eq!(tx.query_row("SELECT COUNT(*) FROM sqlite_schema WHERE type='table' AND name LIKE 'policy_%'", [], |r|r.get::<_,i64>(0))?, 4);
+                Err(invalid(
+                    "injected after registry DDL before migration commit",
+                ))
+            }),
+        );
+        assert!(failure.is_err());
+        let old = Connection::open(&copy)?;
+        assert_eq!(
+            old.pragma_query_value(None, "user_version", |r| r.get::<_, i32>(0))?,
+            9
+        );
+        assert_eq!(snapshot(&old)?, before);
+        assert_eq!(
+            old.query_row(
+                "SELECT COUNT(*) FROM sqlite_schema WHERE name LIKE 'policy_%'",
+                [],
+                |r| r.get::<_, i64>(0)
+            )?,
+            0
+        );
+        drop(old);
+        assert_eq!(std::fs::read(&copy).unwrap(), bytes);
+        let reopened = Store::open(&copy)?;
+        assert_eq!(snapshot(&reopened.conn)?, before);
+        assert_eq!(std::fs::read(&backup).unwrap(), bytes);
+        eprintln!(
+            "D2 interrupted migration evidence: {} sha256={hash}",
+            packet.display()
+        );
+        Ok(())
+    }
+}
