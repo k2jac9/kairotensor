@@ -163,5 +163,63 @@ recovery's contract.
 Tests deliberately use a protocol-valid but semantically wrong canned answer.
 Store acceptance here means current evidence and valid format, not correctness
 against semantic labels. This work supplies no efficacy, live inference,
-production calibration, remote exactly-once delivery, or all-case export claim.
-All-case exports and CI integration belong to the separately scoped next task.
+production calibration or remote exactly-once delivery claim.
+
+## All-case Store request export and parity
+
+Export every frozen case in corpus order to an explicit, previously nonexistent
+file. The parent directory must already exist. The default invocation above
+continues to run the original single-case canned demo.
+
+```sh
+mkdir -p /home/neo/Projects/kairotensor-artifacts/my-parity-run
+# First obtain fresh storage admission for the retained artifact destination.
+/home/neo/.local/bin/kairotensor-storage preflight --budget-gib 2 \
+  --output-dir /home/neo/Projects/kairotensor-artifacts/my-parity-run
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 \
+  /home/neo/.local/bin/kairotensor-cargo --budget-gib 2 run --locked \
+  --example incident_store_bridge -- \
+  --requests /home/neo/Projects/kairotensor-artifacts/my-parity-run/requests.json
+python3 scripts/check_incident_store_bridge.py --requests \
+  /home/neo/Projects/kairotensor-artifacts/my-parity-run/requests.json
+python3 -m unittest discover -s scripts -p test_incident_store_bridge.py
+```
+
+The exporter uses `Fixture::for_case` with a fresh in-memory Store for each case,
+admits its context and all reports, binds the complete manifest, and calls
+`prepare_incident_attempt`. Requests come from that actual Store capture and
+preparation, with context first and reports in pinned order. Occurrence IDs are
+local to each fixture Store; equal IDs across records do not identify the same
+occurrence. Export performs no reservation, dispatch, backend invocation or model
+call. Both calibration and held-out cases are exported solely for offline byte
+parity; this is not a held-out inference or scoring run.
+
+The output is one compact UTF-8 JSON object followed by a newline. Its exact
+top-level fields are `schema_version` (integer `1`), `version`
+(`incident-store-requests/1`), `mode` (`synthetic_store_incident_fixture`),
+`new_model_calls` (integer `0`), `accounting_unit` (`UTF-8 bytes`), `capture`
+(`Store`), `freeze_sha256` (the pinned frozen manifest digest above), and
+`requests` (12 records in frozen case order). Each record has exactly:
+
+- `case_id`: frozen case ID, outside request bytes.
+- `request`: exact prepared request as a JSON string; send only its UTF-8 bytes
+  to any separately authorized consumer.
+- `request_sha256`: SHA-256 of those UTF-8 request bytes.
+- `manifest_sha256`: immutable `incident-store-manifest/1` digest returned by
+  Store-backed preparation, also bound as the timing runtime fingerprint.
+- `captured_ids`: ordered positive occurrence IDs, context followed by every
+  required report, without duplicates within that record.
+
+The checker reloads the frozen workload and calls
+`incident_routing.prepare(workload, split='all')`. It compares every case ID,
+request byte and case/report order, independently of producer digests. It rejects
+missing, duplicate, reordered or malformed records, changed bytes even with
+recomputed hashes, duplicate JSON keys and incorrect fixture metadata. Success
+prints `mode=offline_store_byte_parity`, `cases_checked=12`,
+`new_model_calls=0` and `accounting_unit=UTF-8 bytes`; failure exits nonzero.
+The manifest digest and occurrence IDs are producer provenance: the checker
+validates their shape, while the adapter tests establish Store capture behavior.
+Neither hashes nor this checker authenticate an arbitrary report's execution.
+
+`check.yml` adds only offline export/checker/test steps. Configured CI is not
+evidence of hosted execution or qualification of an external provider/runtime.

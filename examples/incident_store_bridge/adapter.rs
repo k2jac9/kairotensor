@@ -455,8 +455,12 @@ pub(super) struct Fixture {
     pub(super) budget: i64,
 }
 impl Fixture {
-    pub(super) fn new(mut store: Store) -> Result<Self> {
-        let (context, reports) = pinned_case("cal-01")?;
+    pub(super) fn new(store: Store) -> Result<Self> {
+        Self::for_case(store, "cal-01")
+    }
+
+    pub(super) fn for_case(mut store: Store, case_id: &str) -> Result<Self> {
+        let (context, reports) = pinned_case(case_id)?;
         let raw = context.to_json()?;
         let observations: Vec<_> = std::iter::once(("incident-context", raw.as_slice()))
             .chain(

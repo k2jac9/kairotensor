@@ -8,6 +8,43 @@ use serde_json::{json, Value};
 const REPLY: &[u8] =
     br#"{"decision":"abstain","owner":null,"reason":"undetermined_cause","evidence_ids":["e01"]}"#;
 
+#[test]
+fn export_prepares_all_frozen_cases_in_order_through_store() {
+    let report = super::requests_report().unwrap();
+    let cases: Value = serde_json::from_slice(include_bytes!(
+        "../../workloads/incident-routing-v1/cases.json"
+    ))
+    .unwrap();
+    let records = report["requests"].as_array().unwrap();
+    assert_eq!(records.len(), 12);
+    for (record, case) in records.iter().zip(cases["cases"].as_array().unwrap()) {
+        assert_eq!(record["case_id"], case["case_id"]);
+        assert_eq!(
+            record["captured_ids"].as_array().unwrap().len(),
+            case["evidence"].as_array().unwrap().len() + 1
+        );
+        assert_eq!(
+            record["request_sha256"],
+            sha256(record["request"].as_str().unwrap().as_bytes())
+        );
+        assert_eq!(record["manifest_sha256"].as_str().unwrap().len(), 64);
+    }
+    assert_eq!(report["capture"], "Store");
+    assert_eq!(report["new_model_calls"], 0);
+    assert_eq!(report["accounting_unit"], "UTF-8 bytes");
+}
+
+#[test]
+fn export_exclusively_creates_explicit_destination() {
+    let path = Database::new();
+    super::export_requests(&path.0).unwrap();
+    let original = std::fs::read(&path.0).unwrap();
+    assert!(super::export_requests(&path.0).is_err());
+    assert_eq!(std::fs::read(&path.0).unwrap(), original);
+    let report: Value = serde_json::from_slice(&original).unwrap();
+    assert_eq!(report["requests"].as_array().unwrap().len(), 12);
+}
+
 fn counts(file: &Database) -> (i64, i64, i64) {
     Connection::open(&file.0).unwrap().query_row(
         "SELECT (SELECT count(*) FROM attempts), (SELECT count(*) FROM token_reservations), (SELECT count(*) FROM dispatches)",

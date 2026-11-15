@@ -32,7 +32,8 @@ jobs:
         run: |
           python3 -m unittest discover -s reference -p test_memory.py
           python3 reference/belief_oracle.py
-          python3 -m unittest discover -s scripts -p 'test_*.py'
+          cargo build --locked --example recovery_policy_eval
+          KAIROTENSOR_RECOVERY_RUNNER="$PWD/target/debug/examples/recovery_policy_eval" python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Verify archived output-cap measurements
         run: python3 scripts/summarize_token_caps.py docs/evaluations/token-caps-*-2026-11-13.json
 
@@ -52,6 +53,12 @@ jobs:
 
       - name: Prepare frozen semantic calibration requests without inference
         run: python3 scripts/incident_routing.py prepare --out "$RUNNER_TEMP/incident-routing-calibration"
+
+      - name: Verify all frozen incident request bytes through Store capture without inference
+        run: |
+          cargo run --locked --example incident_store_bridge -- --requests "$RUNNER_TEMP/incident-store-requests.json"
+          python3 scripts/check_incident_store_bridge.py --requests "$RUNNER_TEMP/incident-store-requests.json"
+          python3 -m unittest discover -s scripts -p test_incident_store_bridge.py
 
       - name: Emit bounded prepared-request calibration proposal without inference
         run: python3 scripts/incident_preflight.py --out "$RUNNER_TEMP/incident-preflight-plan.json"
