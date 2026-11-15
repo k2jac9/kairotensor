@@ -1,4 +1,5 @@
 -- Scoped immutable attestations. Only the trusted runtime authenticates the caller.
+-- WITHOUT ROWID removes undeclared rowid aliases as a REPLACE conflict target.
 CREATE TABLE policy_versions (
     version_id TEXT PRIMARY KEY NOT NULL CHECK (length(trim(version_id)) > 0),
     actor TEXT NOT NULL CHECK (length(trim(actor)) > 0),
@@ -8,7 +9,7 @@ CREATE TABLE policy_versions (
     compatibility_contract_sha256 TEXT NOT NULL CHECK (length(compatibility_contract_sha256) = 64),
     artifact_sha256 TEXT NOT NULL CHECK (length(artifact_sha256) = 64),
     UNIQUE (version_id, actor, scope, purpose)
-);
+) WITHOUT ROWID;
 CREATE TABLE policy_evaluations (
     evaluation_id TEXT PRIMARY KEY NOT NULL CHECK (length(trim(evaluation_id)) > 0),
     actor TEXT NOT NULL CHECK (length(trim(actor)) > 0),
@@ -29,7 +30,7 @@ CREATE TABLE policy_evaluations (
     FOREIGN KEY (baseline_id, actor, scope, purpose) REFERENCES policy_versions(version_id, actor, scope, purpose),
     FOREIGN KEY (candidate_id, actor, scope, purpose) REFERENCES policy_versions(version_id, actor, scope, purpose),
     UNIQUE (evaluation_id, actor, scope, purpose)
-);
+) WITHOUT ROWID;
 CREATE TABLE policy_heads (
     actor TEXT NOT NULL,
     scope TEXT NOT NULL,

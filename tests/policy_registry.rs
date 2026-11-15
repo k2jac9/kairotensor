@@ -477,3 +477,116 @@ fn evaluation_cannot_borrow_same_artifact_from_another_scope() -> Result<()> {
     assert_eq!(count(&db.conn()?, "policy_evaluations")?, 0);
     inactive(&db.conn()?)
 }
+
+fn all_table_rows(conn: &Connection) -> Result<Vec<(String, Vec<Vec<rusqlite::types::Value>>)>> {
+    let mut names =
+        conn.prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name")?;
+    let tables = names
+        .query_map([], |r| r.get::<_, String>(0))?
+        .collect::<Result<Vec<_>>>()?;
+    let mut snapshot = Vec::new();
+    for table in tables {
+        let quoted = format!("\"{}\"", table.replace('"', "\"\""));
+        let columns = conn
+            .prepare(&format!("SELECT * FROM {quoted}"))?
+            .column_count();
+        let order = (1..=columns)
+            .map(|n| n.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        let mut query = conn.prepare(&format!("SELECT * FROM {quoted} ORDER BY {order}"))?;
+        let rows = query
+            .query_map([], |r| (0..columns).map(|n| r.get(n)).collect())?
+            .collect::<Result<Vec<_>>>()?;
+        snapshot.push((table, rows));
+    }
+    Ok(snapshot)
+}
+
+fn rowid_replacement_refused(table: &str, alias: &str) -> Result<()> {
+    let db = Database::new();
+    let mut store = Store::open(&db.0)?;
+    let sql = db.conn()?;
+    sql.pragma_update(None, "recursive_triggers", false)?;
+    assert!(sql.pragma_query_value(None, "foreign_keys", |r| r.get::<_, bool>(0))?);
+    assert!(!sql.pragma_query_value(None, "recursive_triggers", |r| r.get::<_, bool>(0))?);
+    let original = candidate("original");
+    let evaluation = fixture();
+    let statement = if table == "policy_versions" {
+        store.register_policy_candidate(&original)?;
+        // A valid fresh evidence ID avoids the declared evidence uniqueness guard.
+        let fresh_evidence = store.observe("rowid-regression", &original.artifact)?;
+        format!("INSERT OR REPLACE INTO policy_versions({alias},version_id,actor,scope,purpose,evidence_id,compatibility_contract_sha256,artifact_sha256)
+            SELECT 1,'fresh-version',actor,scope,purpose,{fresh_evidence},compatibility_contract_sha256,artifact_sha256 FROM policy_versions WHERE version_id='original'")
+    } else {
+        register_pair(&mut store, &evaluation)?;
+        store.record_policy_evaluation(&evaluation)?;
+        format!("INSERT OR REPLACE INTO policy_evaluations({alias},evaluation_id,actor,scope,purpose,baseline_id,candidate_id,baseline_sha256,candidate_sha256,experiment_manifest,experiment_sha256,evaluator_version,evaluator_sha256,baseline_rows,candidate_rows,evaluation_bytes,evaluation_sha256)
+            SELECT 1,'fresh-evaluation',actor,scope,purpose,baseline_id,candidate_id,baseline_sha256,candidate_sha256,experiment_manifest,experiment_sha256,evaluator_version,evaluator_sha256,baseline_rows,candidate_rows,evaluation_bytes,evaluation_sha256 FROM policy_evaluations WHERE evaluation_id='e1'")
+    };
+    assert_eq!(count(&sql, "pragma_foreign_key_check")?, 0);
+    let before = all_table_rows(&sql)?;
+    let result = sql.execute(&statement, []);
+    assert!(
+        result.is_err(),
+        "{table} replacement through {alias} succeeded: {result:?}"
+    );
+    assert_eq!(
+        all_table_rows(&sql)?,
+        before,
+        "{table} {alias} altered database rows"
+    );
+    assert_eq!(count(&sql, "pragma_foreign_key_check")?, 0);
+    // The old immutable record remains usable through the ordinary exact retry API.
+    if table == "policy_versions" {
+        store.register_policy_candidate(&original)?;
+    } else {
+        store.record_policy_evaluation(&evaluation)?;
+    }
+    assert_eq!(all_table_rows(&sql)?, before);
+    drop(store);
+    drop(sql);
+    let _reopened = Store::open(&db.0)?;
+    assert_eq!(all_table_rows(&db.conn()?)?, before);
+    assert_eq!(count(&db.conn()?, "pragma_foreign_key_check")?, 0);
+    Ok(())
+}
+
+macro_rules! rowid_replacement_test {
+    ($name:ident, $table:literal, $alias:literal) => {
+        #[test]
+        fn $name() -> Result<()> {
+            rowid_replacement_refused($table, $alias)
+        }
+    };
+}
+rowid_replacement_test!(
+    version_explicit_rowid_replace_preserves_history,
+    "policy_versions",
+    "rowid"
+);
+rowid_replacement_test!(
+    version_explicit_underscore_rowid_replace_preserves_history,
+    "policy_versions",
+    "_rowid_"
+);
+rowid_replacement_test!(
+    version_explicit_oid_replace_preserves_history,
+    "policy_versions",
+    "oid"
+);
+rowid_replacement_test!(
+    evaluation_explicit_rowid_replace_preserves_history,
+    "policy_evaluations",
+    "rowid"
+);
+rowid_replacement_test!(
+    evaluation_explicit_underscore_rowid_replace_preserves_history,
+    "policy_evaluations",
+    "_rowid_"
+);
+rowid_replacement_test!(
+    evaluation_explicit_oid_replace_preserves_history,
+    "policy_evaluations",
+    "oid"
+);
