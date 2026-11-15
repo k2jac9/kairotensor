@@ -223,6 +223,11 @@ fn snapshot(db: &Connection) -> Result<Vec<Vec<rusqlite::types::Value>>> {
     let mut snapshot = Vec::new();
     for table in [
         "branches",
+        "evidence",
+        "support_bindings",
+        "support_clauses",
+        "support_premises",
+        "attempt_candidates",
         "attempts",
         "attempt_inputs",
         "admission_events",
@@ -334,4 +339,96 @@ fn malformed_head_without_accepted_delivery_is_an_error() -> Result<()> {
         assert!(store.begin_resume("a", "s", "b", &[]).is_err());
     }
     Ok(())
+}
+
+// Rejecting malformed output must precede both Ready proofs, without repairing
+// corruption or altering historical charges and unresolved dispatch reservations.
+fn malformed_output_is_rejected(support_fallback: bool) -> Result<()> {
+    use rusqlite::types::Value;
+    for malformed in [
+        Value::Integer(42),
+        Value::Real(4.2),
+        Value::Text("wrong storage class".into()),
+    ] {
+        let file = Database::new();
+        let mut store = Store::open(&file.0)?;
+        let witness = store.observe_and_admit_many("a", "s", &[("source", b"evidence")])?[0];
+        let budget = store.create_token_budget(100)?;
+        let accepted = store.begin_attempt("a", "s", "b", &[witness])?;
+        store.reserve_dispatch(budget, accepted, b"request", 2, 8)?;
+        store.settle(accepted, b"accepted", 7)?;
+        let head = if support_fallback {
+            let head = store.publish_support("a", "s", "b", &[vec![witness]])?;
+            store.observe_and_admit_many("a", "s", &[("unrelated", b"new")])?;
+            head
+        } else {
+            accepted
+        };
+        let pending = store.begin_attempt("a", "s", "uncertain", &[])?;
+        store.reserve_dispatch(budget, pending, b"unknown send", 4, 10)?;
+        let explanation = store.explain_current("a", "s", "b")?;
+        assert_eq!(explanation.state, State::Ready);
+        assert_eq!(explanation.head_id, Some(head));
+        assert_eq!(
+            explanation.proof_kind,
+            Some(if support_fallback {
+                Proof::SupportV1
+            } else {
+                Proof::CoarseEpoch
+            })
+        );
+        assert_eq!(
+            store.read_current("a", "s", "b")?,
+            Current::Ready(if support_fallback {
+                b"supported".to_vec()
+            } else {
+                b"accepted".to_vec()
+            })
+        );
+
+        let audit = Connection::open(&file.0)?;
+        assert_eq!(
+            audit.execute(
+                "UPDATE deliveries SET output=?1 WHERE attempt_id=?2",
+                rusqlite::params![malformed, head]
+            )?,
+            1
+        );
+        let before = snapshot(&audit)?;
+        let before_budget = store.token_budget_state(budget)?;
+        let before_charge = store.charged_usage()?;
+        assert_eq!(before_budget.spent, 7);
+        assert_eq!(before_budget.reserved, 14);
+        assert_eq!(before_charge, if support_fallback { 8 } else { 7 });
+
+        let explanation = store.explain_current("a", "s", "b");
+        assert!(store.read_current("a", "s", "b").is_err());
+        assert!(store.begin_resume("a", "s", "b", &[]).is_err());
+        assert_eq!(snapshot(&audit)?, before);
+        assert_eq!(store.token_budget_state(budget)?, before_budget);
+        assert_eq!(store.charged_usage()?, before_charge);
+        assert_eq!(
+            audit.query_row(
+                "SELECT output FROM deliveries WHERE attempt_id=?1",
+                [head],
+                |row| row.get::<_, Value>(0)
+            )?,
+            malformed
+        );
+        assert!(
+            explanation.is_err(),
+            "malformed accepted output must not be eligible: {explanation:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn malformed_output_is_rejected_at_unchanged_epoch() -> Result<()> {
+    malformed_output_is_rejected(false)
+}
+
+#[test]
+fn malformed_output_is_rejected_by_support_fallback() -> Result<()> {
+    malformed_output_is_rejected(true)
 }

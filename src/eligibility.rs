@@ -3,7 +3,7 @@ use rusqlite::{Connection, Result};
 
 use crate::attempts::{find_branch, Branch};
 use crate::support::{inspect_current, SupportStatus};
-use crate::{view_epoch, Store};
+use crate::{invalid, view_epoch, Store};
 
 /// Eligibility under the Store contract, not a claim that an output is true.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -61,13 +61,18 @@ pub(crate) fn evaluate(
     };
     // Missing/nonaccepted delivery or a head belonging to another branch is a
     // malformed stored head, even if its epoch would otherwise be stale.
-    let captured_epoch: i64 = db.query_row(
-        "SELECT a.view_epoch FROM attempts a
+    let (captured_epoch, output_is_blob): (i64, bool) = db.query_row(
+        "SELECT a.view_epoch, typeof(d.output) = 'blob' FROM attempts a
          JOIN deliveries d ON d.attempt_id = a.id AND d.disposition = 'accepted'
          WHERE a.id = ?1 AND a.branch_id = ?2",
         rusqlite::params![head, branch.id],
-        |row| row.get(0),
+        |row| Ok((row.get(0)?, row.get(1)?)),
     )?;
+    // SQLite's BLOB affinity alone does not ensure Vec<u8> can decode the value.
+    // Inspect only its storage class, never the accepted output bytes.
+    if !output_is_blob {
+        return Err(invalid("stored accepted output is not a blob"));
+    }
     explanation.captured_epoch = Some(captured_epoch);
     let (state, proof, reason) = if captured_epoch == current_epoch {
         (EligibilityState::Ready, EligibilityProof::CoarseEpoch, None)
