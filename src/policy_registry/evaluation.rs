@@ -259,7 +259,6 @@ pub fn evaluate_policy_comparison(e: &PolicyEvaluation) -> rusqlite::Result<Sele
         || sha256_hex(&e.experiment_manifest) != e.experiment_sha256
         || e.evaluator_version != "policy-selection/1"
         || e.evaluator_sha256 != SELECTION_CONTRACT_SHA256
-        || e.baseline_id == e.candidate_id
         || !matches!(
             m.accounting_unit,
             AccountingUnit::ModelTokens | AccountingUnit::FixtureBytes
@@ -295,8 +294,16 @@ pub fn evaluate_policy_comparison(e: &PolicyEvaluation) -> rusqlite::Result<Sele
         cand.policy_name,
         &mut executions,
     )?;
+    if e.baseline_id == e.candidate_id
+        && (e.baseline_sha256 != e.candidate_sha256 || e.baseline_rows != e.candidate_rows)
+    {
+        return Ok(refused(SelectionRefusal::Incomparable));
+    }
     let (b, c) = match (b, c) {
         (Ok(b), Ok(c)) => (b, c),
+        (Err(SelectionRefusal::Incomparable), _) | (_, Err(SelectionRefusal::Incomparable)) => {
+            return Ok(refused(SelectionRefusal::Incomparable))
+        }
         (Err(r), _) | (_, Err(r)) => return Ok(refused(r)),
     };
     let reason = if c.success <= b.success {
@@ -328,7 +335,7 @@ fn rows(
     labels: &[FrozenLabel],
     rows: &[PolicyRow],
     policy: PolicyName,
-    executions: &mut HashMap<String, (String, ObservedAttempt)>,
+    executions: &mut HashMap<String, ExecutionFacts>,
 ) -> rusqlite::Result<CheckedCounters> {
     let mut refusal = if rows.len() != m.cases.len() {
         Some(SelectionRefusal::Incomplete)
@@ -384,7 +391,11 @@ fn rows(
         } else {
             require(!r.simulated, "observed row cannot simulate counters")?;
             if let Some(reason) = observed(m, c, l, r, policy, executions)? {
-                refusal.get_or_insert(reason);
+                if reason == SelectionRefusal::Incomparable {
+                    refusal = Some(reason);
+                } else {
+                    refusal.get_or_insert(reason);
+                }
                 continue;
             }
         }
@@ -438,7 +449,7 @@ fn observed(
     l: &FrozenLabel,
     r: &PolicyRow,
     policy: PolicyName,
-    executions: &mut HashMap<String, (String, ObservedAttempt)>,
+    executions: &mut HashMap<String, ExecutionFacts>,
 ) -> rusqlite::Result<Option<SelectionRefusal>> {
     let ops = &c
         .policy_opportunities
@@ -450,6 +461,9 @@ fn observed(
         return Ok(Some(SelectionRefusal::Incomplete));
     }
     require(r.attempts.len() <= ops.len(), "too many observed attempts")?;
+    if let Some(reason) = check_observed_facts(m, c, l, r, ops, policy, executions)? {
+        return Ok(Some(reason));
+    }
     let mut charged = 0;
     let mut previous_end = c.timing_start_ms;
     let mut result = (
@@ -579,8 +593,7 @@ fn observed(
                 }
                 scoring.normalized == l.expected_normalized
             } else {
-                require(a.scoring.is_none(), "scoring without response")?;
-                if a.disposition != AttemptDisposition::Failed {
+                if a.scoring.is_some() || a.disposition != AttemptDisposition::Failed {
                     return Ok(Some(SelectionRefusal::Incomplete));
                 }
                 false
@@ -609,16 +622,6 @@ fn observed(
                 )?;
             }
         }
-        // Opportunity IDs are local to a policy path; execution IDs identify realizations.
-        let mut observation = a.clone();
-        observation.opportunity_id.clear();
-        if let Some(prior) = executions.get(&a.execution_id) {
-            if *prior != (c.case_id.clone(), observation.clone()) {
-                return Ok(Some(SelectionRefusal::Incomparable));
-            }
-        } else {
-            executions.insert(a.execution_id.clone(), (c.case_id.clone(), observation));
-        }
     }
     require(
         (r.outcome == Outcome::Unknown || r.outcome == result.0)
@@ -636,6 +639,288 @@ fn observed(
         || r.charged.is_none()
     {
         return Ok(Some(SelectionRefusal::Incomplete));
+    }
+    Ok(None)
+}
+
+// Cumulative facts are used only to detect contradictions, never to complete a row.
+struct ExecutionFacts {
+    case_id: String,
+    input_bound: u64,
+    output_cap: u64,
+    observation: ObservedAttempt,
+}
+fn merge_known<T: Clone + PartialEq>(known: &mut Option<T>, supplied: &Option<T>) -> bool {
+    match (known.as_ref(), supplied.as_ref()) {
+        (Some(left), Some(right)) => left == right,
+        (None, Some(value)) => {
+            *known = Some(value.clone());
+            true
+        }
+        _ => true,
+    }
+}
+fn shared_execution_consistent(
+    c: &FrozenCase,
+    o: &RequestOpportunity,
+    a: &ObservedAttempt,
+    executions: &mut HashMap<String, ExecutionFacts>,
+) -> bool {
+    let Some(facts) = executions.get_mut(&a.execution_id) else {
+        executions.insert(
+            a.execution_id.clone(),
+            ExecutionFacts {
+                case_id: c.case_id.clone(),
+                input_bound: o.input_bound,
+                output_cap: o.output_cap,
+                observation: a.clone(),
+            },
+        );
+        return true;
+    };
+    let prior = &mut facts.observation;
+    if facts.case_id != c.case_id
+        || facts.input_bound != o.input_bound
+        || facts.output_cap != o.output_cap
+        || prior.request_sha256 != a.request_sha256
+        || prior.evidence_manifest_sha256 != a.evidence_manifest_sha256
+        || prior.validator_sha256 != a.validator_sha256
+        || prior.scorer_sha256 != a.scorer_sha256
+        || prior.label_sha256 != a.label_sha256
+        || prior.start_ms != a.start_ms
+    {
+        return false;
+    }
+    if prior.execution != Execution::Unknown
+        && a.execution != Execution::Unknown
+        && prior.execution != a.execution
+    {
+        return false;
+    }
+    if prior.disposition != AttemptDisposition::Uncertain
+        && a.disposition != AttemptDisposition::Uncertain
+        && prior.disposition != a.disposition
+    {
+        return false;
+    }
+    if !merge_known(&mut prior.response, &a.response)
+        || !merge_known(&mut prior.scoring, &a.scoring)
+        || !merge_known(&mut prior.measured_input, &a.measured_input)
+        || !merge_known(&mut prior.measured_output, &a.measured_output)
+        || !merge_known(&mut prior.completed_ms, &a.completed_ms)
+    {
+        return false;
+    }
+    if prior.execution == Execution::Unknown {
+        prior.execution = a.execution;
+    }
+    if prior.disposition == AttemptDisposition::Uncertain {
+        prior.disposition = a.disposition;
+    }
+    // A response and its scoring assertion can arrive in separate partial records.
+    match (&prior.response, &prior.scoring) {
+        (Some(response), Some(scoring)) => response.sha256 == scoring.response_sha256,
+        _ => true,
+    }
+}
+fn check_observed_facts(
+    m: &ComparisonManifest,
+    c: &FrozenCase,
+    l: &FrozenLabel,
+    r: &PolicyRow,
+    ops: &[RequestOpportunity],
+    policy: PolicyName,
+    executions: &mut HashMap<String, ExecutionFacts>,
+) -> rusqlite::Result<Option<SelectionRefusal>> {
+    let mut ids = HashSet::new();
+    let mut previous_start = c.timing_start_ms;
+    let mut previous_end = Some(c.timing_start_ms);
+    let mut known_charge = Some(0u64);
+    let mut held = 0;
+    for (i, (a, o)) in r.attempts.iter().zip(ops).enumerate() {
+        if i > 0 {
+            let previous = &r.attempts[i - 1];
+            require(
+                previous.execution == Execution::Executed
+                    && previous.disposition == AttemptDisposition::InvalidOutput
+                    && previous.measured_input.is_some()
+                    && previous.measured_output.is_some(),
+                "only settled invalid output unlocks retry",
+            )?;
+        }
+        if i + 1 < r.attempts.len() {
+            require(
+                a.execution == Execution::Executed
+                    && a.disposition == AttemptDisposition::InvalidOutput,
+                "terminal disposition cannot unlock retry",
+            )?;
+        }
+        require(
+            ids.insert(&a.execution_id),
+            "reused execution in one policy path",
+        )?;
+        if a.opportunity_id != o.opportunity_id
+            || a.request_sha256 != o.request.sha256
+            || a.evidence_manifest_sha256 != o.evidence_manifest.sha256
+            || a.validator_sha256 != m.validator_sha256
+            || a.scorer_sha256 != m.scorer_sha256
+            || a.label_sha256 != c.label.sha256
+        {
+            return Ok(Some(SelectionRefusal::Incomparable));
+        }
+        require(
+            a.start_ms >= previous_start
+                && previous_end.is_none_or(|end| a.start_ms >= end)
+                && a.start_ms >= o.start_min_ms
+                && a.start_ms <= o.start_max_ms,
+            "attempt outside timing window",
+        )?;
+        if let Some(end) = a.completed_ms {
+            require(
+                end >= a.start_ms && end <= c.timing_end_ms,
+                "invalid completion time",
+            )?;
+        }
+        previous_start = a.start_ms;
+        previous_end = a.completed_ms;
+        if let Some(input) = a.measured_input {
+            require(input <= o.input_bound, "input exceeds quote")?;
+        }
+        if let Some(output) = a.measured_output {
+            require(output <= o.output_cap, "output exceeds cap")?;
+        }
+        if let Some(scoring) = &a.scoring {
+            if scoring.scorer_sha256 != m.scorer_sha256
+                || scoring.label_sha256 != c.label.sha256
+                || a.response
+                    .as_ref()
+                    .is_some_and(|response| response.sha256 != scoring.response_sha256)
+            {
+                return Ok(Some(SelectionRefusal::Incomparable));
+            }
+        }
+        let quote = add(o.input_bound, o.output_cap)?;
+        if let Some(spent) = known_charge {
+            let remaining = c
+                .budget
+                .checked_sub(spent)
+                .ok_or_else(|| bad("budget exceeded"))?;
+            let gate = o.admitted
+                && !(i > 0 && policy == PolicyName::EvidenceGatedRetry && !o.consistent)
+                && a.start_ms < c.deadline_ms
+                && quote <= remaining;
+            require(
+                gate == (a.execution != Execution::NotExecuted),
+                "execution violates frozen admission",
+            )?;
+        }
+        match a.execution {
+            Execution::Unknown => require(
+                a.measured_input.is_none()
+                    && a.measured_output.is_none()
+                    && a.response.is_none()
+                    && a.scoring.is_none()
+                    && a.disposition == AttemptDisposition::Uncertain
+                    && a.retained_bound == quote,
+                "invalid unknown execution",
+            )?,
+            Execution::NotExecuted => require(
+                a.measured_input == Some(0)
+                    && a.measured_output == Some(0)
+                    && a.retained_bound == 0
+                    && a.response.is_none()
+                    && a.scoring.is_none()
+                    && a.disposition == AttemptDisposition::Refused
+                    && a.completed_ms == Some(a.start_ms),
+                "invalid nonexecution attestation",
+            )?,
+            Execution::Executed => {
+                if a.measured_input.is_some() && a.measured_output.is_some() {
+                    require(
+                        a.retained_bound == 0 && a.disposition != AttemptDisposition::Uncertain,
+                        "invalid settled usage",
+                    )?;
+                } else {
+                    require(
+                        a.retained_bound == quote,
+                        "unknown usage must retain full bound",
+                    )?;
+                }
+            }
+        }
+        known_charge = match (known_charge, a.measured_input, a.measured_output) {
+            (Some(total), Some(input), Some(output)) => Some(add(total, add(input, output)?)?),
+            _ => None,
+        };
+        held = add(held, a.retained_bound)?;
+        if !shared_execution_consistent(c, o, a, executions) {
+            return Ok(Some(SelectionRefusal::Incomparable));
+        }
+    }
+    let terminal = r.attempts.last().unwrap();
+    let missing_retry = terminal.execution == Execution::Executed
+        && terminal.disposition == AttemptDisposition::InvalidOutput
+        && r.attempts.len() < ops.len();
+    if let (Some(supplied), Some(known)) = (r.charged, known_charge) {
+        require(supplied >= known, "row charge below known attempt prefix")?;
+    }
+    if let (Some(supplied), Some(known)) = (r.completed_ms, terminal.completed_ms) {
+        require(
+            supplied >= known,
+            "row completion before known attempt prefix",
+        )?;
+    }
+    if !missing_retry {
+        let known_outcome = match (terminal.execution, terminal.disposition) {
+            (Execution::Unknown, _) | (_, AttemptDisposition::Uncertain) => Outcome::Unknown,
+            (Execution::NotExecuted, _) => Outcome::Refused,
+            (_, AttemptDisposition::Accepted) => Outcome::Accepted,
+            (_, AttemptDisposition::Failed) => Outcome::Failed,
+            _ => Outcome::Refused,
+        };
+        require(
+            r.outcome == Outcome::Unknown || r.outcome == known_outcome,
+            "fabricated observed outcome",
+        )?;
+        if terminal.disposition == AttemptDisposition::Failed
+            && terminal.response.is_none()
+            && terminal.scoring.is_none()
+        {
+            require(
+                r.correct.is_none_or(|v| !v),
+                "failed response cannot imply correctness",
+            )?;
+        }
+        if terminal.execution != Execution::Unknown
+            && terminal.disposition != AttemptDisposition::Uncertain
+        {
+            if let Some(eligible) = r.eligible {
+                let opportunity = &ops[r.attempts.len() - 1];
+                require(
+                    eligible
+                        == (opportunity.admitted
+                            && l.admissible_support
+                            && terminal.disposition != AttemptDisposition::Stale),
+                    "fabricated observed eligibility",
+                )?;
+            }
+        }
+        require(r.reserved_bound == held, "fabricated observed hold")?;
+        if let (Some(supplied), Some(known)) = (r.charged, known_charge) {
+            require(supplied == known, "fabricated observed charge")?;
+        }
+        if known_charge.is_none() {
+            require(r.charged.is_none(), "unknown charge must remain unknown")?;
+        }
+        if let (Some(supplied), Some(known)) = (r.completed_ms, terminal.completed_ms) {
+            require(supplied == known, "fabricated observed completion")?;
+        }
+        if let (Some(supplied), Some(scoring)) = (r.correct, &terminal.scoring) {
+            require(
+                supplied == (scoring.normalized == l.expected_normalized),
+                "fabricated observed correctness",
+            )?;
+        }
     }
     Ok(None)
 }

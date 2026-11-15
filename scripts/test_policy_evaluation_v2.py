@@ -923,6 +923,340 @@ def golden_cases():
     return cases
 
 
+def baseline_only_fixture(observed=False):
+    e = observed_fixture() if observed else fixture()
+    e.update(
+        candidate_id=e["baseline_id"],
+        candidate_sha256=e["baseline_sha256"],
+        candidate_rows=copy.deepcopy(e["baseline_rows"]),
+    )
+    return e
+
+
+def incomplete_observation_fixture():
+    e = observed_fixture()
+    r = e["candidate_rows"][0]
+    a = r["attempts"][0]
+    a.update(execution_id="unknown-measurement", measured_input=None, retained_bound=10)
+    r.update(
+        outcome="Unknown",
+        correct=None,
+        charged=None,
+        reserved_bound=10,
+        completed_ms=None,
+    )
+    return e
+
+
+def legacy_observed_comparison():
+    old, e = legacy_comparison()
+    old["mode"] = "recorded_policy_replay"
+    e["provenance"] = "observed_policy_replay"
+    manifest_edit(
+        e,
+        lambda m: m.update(
+            provenance="observed_policy_replay",
+            workload_sha256=hashlib.sha256(pack(old)).hexdigest(),
+        ),
+    )
+    m = json.loads(bytes(e["experiment_manifest"]))
+    for side, pi in [("baseline_rows", 0), ("candidate_rows", 1)]:
+        for row, c, oldc in zip(e[side], m["cases"], old["cases"]):
+            count = (
+                2 if pi and oldc["initial"]["disposition"] == "invalid_output" else 1
+            )
+            attempts = []
+            end = 0
+            for i in range(count):
+                cell = (
+                    oldc["retries"]["affordable_retry"]
+                    if i
+                    else {
+                        "context": oldc["initial_context"],
+                        "attempt": oldc["initial"],
+                    }
+                )
+                ctx, prior = cell["context"], cell["attempt"]
+                op = c["policy_opportunities"][pi]["opportunities"][i]
+                start = end + ctx["elapsed_ms"]
+                end = start + prior["elapsed_ms"]
+                response = record(b"yes" if prior["correct"] else b"no")
+                attempts.append(
+                    {
+                        "execution_id": c["case_id"] + "/" + str(i),
+                        "opportunity_id": op["opportunity_id"],
+                        "request_sha256": op["request"]["sha256"],
+                        "evidence_manifest_sha256": op["evidence_manifest"]["sha256"],
+                        "execution": "Executed",
+                        "disposition": "Accepted"
+                        if prior["disposition"] == "accepted"
+                        else "InvalidOutput",
+                        "response": response,
+                        "measured_input": ctx["input_tokens"],
+                        "measured_output": prior["charged_tokens"]
+                        - ctx["input_tokens"],
+                        "retained_bound": 0,
+                        "start_ms": start,
+                        "completed_ms": end,
+                        "validator_sha256": m["validator_sha256"],
+                        "scorer_sha256": m["scorer_sha256"],
+                        "label_sha256": c["label"]["sha256"],
+                        "scoring": {
+                            "response_sha256": response["sha256"],
+                            "scorer_sha256": m["scorer_sha256"],
+                            "label_sha256": c["label"]["sha256"],
+                            "normalized": list(b"yes" if prior["correct"] else b"no"),
+                        },
+                    }
+                )
+            row.update(simulated=False, attempts=attempts)
+    return old, e
+
+
+def fix_round_one_goldens():
+    cases = []
+    for observed in (False, True):
+        e = baseline_only_fixture(observed)
+        cases.append(("baseline-only-" + str(observed), e, "NoImprovement"))
+        e = baseline_only_fixture(observed)
+        for side in ("baseline_rows", "candidate_rows"):
+            e[side][0]["charged"] = None
+        cases.append(("baseline-unknown-" + str(observed), e, "Incomplete"))
+    e = baseline_only_fixture()
+    for side in ("baseline_rows", "candidate_rows"):
+        e[side][0]["false_refusal"] = False
+    cases.append(("baseline-invalid-identical", e, "Error"))
+    e = baseline_only_fixture()
+    e["candidate_sha256"] = "0" * 64
+    cases.append(("baseline-conflicting-digest", e, "Incomparable"))
+    e = baseline_only_fixture()
+    e["candidate_rows"][0]["charged"] = 3
+    cases.append(("baseline-conflicting-rows", e, "Incomparable"))
+    e = incomplete_observation_fixture()
+    cases.append(("unknown-usage-valid", e, "Incomplete"))
+    for end in (201,):
+        e = incomplete_observation_fixture()
+        e["candidate_rows"][0]["attempts"][0]["completed_ms"] = end
+        cases.append(("unknown-usage-invalid-completion", e, "Error"))
+    e = incomplete_observation_fixture()
+    a = e["candidate_rows"][0]["attempts"][0]
+    a.update(start_ms=20, completed_ms=19)
+    cases.append(("unknown-usage-completion-before-start", e, "Error"))
+    for key in ("response_sha256", "scorer_sha256", "label_sha256"):
+        e = incomplete_observation_fixture()
+        e["candidate_rows"][0]["attempts"][0]["scoring"][key] = "0" * 64
+        cases.append(("unknown-usage-scoring-" + key, e, "Incomparable"))
+    e = incomplete_observation_fixture()
+    a = e["candidate_rows"][0]["attempts"][0]
+    a["execution_id"] = "shared-execution"
+    a["response"] = record(b"different raw response")
+    a["scoring"].update(response_sha256=a["response"]["sha256"], normalized=list(b"no"))
+    cases.append(("unknown-usage-conflicting-execution", e, "Incomparable"))
+    e = incomplete_observation_fixture()
+    a = e["candidate_rows"][0]["attempts"][0]
+    a.update(
+        execution="Unknown",
+        disposition="Uncertain",
+        measured_output=None,
+        response=None,
+        scoring=None,
+        completed_ms=201,
+    )
+    cases.append(("unknown-execution-invalid-completion", e, "Error"))
+    for reverse in (False, True):
+        e = incomplete_observation_fixture()
+        e["candidate_rows"][0]["attempts"][0]["execution_id"] = "shared-execution"
+        if reverse:
+            for left, right in [
+                ("baseline_id", "candidate_id"),
+                ("baseline_sha256", "candidate_sha256"),
+                ("baseline_rows", "candidate_rows"),
+            ]:
+                e[left], e[right] = e[right], e[left]
+        cases.append(
+            ("compatible-partial-order-" + str(reverse), copy.deepcopy(e), "Incomplete")
+        )
+        partial = e["baseline_rows" if reverse else "candidate_rows"][0]["attempts"][0]
+        partial["response"] = record(b"different response")
+        partial["scoring"].update(
+            response_sha256=partial["response"]["sha256"], normalized=list(b"no")
+        )
+        cases.append(("conflicting-partial-order-" + str(reverse), e, "Incomparable"))
+    e = incomplete_observation_fixture()
+    a = e["candidate_rows"][0]["attempts"][0]
+    a.update(execution_id="shared-execution", start_ms=1)
+    cases.append(("partial-fixed-start-conflict", e, "Incomparable"))
+    e = incomplete_observation_fixture()
+    a = e["candidate_rows"][0]["attempts"][0]
+    a.update(execution_id="shared-execution", disposition="Stale")
+    e["candidate_rows"][0]["eligible"] = False
+    cases.append(("partial-known-terminal-conflict", e, "Incomparable"))
+    for reverse in (False, True):
+        for conflict in (False, True):
+            e = observed_fixture()
+            e["baseline_rows"][0]["attempts"][0]["response"] = None
+            e["baseline_rows"][0]["correct"] = None
+            e["candidate_rows"][0]["attempts"][0]["scoring"] = None
+            e["candidate_rows"][0]["correct"] = None
+            if conflict:
+                e["candidate_rows"][0]["attempts"][0]["response"] = record(b"other")
+            if reverse:
+                for left, right in [
+                    ("baseline_id", "candidate_id"),
+                    ("baseline_sha256", "candidate_sha256"),
+                    ("baseline_rows", "candidate_rows"),
+                ]:
+                    e[left], e[right] = e[right], e[left]
+            cases.append(
+                (
+                    "complementary-partials-" + str(reverse) + "-" + str(conflict),
+                    e,
+                    "Incomparable" if conflict else "Incomplete",
+                )
+            )
+    for changed_bound in ("input_bound", "output_cap"):
+        _, e = legacy_observed_comparison()
+        m = json.loads(bytes(e["experiment_manifest"]))
+        e.update(
+            baseline_id="v3",
+            baseline_sha256=m["policies"][2]["artifact"]["sha256"],
+            baseline_rows=copy.deepcopy(e["candidate_rows"]),
+        )
+        for row, c in zip(e["baseline_rows"], m["cases"]):
+            for a, o in zip(
+                row["attempts"], c["policy_opportunities"][2]["opportunities"]
+            ):
+                a["opportunity_id"] = o["opportunity_id"]
+        manifest_edit(
+            e,
+            lambda m, k=changed_bound: m["cases"][1]["policy_opportunities"][2][
+                "opportunities"
+            ][1].update({k: 6 if k == "input_bound" else 9}),
+        )
+        cases.append(("shared-execution-" + changed_bound, e, "Incomparable"))
+    e = incomplete_observation_fixture()
+    e["candidate_rows"][0]["eligible"] = False
+    cases.append(("unknown-usage-known-eligibility", e, "Error"))
+    _, e = legacy_observed_comparison()
+    a = e["candidate_rows"][1]["attempts"][0]
+    a.update(
+        execution_id="independent-terminal", disposition="Accepted", completed_ms=None
+    )
+    cases.append(("unknown-completion-terminal-cannot-retry", e, "Error"))
+    _, e = legacy_observed_comparison()
+    e["candidate_rows"][1]["attempts"][0]["completed_ms"] = None
+    e["candidate_rows"][1].update(eligible=False, unsafe_acceptance=True)
+    manifest_edit(
+        e,
+        lambda m: m["cases"][1]["policy_opportunities"][1]["opportunities"][1].update(
+            admitted=False
+        ),
+    )
+    cases.append(("unknown-completion-cannot-hide-next-denied-gate", e, "Error"))
+    for key, value in [("charged", 1), ("completed_ms", 5)]:
+        _, e = legacy_observed_comparison()
+        r = e["candidate_rows"][1]
+        r["attempts"] = r["attempts"][:1]
+        r[key] = value
+        cases.append(("missing-retry-below-known-prefix-" + key, e, "Error"))
+    return cases
+
+
+class FixRoundOneTests(unittest.TestCase):
+    evaluate = ComparisonTests.evaluate
+
+    def test_baseline_only_and_incomplete_known_fact_regressions(self):
+        for name, e, want in fix_round_one_goldens():
+            with self.subTest(name=name):
+                try:
+                    result = self.evaluate(e)
+                    actual = result.get("reason", result["decision"])
+                except ValueError:
+                    actual = "Error"
+                self.assertEqual(actual, want)
+
+    def test_observed_conversion_preserves_known_per_attempt_facts(self):
+        from policy_evaluation_v2 import convert_legacy
+
+        old, e = legacy_observed_comparison()
+        self.assertEqual(convert_legacy(old, e)["status"], "Complete")
+        changes = [
+            ("start", lambda a: a.update(start_ms=3)),
+            (
+                "input-output-split",
+                lambda a: a.update(measured_input=3, measured_output=4),
+            ),
+            ("disposition", lambda a: a.update(disposition="Stale")),
+            ("correctness", lambda a: a["scoring"].update(normalized=list(b"no"))),
+        ]
+        for name, change in changes:
+            bad = copy.deepcopy(e)
+            for side in ("baseline_rows", "candidate_rows"):
+                change(bad[side][0]["attempts"][0])
+            with self.subTest(name=name):
+                self.assertEqual(convert_legacy(old, bad)["status"], "Incomplete")
+        bad = copy.deepcopy(e)
+        row = bad["candidate_rows"][1]
+        row["attempts"][0]["completed_ms"] = 5
+        row["attempts"][1]["start_ms"] = 6
+        self.assertEqual(convert_legacy(old, bad)["status"], "Incomplete")
+
+
+class LegacyNonexecutionTests(unittest.TestCase):
+    def test_nonexecuted_attempt_preserves_preparation_and_zero_usage(self):
+        from policy_evaluation_v2 import convert_legacy
+
+        old, e = legacy_observed_comparison()
+        old["cases"][0]["initial_context"]["admitted"] = False
+
+        def edit(m):
+            m["workload_sha256"] = hashlib.sha256(pack(old)).hexdigest()
+            for p in m["cases"][0]["policy_opportunities"]:
+                p["opportunities"][0]["admitted"] = False
+
+        manifest_edit(e, edit)
+        for side in ("baseline_rows", "candidate_rows"):
+            r = e[side][0]
+            a = r["attempts"][0]
+            a.update(
+                execution="NotExecuted",
+                disposition="Refused",
+                response=None,
+                scoring=None,
+                measured_input=0,
+                measured_output=0,
+                completed_ms=1,
+            )
+            r.update(
+                outcome="Refused",
+                correct=False,
+                eligible=False,
+                charged=0,
+                completed_ms=1,
+                false_refusal=True,
+            )
+        self.assertEqual(convert_legacy(old, e)["status"], "Complete")
+        for key, value in [
+            ("start_ms", 0),
+            ("measured_input", 1),
+            ("execution", "Executed"),
+        ]:
+            bad = copy.deepcopy(e)
+            bad["candidate_rows"][0]["attempts"][0][key] = value
+            with self.subTest(key=key):
+                self.assertEqual(convert_legacy(old, bad)["status"], "Incomplete")
+
+    def test_same_total_charge_cannot_shift_usage_between_attempts(self):
+        from policy_evaluation_v2 import convert_legacy
+
+        old, e = legacy_observed_comparison()
+        row = e["candidate_rows"][1]
+        row["attempts"][0]["execution_id"] = "independent-initial"
+        row["attempts"][0]["measured_output"] -= 1
+        row["attempts"][1]["measured_output"] += 1
+        self.assertEqual(convert_legacy(old, e)["status"], "Incomplete")
+
+
 class GoldenTests(unittest.TestCase):
     def test_frozen_golden_bytes_and_decisions(self):
         from policy_evaluation_v2 import (

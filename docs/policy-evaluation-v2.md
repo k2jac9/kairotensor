@@ -56,8 +56,11 @@ cover every record and its relationships; names are wire names unless noted.
 - `PolicyEvaluation`: `evaluation_id`, `actor`, `scope`, `purpose`, `baseline_id`,
   `candidate_id`, `baseline_sha256`, `candidate_sha256`, `experiment_manifest`
   (bytes), `experiment_sha256`, `evaluator_version`, `evaluator_sha256`,
-  `provenance`, `baseline_rows`, `candidate_rows`. Selected version IDs are distinct
-  and nonempty. Their artifact digests select entries in the shared universe.
+  `provenance`, `baseline_rows`, `candidate_rows`. Selected version IDs are nonempty.
+  Their artifact digests select entries in the shared universe. A baseline-only receipt uses equal IDs, equal digests and
+  identical ordered rows on both sides. It undergoes full validation and returns
+  `NoImprovement` when complete, never `Eligible`; unknown facts remain incomplete
+  and malformed facts error. Conflicting same-ID digests or rows are incomparable.
 - `ComparisonManifest`: `format="policy-comparison/1"`, `actor`, `scope`, `purpose`,
   `provenance`, `accounting_unit`, `workload_sha256`, `prompt_sha256`,
   `runtime_sha256`, `model_sha256`, `tokenizer_sha256`, `validator_sha256`,
@@ -141,10 +144,23 @@ sum of measured input/output, completion is the terminal completion, correctness
 comes from the scoring assertion, and eligibility comes from frozen admission and
 support (and stale disposition). All supplied redundant row values must agree.
 
-An execution ID can recur across policy paths only for the same case and identical
-observations, excluding the path-local opportunity ID. It cannot be counted for
-another scheduled case. Distinct execution IDs can refer to equal request bytes:
-request equality is not proof of identical independent realizations.
+An execution ID can recur across policy paths only for the same case and compatible
+present facts. Fixed request/evidence/validator/scorer/label identities, start time,
+and opportunity input bound/output cap must agree; path-local opportunity IDs may
+differ. Two present optional facts or known execution/terminal states cannot
+conflict. A null optional fact, `Unknown` execution, or `Uncertain` disposition
+remains missing knowledge. Known facts accumulate solely for order-independent
+conflict detection, including response/scoring associations supplied separately.
+They never complete a local record, infer a measurement, or release its hold.
+Each local hold is validated independently: missing usage retains the full quote;
+settled measured usage retains zero. Their resulting hold difference is permitted.
+All independently known timing, reference, scoring, gate and transition facts are
+checked before an incompleteness refusal; a missing completion cannot hide an
+accepted-to-retry transition or a denied later gate. Incomparable shared facts take
+precedence over incompleteness independent of which side is checked first.
+An execution cannot be counted for another scheduled case. Distinct execution IDs
+can refer to equal request bytes: request equality is not proof of identical
+independent realizations.
 
 Synthetic rows have `simulated=true`, no attempt references, and explicitly
 simulated counters. Their eligibility and answerability still match frozen support
@@ -202,10 +218,19 @@ Conversion without a matching complete supplied attestation returns
 reason; it never fills unknown facts from protocol parse success. With supplied
 facts, `workload_sha256` must bind compact sorted-key UTF-8 JSON of the archived
 input; cases/families/splits, token unit, exact requests, quotes, gates, deadlines,
-timings and old measured row totals must match. Evidence/labels remain supplied
-attestations. Missing legacy retry contexts or uncertain legacy usage stay
-incomplete. A complete conversion returns the supplied evaluation and its selection
-result, which may refuse. The existing positive-retry corpus correctly returns
+timings and old measured row totals must match. For observed conversion, each
+supplied executed or nonexecuted opportunity is additionally reconciled with the
+legacy path: dispatch offset equals prior completion plus recorded preparation
+duration; completion adds the recorded attempt duration for executed attempts, or
+equals dispatch for a gated nonexecution. Execution/disposition, per-attempt
+input/output split and charge, zero/nonzero holds, and the recorded correctness
+assertion must agree. Equal aggregate time or cost cannot hide changed attempt
+facts. Frozen evidence-manifest bytes in this legacy binding must equal the exact
+UTF-8 archived `evidence_id`; this binds the old opaque identity, not reconstructed
+evidence contents. Labels, raw responses and normalization remain supplied
+attestations. Missing legacy retry contexts, unrecorded events or uncertain legacy
+usage stay incomplete; an omitted event is never assigned an invented duration.
+A complete conversion returns the supplied evaluation and its selection result, which may refuse. The existing positive-retry corpus correctly returns
 `IncreasedCost`; no worse baseline or changed selection rule is used.
 
 The inline `fixture()` and `golden_cases()` in

@@ -311,3 +311,24 @@ fn candidate_binds_exact_artifact_purpose_and_identity() {
     c.actor.clear();
     assert!(validate_policy_candidate(&c).is_err());
 }
+
+#[test]
+fn fix_round_one_baseline_and_incomplete_observation_regressions() {
+    let output=Command::new("python3").args(["-c","import sys,json;sys.path.insert(0,'scripts');from test_policy_evaluation_v2 import fix_round_one_goldens;print(json.dumps(fix_round_one_goldens()))"]).output().unwrap();
+    assert!(output.status.success());
+    let cases: Vec<(String, Value, String)> = serde_json::from_slice(&output.stdout).unwrap();
+    let mut failures = Vec::new();
+    for (name, value, want) in cases {
+        let actual = match parse_policy_evaluation(&serde_json::to_vec(&value).unwrap())
+            .and_then(|e| evaluate_policy_comparison(&e))
+        {
+            Ok(SelectionDecision::Eligible { .. }) => "Eligible".into(),
+            Ok(SelectionDecision::Refused(reason)) => format!("{reason:?}"),
+            Err(_) => "Error".into(),
+        };
+        if actual != want {
+            failures.push(format!("{name}: got {actual}, expected {want}"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}

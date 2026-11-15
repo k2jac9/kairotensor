@@ -293,5 +293,27 @@ class V2ConversionModeTests(unittest.TestCase):
         self.assertEqual(json.loads(default.stdout)['policy_version'], 'frozen-v1')
 
 
+class ObservedConversionTimingTests(unittest.TestCase):
+    def test_explicit_conversion_rejects_changed_preparation_with_same_completion(self):
+        from test_policy_evaluation_v2 import legacy_observed_comparison
+        old, comparison = legacy_observed_comparison()
+        script = Path(__file__).with_name('recovery_policy_eval.py')
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'legacy.json'
+            supplied = Path(directory) / 'complete.json'
+            source.write_text(json.dumps(old))
+            supplied.write_text(json.dumps(comparison))
+            command = [sys.executable, str(script), str(source), '--convert-v2', '--comparison-v2', str(supplied)]
+            good = subprocess.run(command, capture_output=True, text=True, check=True)
+            self.assertEqual(json.loads(good.stdout)['status'], 'Complete')
+            for side in ('baseline_rows', 'candidate_rows'):
+                for row in comparison[side]:
+                    row['attempts'][0]['start_ms'] = 3
+            supplied.write_text(json.dumps(comparison))
+            bad = subprocess.run(command, capture_output=True, text=True, check=True)
+            self.assertEqual(json.loads(bad.stdout)['status'], 'Incomplete')
+            self.assertEqual(evaluate(old)['policy_version'], 'frozen-v1')
+
+
 if __name__ == '__main__':
     unittest.main()

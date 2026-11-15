@@ -550,7 +550,6 @@ def evaluate_policy_comparison(e):
         or sha(byte_array(e["experiment_manifest"])) != e["experiment_sha256"]
         or e["evaluator_version"] != "policy-selection/1"
         or e["evaluator_sha256"] != SELECTION_CONTRACT_SHA256
-        or e["baseline_id"] == e["candidate_id"]
         or m["accounting_unit"] not in ("model_tokens", "fixture_bytes")
         or (
             e["provenance"] == "synthetic_registry_mechanics"
@@ -566,6 +565,13 @@ def evaluate_policy_comparison(e):
     c = rows(
         m, labels, e["candidate_rows"], selected[e["candidate_sha256"]], executions
     )
+    if e["baseline_id"] == e["candidate_id"] and (
+        e["baseline_sha256"] != e["candidate_sha256"]
+        or e["baseline_rows"] != e["candidate_rows"]
+    ):
+        return refused("Incomparable")
+    if b == "Incomparable" or c == "Incomparable":
+        return refused("Incomparable")
     if type(b) is str:
         return refused(b)
     if type(c) is str:
@@ -646,7 +652,7 @@ def rows(m, labels, records, policy, executions):
             require(not r["simulated"], "observed row cannot simulate counters")
             reason = observed(m, c, l, r, policy, executions)
             if reason:
-                issue = issue or reason
+                issue = reason if reason == "Incomparable" else issue or reason
                 continue
         if (
             any(
@@ -707,6 +713,9 @@ def observed(m, c, l, r, policy, executions):
     if not r["attempts"]:
         return "Incomplete"
     require(len(r["attempts"]) <= len(ops), "too many observed attempts")
+    reason = check_observed_facts(m, c, l, r, ops, policy, executions)
+    if reason:
+        return reason
     charged = 0
     previous_end = c["timing_start_ms"]
     result = ("Refused", False, l["admissible_support"], previous_end)
@@ -823,8 +832,7 @@ def observed(m, c, l, r, policy, executions):
                     return "Incomparable"
                 correct = s["normalized"] == l["expected_normalized"]
             else:
-                require(a["scoring"] is None, "scoring without response")
-                if a["disposition"] != "Failed":
+                if a["scoring"] is not None or a["disposition"] != "Failed":
                     return "Incomplete"
                 correct = False
             outcome = (
@@ -851,13 +859,7 @@ def observed(m, c, l, r, policy, executions):
                     i + 1 == len(r["attempts"]),
                     "terminal disposition cannot unlock retry",
                 )
-        observation = (c["case_id"], dict(a, opportunity_id=""))
-        if (
-            a["execution_id"] in executions
-            and executions[a["execution_id"]] != observation
-        ):
-            return "Incomparable"
-        executions[a["execution_id"]] = observation
+
     require(
         (r["outcome"] == "Unknown" or r["outcome"] == result[0])
         and all(
@@ -875,6 +877,332 @@ def observed(m, c, l, r, policy, executions):
     ):
         return "Incomplete"
     return None
+
+
+def shared_execution_consistent(c, o, a, executions):
+    # Retained holds remain local; cumulative facts never fill another row.
+    import copy
+
+    identity = (c["case_id"], o["input_bound"], o["output_cap"])
+    if a["execution_id"] not in executions:
+        executions[a["execution_id"]] = (identity, copy.deepcopy(a))
+        return True
+    prior_identity, prior = executions[a["execution_id"]]
+    if prior_identity != identity or any(
+        prior[k] != a[k]
+        for k in (
+            "request_sha256",
+            "evidence_manifest_sha256",
+            "validator_sha256",
+            "scorer_sha256",
+            "label_sha256",
+            "start_ms",
+        )
+    ):
+        return False
+    for k, unknown in [("execution", "Unknown"), ("disposition", "Uncertain")]:
+        if prior[k] != unknown and a[k] != unknown and prior[k] != a[k]:
+            return False
+        if prior[k] == unknown:
+            prior[k] = a[k]
+    for k in (
+        "response",
+        "scoring",
+        "measured_input",
+        "measured_output",
+        "completed_ms",
+    ):
+        if prior[k] is not None and a[k] is not None and prior[k] != a[k]:
+            return False
+        if prior[k] is None:
+            prior[k] = copy.deepcopy(a[k])
+    return (
+        prior["response"] is None
+        or prior["scoring"] is None
+        or prior["response"]["sha256"] == prior["scoring"]["response_sha256"]
+    )
+
+
+def check_observed_facts(m, c, l, r, ops, policy, executions):
+    ids = set()
+    previous_start = c["timing_start_ms"]
+    previous_end = previous_start
+    known_charge = 0
+    held = 0
+    for i, (a, o) in enumerate(zip(r["attempts"], ops)):
+        if i:
+            previous = r["attempts"][i - 1]
+            require(
+                previous["execution"] == "Executed"
+                and previous["disposition"] == "InvalidOutput"
+                and previous["measured_input"] is not None
+                and previous["measured_output"] is not None,
+                "only settled invalid output unlocks retry",
+            )
+        if i + 1 < len(r["attempts"]):
+            require(
+                a["execution"] == "Executed" and a["disposition"] == "InvalidOutput",
+                "terminal disposition cannot unlock retry",
+            )
+        require(a["execution_id"] not in ids, "reused execution in one policy path")
+        ids.add(a["execution_id"])
+        if (
+            a["opportunity_id"] != o["opportunity_id"]
+            or a["request_sha256"] != o["request"]["sha256"]
+            or a["evidence_manifest_sha256"] != o["evidence_manifest"]["sha256"]
+            or a["validator_sha256"] != m["validator_sha256"]
+            or a["scorer_sha256"] != m["scorer_sha256"]
+            or a["label_sha256"] != c["label"]["sha256"]
+        ):
+            return "Incomparable"
+        require(
+            a["start_ms"] >= previous_start
+            and (previous_end is None or a["start_ms"] >= previous_end)
+            and o["start_min_ms"] <= a["start_ms"] <= o["start_max_ms"],
+            "attempt outside timing window",
+        )
+        if a["completed_ms"] is not None:
+            require(
+                a["start_ms"] <= a["completed_ms"] <= c["timing_end_ms"],
+                "invalid completion time",
+            )
+        previous_start = a["start_ms"]
+        previous_end = a["completed_ms"]
+        if a["measured_input"] is not None:
+            require(a["measured_input"] <= o["input_bound"], "input exceeds quote")
+        if a["measured_output"] is not None:
+            require(a["measured_output"] <= o["output_cap"], "output exceeds cap")
+        if a["scoring"] is not None:
+            scoring = a["scoring"]
+            if (
+                scoring["scorer_sha256"] != m["scorer_sha256"]
+                or scoring["label_sha256"] != c["label"]["sha256"]
+                or (
+                    a["response"] is not None
+                    and a["response"]["sha256"] != scoring["response_sha256"]
+                )
+            ):
+                return "Incomparable"
+        quote = add(o["input_bound"], o["output_cap"])
+        if known_charge is not None:
+            require(known_charge <= c["budget"], "budget exceeded")
+            gate = (
+                o["admitted"]
+                and not (
+                    i > 0 and policy == "evidence_gated_retry" and not o["consistent"]
+                )
+                and a["start_ms"] < c["deadline_ms"]
+                and quote <= c["budget"] - known_charge
+            )
+            require(
+                gate == (a["execution"] != "NotExecuted"),
+                "execution violates frozen admission",
+            )
+        if a["execution"] == "Unknown":
+            require(
+                a["measured_input"] is None
+                and a["measured_output"] is None
+                and a["response"] is None
+                and a["scoring"] is None
+                and a["disposition"] == "Uncertain"
+                and a["retained_bound"] == quote,
+                "invalid unknown execution",
+            )
+        elif a["execution"] == "NotExecuted":
+            require(
+                a["measured_input"] == 0
+                and a["measured_output"] == 0
+                and a["retained_bound"] == 0
+                and a["response"] is None
+                and a["scoring"] is None
+                and a["disposition"] == "Refused"
+                and a["completed_ms"] == a["start_ms"],
+                "invalid nonexecution attestation",
+            )
+        elif a["measured_input"] is not None and a["measured_output"] is not None:
+            require(
+                a["retained_bound"] == 0 and a["disposition"] != "Uncertain",
+                "invalid settled usage",
+            )
+        else:
+            require(
+                a["retained_bound"] == quote, "unknown usage must retain full bound"
+            )
+        known_charge = (
+            add(known_charge, add(a["measured_input"], a["measured_output"]))
+            if all(
+                x is not None
+                for x in (known_charge, a["measured_input"], a["measured_output"])
+            )
+            else None
+        )
+        held = add(held, a["retained_bound"])
+        if not shared_execution_consistent(c, o, a, executions):
+            return "Incomparable"
+    terminal = r["attempts"][-1]
+    missing_retry = (
+        terminal["execution"] == "Executed"
+        and terminal["disposition"] == "InvalidOutput"
+        and len(r["attempts"]) < len(ops)
+    )
+    if r["charged"] is not None and known_charge is not None:
+        require(r["charged"] >= known_charge, "row charge below known attempt prefix")
+    if r["completed_ms"] is not None and terminal["completed_ms"] is not None:
+        require(
+            r["completed_ms"] >= terminal["completed_ms"],
+            "row completion before known attempt prefix",
+        )
+    if not missing_retry:
+        known_outcome = (
+            "Unknown"
+            if terminal["execution"] == "Unknown"
+            or terminal["disposition"] == "Uncertain"
+            else "Refused"
+            if terminal["execution"] == "NotExecuted"
+            else "Accepted"
+            if terminal["disposition"] == "Accepted"
+            else "Failed"
+            if terminal["disposition"] == "Failed"
+            else "Refused"
+        )
+        require(
+            r["outcome"] == "Unknown" or r["outcome"] == known_outcome,
+            "fabricated observed outcome",
+        )
+        if (
+            terminal["disposition"] == "Failed"
+            and terminal["response"] is None
+            and terminal["scoring"] is None
+        ):
+            require(
+                r["correct"] is None or not r["correct"],
+                "failed response cannot imply correctness",
+            )
+        if (
+            terminal["execution"] != "Unknown"
+            and terminal["disposition"] != "Uncertain"
+            and r["eligible"] is not None
+        ):
+            opportunity = ops[len(r["attempts"]) - 1]
+            require(
+                r["eligible"]
+                == (
+                    opportunity["admitted"]
+                    and l["admissible_support"]
+                    and terminal["disposition"] != "Stale"
+                ),
+                "fabricated observed eligibility",
+            )
+        require(r["reserved_bound"] == held, "fabricated observed hold")
+        if r["charged"] is not None and known_charge is not None:
+            require(r["charged"] == known_charge, "fabricated observed charge")
+        if known_charge is None:
+            require(r["charged"] is None, "unknown charge must remain unknown")
+        if r["completed_ms"] is not None and terminal["completed_ms"] is not None:
+            require(
+                r["completed_ms"] == terminal["completed_ms"],
+                "fabricated observed completion",
+            )
+        if r["correct"] is not None and terminal["scoring"] is not None:
+            require(
+                r["correct"]
+                == (terminal["scoring"]["normalized"] == l["expected_normalized"]),
+                "fabricated observed correctness",
+            )
+    return None
+
+
+def legacy_observations_match(case, label, legacy_case, row, policy):
+    """Check a supplied observed prefix against facts the archived trace records.
+
+    Missing measurements/references remain missing. This computes expected offsets
+    from recorded preparation/execution durations; it never supplies new observations.
+    """
+    ops = next(
+        p["opportunities"]
+        for p in case["policy_opportunities"]
+        if p["policy_name"] == policy
+    )
+    end = 0
+    charged = 0
+    expected = []
+    disposition_names = {
+        "accepted": "Accepted",
+        "invalid_output": "InvalidOutput",
+        "stale": "Stale",
+        "uncertain": "Uncertain",
+    }
+    for i, o in enumerate(ops):
+        if i:
+            # Legacy stops before preparing a retry once its deadline has elapsed.
+            if policy == "always_stop" or end >= legacy_case["deadline_ms"]:
+                break
+            cell = legacy_case["retries"][policy]
+            if cell is None:
+                return False
+            context, receipt = cell["context"], cell["attempt"]
+        else:
+            context, receipt = legacy_case["initial_context"], legacy_case["initial"]
+        start = add(end, context["elapsed_ms"])
+        quote = add(context["input_tokens"], context["output_cap"])
+        gate = (
+            context["admitted"]
+            and not (
+                i and policy == "evidence_gated_retry" and not context["consistent"]
+            )
+            and start < legacy_case["deadline_ms"]
+            and quote <= legacy_case["budget_tokens"] - charged
+        )
+        if not gate:
+            expected.append((o, context, None, start, start))
+            break
+        if receipt is None or receipt["disposition"] == "uncertain":
+            return False
+        end = add(start, receipt["elapsed_ms"])
+        charged = add(charged, receipt["charged_tokens"])
+        expected.append((o, context, receipt, start, end))
+        # Only invalid_output reaches another iteration.
+        if receipt["disposition"] != "invalid_output":
+            break
+    if len(row["attempts"]) != len(expected):
+        return False
+    for a, (o, context, receipt, start, end) in zip(row["attempts"], expected):
+        if (
+            a["opportunity_id"] != o["opportunity_id"]
+            or a["request_sha256"] != o["request"]["sha256"]
+            or a["evidence_manifest_sha256"] != o["evidence_manifest"]["sha256"]
+            or a["start_ms"] != start
+            or a["completed_ms"] != end
+        ):
+            return False
+        if receipt is None:
+            if (
+                a["execution"] != "NotExecuted"
+                or a["disposition"] != "Refused"
+                or a["measured_input"] != 0
+                or a["measured_output"] != 0
+                or a["retained_bound"] != 0
+                or a["response"] is not None
+                or a["scoring"] is not None
+            ):
+                return False
+        else:
+            if (
+                a["execution"] != "Executed"
+                or a["disposition"] != disposition_names[receipt["disposition"]]
+                or a["measured_input"] != context["input_tokens"]
+                or a["measured_output"]
+                != receipt["charged_tokens"] - context["input_tokens"]
+                or a["retained_bound"] != 0
+                or a["response"] is None
+                or a["scoring"] is None
+            ):
+                return False
+            if (a["scoring"]["normalized"] == label["expected_normalized"]) != receipt[
+                "correct"
+            ]:
+                return False
+    return True
 
 
 def convert_legacy(document, comparison=None):
@@ -898,7 +1226,7 @@ def convert_legacy(document, comparison=None):
     if comparison is None:
         return result
     shape(comparison)
-    m, _ = manifest(comparison)
+    m, labels = manifest(comparison)
     expected_provenance = (
         "synthetic_registry_mechanics"
         if document["mode"] == "synthetic_policy_fixture"
@@ -934,6 +1262,10 @@ def convert_legacy(document, comparison=None):
                 ctx = cell["context"] if i else old["initial_context"]
                 if byte_array(o["request"]["bytes"]) != ctx["request"].encode("utf-8"):
                     return result
+                if byte_array(o["evidence_manifest"]["bytes"]) != ctx[
+                    "evidence_id"
+                ].encode("utf-8"):
+                    return result
                 if any(
                     o[k] != ctx[v]
                     for k, v in [
@@ -953,7 +1285,14 @@ def convert_legacy(document, comparison=None):
         oldrows = [r for r in legacy["cases"] if r["policy"] == policy]
         if len(oldrows) != len(comparison[side]):
             return result
-        for row, old in zip(comparison[side], oldrows):
+        for row, old, case, label, legacy_case in zip(
+            comparison[side], oldrows, m["cases"], labels, document["cases"]
+        ):
+            if (
+                expected_provenance == "observed_policy_replay"
+                and not legacy_observations_match(case, label, legacy_case, row, policy)
+            ):
+                return result
             if old["reason"] == "uncertain":
                 return result
             if any(
