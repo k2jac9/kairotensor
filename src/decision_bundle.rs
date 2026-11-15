@@ -6,7 +6,7 @@ use crate::evidence_digest::sha256_hex;
 pub use replay::{reevaluate_bundle, validate_recorded_bundle};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fmt,
     io::{self, Write},
 };
@@ -467,6 +467,7 @@ fn check_bundle(b: &DecisionBundleV1) -> Result<serde_json::Value, Error> {
             }
         }
     }
+    check_recovery_runs(b)?;
     for a in &b.attempts {
         if let Some(origin) = a
             .reuse_origin
@@ -525,6 +526,61 @@ fn check_bundle(b: &DecisionBundleV1) -> Result<serde_json::Value, Error> {
         charge.checked_add(held).ok_or(Error::InconsistentLedger)?;
     }
     Ok(value)
+}
+
+// A recovery's primary key and immutable run facts are shared across phases.
+// Quotes are per-attempt: an unsent phase may have no reservation, or a quote
+// that timed admission refused. Only a recorded sent phase requires coverage.
+fn check_recovery_runs(bundle: &DecisionBundleV1) -> Result<(), Error> {
+    let mut keys = HashSet::new();
+    let mut runs: HashMap<i64, &AttemptRecord> = HashMap::new();
+    let mut budgets = HashMap::new();
+    for attempt in &bundle.attempts {
+        let Some(recovery) = &attempt.recovery else {
+            continue;
+        };
+        if !keys.insert((recovery.recovery_id, recovery.ordinal)) {
+            return Err(Error::InconsistentLedger);
+        }
+        if let Some(prior) = runs.insert(recovery.recovery_id, attempt) {
+            if attempt.actor != prior.actor
+                || attempt.scope != prior.scope
+                || attempt.branch != prior.branch
+                || attempt.timing_configuration != prior.timing_configuration
+                || attempt.immutable_runtime != prior.immutable_runtime
+                || attempt.immutable_manifest != prior.immutable_manifest
+            {
+                return Err(Error::InconsistentLedger);
+            }
+        }
+        // Absence here means this phase has no token_reservations row; it does
+        // not erase or contradict a budget reference recorded by another phase.
+        if let Some(budget) = attempt.accounting.budget_reference {
+            if budgets
+                .insert(recovery.recovery_id, budget)
+                .is_some_and(|prior| prior != budget)
+            {
+                return Err(Error::InconsistentLedger);
+            }
+        }
+        if recovery.state == "sent" {
+            if let Some(configuration) = &attempt.timing_configuration {
+                let timing: crate::RecoveryTiming = decode_strict(&configuration.decode()?)
+                    .map_err(|_| Error::InconsistentLedger)?;
+                let quote = attempt
+                    .accounting
+                    .quote
+                    .as_ref()
+                    .ok_or(Error::InconsistentLedger)?;
+                if quote.output_cap != timing.calibration.output_cap
+                    || quote.input_tokens > timing.calibration.max_input_tokens
+                {
+                    return Err(Error::InconsistentLedger);
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 // Check every envelope's borrowed lengths before the outer JSON allocation.

@@ -171,7 +171,18 @@ the reservation bound. A known delivery's charge equals usage and its hold is
 zero; reserved usage must lie between input quote and full bound. A granted
 unresolved reservation keeps its full hold except a cancelled unsent recovery.
 Denied reservations have no hold. Recovery state, request, dispatch, reservation
-and delivery facts must be compatible. Unknown recovery phases can be retained
+and delivery facts must be compatible. A sent timed phase must also have a quote
+whose output cap equals its immutable calibration cap and whose input is covered
+by that calibration's maximum input. This check uses no historical clock data.
+An unsent reserved, denied or cancelled phase may retain an uncovered quote: timed
+admission can refuse after reservation, so such a quote is not itself corruption.
+
+The composite `(recovery_id, ordinal)` key is unique even across different attempt
+IDs. Included phases of one run must agree on actor/scope/branch, exact timing
+configuration, immutable runtime and manifest. All recorded budget references
+for that recovery must agree. Quotes themselves remain per-attempt and can differ;
+a planned phase with null quote/granted/budget reference does not contradict
+another phase's recorded reservation. Unknown recovery phases can be retained
 but cannot select a renderer.
 
 Units: `logical_support`, `fixture_bytes`, `model_tokens`, `unknown`. C1 recognizes

@@ -604,3 +604,116 @@ fn unknown_manifest_or_renderer_version_never_falls_back() {
             .contains(&MissingRequirement::RendererUnavailable));
     }
 }
+
+#[test]
+fn sent_timed_quote_cap_must_equal_immutable_calibration_after_rehashing() {
+    let mut value = incident_fixture();
+    value["attempts"][0]["accounting"]["quote"]["output_cap"] = 513.into();
+    assert!(matches!(
+        parse_decision_bundle(&seal(value)),
+        Err(BundleError::InconsistentLedger)
+    ));
+}
+
+#[test]
+fn sent_timed_quote_input_must_be_covered_even_with_consistent_usage() {
+    let mut value = incident_fixture();
+    let attempt = &mut value["attempts"][0];
+    attempt["accounting"]["quote"]["input_tokens"] = 1025.into();
+    attempt["accounting"]["charge"] = 1026.into();
+    attempt["delivery"]["usage"] = 1026.into();
+    assert!(matches!(
+        parse_decision_bundle(&seal(value)),
+        Err(BundleError::InconsistentLedger)
+    ));
+}
+
+#[test]
+fn unsent_timed_refusal_keeps_uncovered_reservation_facts() {
+    for state in ["reserved", "denied", "cancelled"] {
+        let mut value = incident_fixture();
+        let attempt = &mut value["attempts"][0];
+        attempt["recovery"]["state"] = state.into();
+        attempt["dispatch_request"] = Value::Null;
+        attempt["delivery"] = json!({"state":"unresolved"});
+        attempt["accounting"] = json!({"unit":"unknown","quote":{"input_tokens":1025,"output_cap":513},"granted":state != "denied","budget_reference":1,"charge":0,"hold_bound":if state == "reserved" {1538} else {0}});
+        let report = validate_recorded_bundle(&parsed(value));
+        assert_eq!(report.consistency, ReplayStatus::Matched, "{state}");
+        assert_eq!(report.reconstruction, ReplayStatus::Matched, "{state}");
+        assert_eq!(report.validation, ReplayStatus::Incomplete, "{state}");
+        assert_eq!(
+            report.accounting[0].held,
+            if state == "reserved" { 1538 } else { 0 }
+        );
+    }
+}
+
+#[test]
+fn recovery_composite_key_is_unique_across_distinct_attempt_ids() {
+    let mut value = incident_fixture();
+    let mut duplicate = value["attempts"][0].clone();
+    duplicate["id"] = 2.into();
+    value["attempts"].as_array_mut().unwrap().push(duplicate);
+    assert!(matches!(
+        parse_decision_bundle(&seal(value)),
+        Err(BundleError::InconsistentLedger)
+    ));
+}
+
+#[test]
+fn included_recovery_phases_share_immutable_timing_and_contract_metadata() {
+    for (field, key, replacement) in [
+        ("timing_configuration", "deadline_ms", json!(1002)),
+        ("immutable_runtime", "threads", json!(2)),
+        ("immutable_manifest", "output_cap", json!(513)),
+    ] {
+        let mut value = retry_fixture();
+        let envelope: ByteEnvelope =
+            serde_json::from_value(value["attempts"][1][field].clone()).unwrap();
+        let mut document: Value = serde_json::from_slice(&envelope.decode().unwrap()).unwrap();
+        document[key] = replacement;
+        value["attempts"][1][field] = bytes(&serde_json::to_vec(&document).unwrap());
+        assert!(
+            matches!(
+                parse_decision_bundle(&seal(value)),
+                Err(BundleError::InconsistentLedger)
+            ),
+            "{field}"
+        );
+    }
+}
+
+#[test]
+fn included_recovery_phases_cannot_name_different_known_budgets() {
+    let mut value = retry_fixture();
+    value["attempts"][1]["accounting"]["budget_reference"] = 2.into();
+    assert!(matches!(
+        parse_decision_bundle(&seal(value)),
+        Err(BundleError::InconsistentLedger)
+    ));
+}
+
+#[test]
+fn planned_recovery_phase_preserves_absent_per_attempt_budget_and_quote() {
+    let mut value = retry_fixture();
+    let planned = &mut value["attempts"][1];
+    planned["recovery"]["state"] = "planned".into();
+    planned["recovery"]["request"] = Value::Null;
+    planned["dispatch_request"] = Value::Null;
+    planned["delivery"] = json!({"state":"unresolved"});
+    planned["accounting"] = json!({"unit":"unknown","quote":null,"granted":null,"budget_reference":null,"charge":0,"hold_bound":0});
+    for reverse in [false, true] {
+        let mut ordered = value.clone();
+        if reverse {
+            ordered["attempts"].as_array_mut().unwrap().reverse();
+        }
+        let bundle = parsed(ordered);
+        let planned = bundle.attempts.iter().find(|a| a.id == 2).unwrap();
+        assert_eq!(planned.accounting.quote, None);
+        assert_eq!(planned.accounting.budget_reference, None);
+        assert_eq!(
+            validate_recorded_bundle(&bundle).consistency,
+            ReplayStatus::Matched
+        );
+    }
+}
