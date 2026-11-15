@@ -1,0 +1,18 @@
+{
+  "checked_at_utc": "2026-11-15T17:34:47.794575+00:00",
+  "source": "20fab84a6baa525452191ecf80eeee339f0b5ac7",
+  "recovery_archive_sha256": "74e8895335f304be0db1d8c705b1e448cb0588dd1b1ccff7296e4a2ff6f8af0d",
+  "recovery_archive_file_hashes": {
+    "environment.txt": "46646d8cbf109401698c940a8320bec2098faa641002b4205ff783d050366df6",
+    "stderr.log": "a6e90f4ceb7013597d89927e2df011300cbaa3d90ca8ac763fda3b11716bc26e",
+    "stdout.log": "c85c37745706becdd8cd40c8d102ab081209663538af3d4c0020d58b34149405",
+    "summary.json": "721432de295988eb1ad0464c64d7903c788d1f487ac246811274755eb34b7ead",
+    "trace.json": "9c26a6a443f2b048f6589ce4c7092468d6b688e3e9800f042a1d6da2a2641614",
+    "trace.json.raw.json": "d93c19bad64a6bfb6e97a3848923462e1c8221344ae137efc67d02e93830312a",
+    "trace.json.sqlite": "a8ac40fc7ac16ad80f957cf710bb32fd46f89f3e79f7156d0bd8c27125d71e17"
+  },
+  "audit_exit_code": 0,
+  "archive_unchanged_after_audit": true,
+  "inference_calls_made_by_this_audit": 0,
+  "scope": "Recomputed archived summaries and internal recovery consistency; no fresh model replication."
+}

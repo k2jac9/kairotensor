@@ -1,0 +1,41 @@
+[
+  {
+    "name": "reference",
+    "command": [
+      "python3",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "reference",
+      "-p",
+      "test_memory.py"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.102
+  },
+  {
+    "name": "belief-oracle",
+    "command": [
+      "python3",
+      "reference/belief_oracle.py"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.046
+  },
+  {
+    "name": "scripts",
+    "command": [
+      "python3",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "scripts",
+      "-p",
+      "test_*.py"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 17.547
+  }
+]

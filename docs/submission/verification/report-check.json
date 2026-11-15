@@ -1,0 +1,12 @@
+{
+  "verified_at_utc": "2026-11-15T17:44:03.080830+00:00",
+  "pdf_pages": 6,
+  "pdf_bytes": 127981,
+  "abstract_words": 192,
+  "all_six_pages_visually_reviewed": true,
+  "required_author_affiliation_provenance_ethics_and_ai_disclosure_present": true,
+  "contact_email_excluded_from_public_documents": true,
+  "source_code_unchanged": true,
+  "new_model_calls_during_packaging": 0,
+  "submission_sent": false
+}
