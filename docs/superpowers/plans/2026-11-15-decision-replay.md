@@ -21,6 +21,8 @@ section C. Prerequisites: A and B reviewed.
 - Do not export cross-scope/global budget totals or infer missing validators.
 - Pure replay cannot invoke tools, a model, network, Store initialization or
   migrations. No Rocket integration; use normal storage admission.
+- Resource bounds apply before cloning public constructed values and before
+  materializing oversized SQLite payload/metadata fields, not only JSON parsing.
 
 ## Review Focus
 
@@ -89,8 +91,9 @@ Reevaluation additionally names the new validator and never changes the bundle.
   Replay compares deterministic output or exact reconstructed request as applicable.
   Missing legacy validator is NotReproducible. Unknown version never falls back.
 - [ ] Test changed validator as a separate report, missing inherited/reuse input,
-  and original disposition preservation. A panic-on-call fake adapter must remain
-  unused; the replay API takes no backend capability.
+  and original disposition preservation. The replay API takes no backend capability;
+  inspect that boundary and observe actual subprocess effects in Task3. Do not add
+  a disconnected panic-only adapter whose non-use proves nothing.
 - [ ] Run `cargo test --locked --test decision_bundle` and locked all-targets;
   review and commit `feat: define bounded pure decision bundle replay`.
 
@@ -133,6 +136,12 @@ historical output bytes. Omit global balances and unrelated budget members.
 Copy bytes only after access checks; commit the read transaction before return.
 Metadata/source/validator free text are sensitive too. Physical unavailability
 or denied access never causes an archive lookup. SQL/I/O errors are not success.
+Use held-snapshot length/type checks before copying payloads or metadata beyond
+the bundle limits. Unavailable/denied/oversized undisclosed selections redact
+generically. CurrentRead authenticates only the request actor/scope: reject
+foreign-scope output dependency closures, rather than treating row identities as
+caller authority. DiagnosticReplay may authorize the exact cross-scope selection,
+but still requires every input's current admission under its owning scope.
 
 - [ ] Add failing tests for default denial, authorized historical output with
   admitted inputs, revocation despite diagnostic approval, missing/withheld target
@@ -168,6 +177,9 @@ Rust validator. Unknown modes refuse, no auto-detection that changes legacy mode
 - [ ] Add failing subprocess tests that compare export/replay results, binary
   preservation, redacted refusal, unknown validator and unchanged file hashes.
 - [ ] Implement CLI and versioned reader; do not add a live/generate mode.
+- [ ] Retain a separate-process replay process/network syscall trace with the
+  installed strace where available; distinguish observed paths from a universal
+  proof. No fake adapter or test-only dispatch capability is needed.
 - [ ] Run `cargo run --locked --example decision_replay -- export-fixture PATH`,
   then `cargo run --locked --example decision_replay -- replay PATH` in a second
   process; run the new Python suite plus `test_audit_recovery_bundle.py`.
