@@ -2,8 +2,9 @@
 
 > **For agentic workers:** Use `superpowers:executing-plans` or
 > `superpowers:subagent-driven-development` to execute task by task. Every checkbox
-> below is future work. The owner requested review and planning first; this
-> document does not claim implementation or authorize a live model run.
+> below is future work until recorded complete. The owner first requested review,
+> then authorized autonomous implementation on 15 November 2026. Follow the
+> [execution map](2026-11-15-autonomous-roadmap.md); this plan makes no live-run claim.
 
 **Goal:** Explain current eligibility and apply several admission corrections
 atomically without weakening read, lineage or accounting guarantees.
@@ -267,5 +268,6 @@ and independently useful with the explanation API. No migration is needed.
 - [ ] Prepare the branch for owner review. Merge, publication, hosted spending
   and the separately authorized Adaption smoke are not part of this milestone.
 
-Next: write the Store-backed incident bridge plan using section 3 of the review.
-Bundle replay, policy activation and portability remain later, separate plans.
+Next: follow the [execution map](2026-11-15-autonomous-roadmap.md) into the separate
+incident bridge, decision replay, policy activation and offline diagnostics plans.
+No Rocket integration. Portable interchange retains its real-consumer prerequisite.
