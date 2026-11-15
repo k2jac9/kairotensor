@@ -1,5 +1,5 @@
 //! Run with `cargo run --example selective_revision`.
-use kairotensor::{Current, Store, SupportRegistration};
+use kairotensor::{AdmissionEdit, BatchRevision, Current, Store, SupportRegistration};
 use rusqlite::Result;
 use std::collections::BTreeSet;
 
@@ -33,6 +33,8 @@ fn main() -> Result<()> {
     ];
     let ids = store.observe_and_admit_many(ACTOR, SCOPE, observations)?;
     let &[report, manifest, rerun] = ids.as_slice() else { unreachable!() };
+    // The replacement occurrence is retained but not yet admitted.
+    store.set_admitted(ACTOR, SCOPE, rerun, false)?;
     let report_rule = [vec![report]];
     let record_rule = [vec![report, manifest], vec![rerun]];
     let heads = store.publish_support_many(ACTOR, SCOPE, &[
@@ -43,7 +45,13 @@ fn main() -> Result<()> {
     let consumers = store.support_consumers(ACTOR, SCOPE, report)?;
     assert_eq!(consumers, vec![REPORT.to_owned(), RECORD.to_owned()]);
     let usage = store.charged_usage()?;
-    let changes = store.set_admitted_and_revise(ACTOR, SCOPE, report, false)?;
+    let expected_epoch = store.epoch(ACTOR, SCOPE)?;
+    let BatchRevision::Applied { epoch, changes } = store.revise_admissions_if_current(
+        ACTOR, SCOPE, expected_epoch,
+        &[AdmissionEdit { evidence: report, admitted: false },
+          AdmissionEdit { evidence: rerun, admitted: true }],
+    )? else { panic!("single-writer example unexpectedly conflicted") };
+    assert_eq!(epoch, expected_epoch + 2);
 
     assert_eq!(changes.len(), 1);
     let revision = &changes[0];
@@ -52,9 +60,9 @@ fn main() -> Result<()> {
     assert!(!revision.supported);
     assert_eq!(store.charged_usage()?, usage + 1);
     assert_eq!(store.revise_support(ACTOR, SCOPE, RECORD)?, old_record);
-    println!("Withdrew the original report and revised its dependent branches in one commit.");
+    println!("Replaced the original report with the second run in one epoch-checked commit.");
     println!("The primary report lost its only witness. Published attempt {}.", revision.attempt_id);
-    println!("The second run still supplies a reproduction record. Kept attempt {old_record}.");
+    println!("The replacement supplies a reproduction record without an intermediate verdict. Kept attempt {old_record}.");
 
     for (branch, rule) in [(REPORT, report_rule.as_slice()), (RECORD, record_rule.as_slice())] {
         let expected = recompute(&store, rule)?;

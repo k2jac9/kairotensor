@@ -13,7 +13,7 @@ mod recovery;
 pub use recovery::{RecoveryReservation, RecoveryStart};
 pub use attempts::{CapturedInputs, Current, Disposition};
 pub use model_reuse::ModelAction;
-pub use support::{SupportRegistration, SupportRevision};
+pub use support::{AdmissionEdit, BatchRevision, SupportRegistration, SupportRevision};
 pub use token_budget::TokenBudgetState;
 
 use rusqlite::{
