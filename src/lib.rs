@@ -1,5 +1,8 @@
 //! Local versioned evidence memory with actor-scoped admission and atomic publication.
 
+mod evidence_digest;
+pub mod incident_protocol;
+
 mod attempts;
 mod eligibility;
 pub use eligibility::{CurrentExplanation, EligibilityProof, EligibilityReason, EligibilityState};
