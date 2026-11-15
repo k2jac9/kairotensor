@@ -1,10 +1,10 @@
 # Decision bundle v1
 
-`kairotensor::decision_bundle` is a pure, bounded export codec and replay API.
+`kairotensor::decision_bundle` provides a bounded Store export and pure codec/replay API.
 It cannot authenticate the producer, grant current access, import into a Store,
 reproduce general historical timing/publication, or dispatch a backend. SHA-256
-establishes internal consistency only. C2 owns transactional access checks and
-payload redaction; C3 owns CLI/process-effect observation.
+establishes internal consistency only. The Store exporter performs transactional access checks and payload redaction;
+C3 owns CLI/process-effect observation.
 
 ## Public API and limits
 
@@ -39,6 +39,80 @@ Errors are payload-free `InvalidSchema`, `InvalidEncoding`, `LimitExceeded`,
 Pure parsing and replay never open a database. Missing input/dependency records
 are representable for diagnostic completeness reporting; duplicate definitions,
 invalid identities, contradictory accounting and invalid digests refuse parsing.
+
+## Authorized Store export (C2)
+
+```rust
+Store::export_decision_bundle(&mut self, request: &BundleRequest,
+    authorizer: &impl DiagnosticAuthorizer) -> Result<BundleExport, BundleError>
+```
+
+`BundleRequest` contains `actor`, `scope`, `attempt`, and `BundlePurpose`, either
+`CurrentRead` or `DiagnosticReplay`. The embedding runtime authenticates that
+identity. The root must belong to that exact actor/scope even for diagnostics.
+`DenyDiagnostics` is the default-deny implementation passed explicitly by callers
+that have no diagnostic policy. CurrentRead never invokes the diagnostic callback.
+
+The synchronous `DiagnosticAuthorizer::authorize(&DiagnosticReadRequest)` gets
+only the exact ordered selection within the open read transaction. Its fields
+are `actor`, `scope`, `root_attempt`, `purpose`, and `attempts`. Each
+`SelectedAttempt` contains `attempt`, its own `actor` and `scope`, `branch`,
+`head`, `revision`, `current_epoch`, `captured_revision`, `captured_epoch`, and
+ordered `inputs: Vec<SelectedInput { position, occurrence_id }>`. Inputs inherit
+their owning identity from their enclosing selected attempt. Repeated input
+positions and occurrence uses remain visible to policy. Traversal is root first,
+then depth-first inherited output, model-reuse origin, and retry predecessor;
+already selected attempts appear once. Missing required outputs, missing retry
+predecessors, cycles and selections exceeding 128 attempts redact. Parent lineage
+and support rule owners are references, not automatic output dependencies.
+The callback must not reenter or mutate the Store or use the network. It receives
+no payload, source, validator reason, reusable grant, or execution authority.
+
+One deferred SQLite read transaction begins before metadata selection and remains
+open through authorization, every input admission check, bounded fetch and sealing.
+It commits before returning either a complete result or a redaction. CurrentRead
+requires each selected output to be its branch's current eligible head, evaluated
+by the existing authoritative eligibility gate. It rejects any selected output
+whose actor/scope differs from the authenticated request; stored row identities
+are not caller authority. Diagnostics can authorize a precise cross-scope closure,
+but neither mode bypasses current input admission in **every consuming scope**.
+A shared global evidence occurrence is exported once, with each admitted consuming
+scope recorded. A later revocation cannot claw back bytes already exported.
+
+`BundleExport` serializes as `{"status":"complete","bundle":...}` or
+`{"status":"redacted","bundle":{"requested_attempt":ID,"reason":"unavailable"}}`.
+The redacted body has only the caller's requested ID and the generic reason.
+Missing, denied, withdrawn, physically unavailable and over-limit selections have
+this same payload-free result. No archive fallback is performed. SQL errors remain
+`BundleError::Store`; its Display message contains no private database values.
+Corrupt schema/ledger values fail rather than becoming successful exports.
+
+SQLite storage class and byte length (including embedded NULs) are checked within
+the held snapshot before copying each selected payload or free-text field. An
+aggregate allocation/encoding budget bounds row enumeration and field copying;
+text metadata reserves worst-case JSON escaping while byte envelopes reserve
+hexadecimal expansion. This conservative budget can redact near-limit selections
+before the final codec's exact 16 MiB check. Neither row counts nor failure details
+are disclosed on redaction. Runtime/timing JSON and source bytes retain their
+exact stored byte representation, including whitespace and non-UTF-8 source bytes.
+
+Public support registration stores formula references without `attempt_inputs`.
+Export preserves that fact: it does not synthesize payload captures or historical
+witness counters from current support premises. If a persisted support attempt
+also has input rows, those inputs must pass admission even when an alternate
+witness keeps its current output eligible. Candidate positions remain independent
+from the compacted input positions used by legacy capture.
+
+Accounting reads only selected per-attempt reservations/deliveries, never a global
+budget balance or unrelated member. Planned phases have absent quote/grant/budget;
+cancelled unsent phases retain any quote but hold zero; unresolved granted sends
+retain their full checked bound. Actual dispatch and recovery preparation are
+separate envelopes. The existing B manifest is reconstructed from exact captured
+context/report bytes plus immutable runtime/calibration cap, and recognized only
+when its canonical hash equals the captured runtime fingerprint. No matching
+fingerprint means no invented manifest, incident roles or fixture units. This
+path does not send, recover, execute validators dynamically or create another
+recovery state machine.
 
 ## Exact outer encoding and digests
 

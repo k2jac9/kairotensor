@@ -1,5 +1,6 @@
-//! Bounded, pure decision exports. Digests establish internal consistency only;
-//! neither parsing nor replay authenticates execution or grants access.
+//! Bounded authorized Store exports and pure replay. Digests establish internal
+//! consistency only; parsing and replay never authenticate or grant access.
+mod export;
 mod replay;
 mod types;
 use crate::evidence_digest::sha256_hex;

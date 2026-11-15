@@ -717,3 +717,964 @@ fn planned_recovery_phase_preserves_absent_per_attempt_budget_and_quote() {
         );
     }
 }
+
+// Store export authority tests: removing either the diagnostic authorization or
+// current admission gate must expose the canaries and fail these tests.
+fn export_request(attempt: i64, purpose: BundlePurpose) -> BundleRequest {
+    BundleRequest {
+        actor: "a".into(),
+        scope: "s".into(),
+        attempt,
+        purpose,
+    }
+}
+struct AllowExport;
+impl DiagnosticAuthorizer for AllowExport {
+    fn authorize(&self, _: &DiagnosticReadRequest) -> Result<bool, BundleError> {
+        Ok(true)
+    }
+}
+fn complete(export: BundleExport) -> DecisionBundleV1 {
+    match export {
+        BundleExport::Complete(bundle) => bundle,
+        other => panic!("expected complete: {other:?}"),
+    }
+}
+#[test]
+fn export_default_denial_missing_withheld_and_revoked_are_payload_free() {
+    let mut store = kairotensor::Store::in_memory().unwrap();
+    let evidence = store
+        .observe_and_admit_many("a", "s", &[("SOURCE_CANARY", b"PAYLOAD_CANARY")])
+        .unwrap()[0];
+    let id = store.begin_attempt("a", "s", "main", &[evidence]).unwrap();
+    store.record_dispatch(id, b"REQUEST_CANARY").unwrap();
+    store
+        .reject_invalid(
+            id,
+            b"RESPONSE_CANARY",
+            3,
+            "VALIDATOR_CANARY",
+            "REASON_CANARY",
+        )
+        .unwrap();
+    let request = export_request(id, BundlePurpose::DiagnosticReplay);
+    let denied = store
+        .export_decision_bundle(&request, &DenyDiagnostics)
+        .unwrap();
+    assert_eq!(
+        denied,
+        BundleExport::Redacted(RedactedBundleV1 {
+            requested_attempt: id,
+            reason: RedactionReason::Unavailable
+        })
+    );
+    let authorized = complete(
+        store
+            .export_decision_bundle(&request, &AllowExport)
+            .unwrap(),
+    );
+    assert_eq!(
+        authorized.evidence[0].source.decode().unwrap(),
+        b"SOURCE_CANARY"
+    );
+    assert_eq!(
+        authorized.attempts[0]
+            .dispatch_request
+            .as_ref()
+            .unwrap()
+            .decode()
+            .unwrap(),
+        b"REQUEST_CANARY"
+    );
+    store.set_admitted("a", "s", evidence, false).unwrap();
+    assert_eq!(
+        store
+            .export_decision_bundle(&request, &AllowExport)
+            .unwrap(),
+        denied
+    );
+    let missing = export_request(999, BundlePurpose::DiagnosticReplay);
+    assert_eq!(
+        store
+            .export_decision_bundle(&missing, &AllowExport)
+            .unwrap(),
+        BundleExport::Redacted(RedactedBundleV1 {
+            requested_attempt: 999,
+            reason: RedactionReason::Unavailable
+        })
+    );
+    let mut wrong = request.clone();
+    wrong.actor = "other".into();
+    assert_eq!(
+        store.export_decision_bundle(&wrong, &AllowExport).unwrap(),
+        denied
+    );
+    let redacted = serde_json::to_string(&denied).unwrap();
+    for private in ["CANARY", "sha256", "source", "inputs", "validator", "head"] {
+        assert!(!redacted.contains(private));
+    }
+}
+#[test]
+fn export_current_gate_preserves_filtered_positions_and_legacy_unknowns() {
+    let mut store = kairotensor::Store::in_memory().unwrap();
+    let evidence = store
+        .observe_and_admit_many("a", "s", &[("raw", b"\xff\0")])
+        .unwrap()[0];
+    let (id, _) = store
+        .begin_from_candidates("a", "s", "main", &[999, evidence, evidence])
+        .unwrap();
+    store.settle(id, b"\xfe\0", 7).unwrap();
+    let request = export_request(id, BundlePurpose::CurrentRead);
+    let b = complete(
+        store
+            .export_decision_bundle(&request, &DenyDiagnostics)
+            .unwrap(),
+    );
+    assert_eq!(
+        b.attempts[0]
+            .candidates
+            .iter()
+            .map(|c| (c.position, c.evidence_id))
+            .collect::<Vec<_>>(),
+        [(0, 999), (1, evidence), (2, evidence)]
+    );
+    assert_eq!(
+        b.attempts[0]
+            .inputs
+            .iter()
+            .map(|c| (c.position, c.evidence_id))
+            .collect::<Vec<_>>(),
+        [(0, evidence), (1, evidence)]
+    );
+    assert_eq!(b.evidence.len(), 1);
+    assert_eq!(b.evidence[0].payload.decode().unwrap(), [255, 0]);
+    assert_eq!(b.attempts[0].validator, None);
+    assert_eq!(b.attempts[0].accounting.unit, AccountingUnit::Unknown);
+    assert_eq!(parse_decision_bundle(&b.to_json().unwrap()).unwrap(), b);
+    let next = store.begin_attempt("a", "s", "main", &[]).unwrap();
+    store.settle(next, b"new", 1).unwrap();
+    assert!(matches!(
+        store
+            .export_decision_bundle(&request, &AllowExport)
+            .unwrap(),
+        BundleExport::Redacted(_)
+    ));
+    let historical = complete(
+        store
+            .export_decision_bundle(
+                &export_request(id, BundlePurpose::DiagnosticReplay),
+                &AllowExport,
+            )
+            .unwrap(),
+    );
+    assert_eq!(historical.snapshot.head, Some(next));
+    // Parent is lineage only: selecting next must not copy the old payload.
+    let next_bundle = complete(
+        store
+            .export_decision_bundle(
+                &export_request(next, BundlePurpose::CurrentRead),
+                &DenyDiagnostics,
+            )
+            .unwrap(),
+    );
+    assert_eq!(next_bundle.attempts.len(), 1);
+    assert!(next_bundle.evidence.is_empty());
+}
+
+#[test]
+fn export_support_ready_still_denies_withdrawn_captured_input() {
+    let path = export_database();
+    let mut store = kairotensor::Store::open(&path).unwrap();
+    let ids = store
+        .observe_and_admit_many("a", "s", &[("one", b"one"), ("two", b"two")])
+        .unwrap();
+    let id = store
+        .publish_support("a", "s", "main", &[vec![ids[0]], vec![ids[1]], vec![999]])
+        .unwrap();
+    let before = complete(
+        store
+            .export_decision_bundle(
+                &export_request(id, BundlePurpose::CurrentRead),
+                &DenyDiagnostics,
+            )
+            .unwrap(),
+    );
+    assert_eq!(
+        before.attempts[0].support.as_ref().unwrap().clauses.len(),
+        3
+    );
+    assert_eq!(
+        before.attempts[0].accounting.unit,
+        AccountingUnit::LogicalSupport
+    );
+    assert!(
+        before.evidence.is_empty(),
+        "support registration captures formula, not evidence bytes"
+    );
+    // Adversarial persisted-state fixture, not produced by register_support:
+    // retain an additional captured input to isolate the export admission gate.
+    rusqlite::Connection::open(&path)
+        .unwrap()
+        .execute(
+            "INSERT INTO attempt_inputs(attempt_id,position,evidence_id) VALUES(?1,0,?2)",
+            rusqlite::params![id, ids[0]],
+        )
+        .unwrap();
+    store.set_admitted("a", "s", ids[0], false).unwrap();
+    assert!(matches!(
+        store.read_current("a", "s", "main").unwrap(),
+        kairotensor::Current::Ready(_)
+    ));
+    for purpose in [BundlePurpose::CurrentRead, BundlePurpose::DiagnosticReplay] {
+        assert!(matches!(
+            store
+                .export_decision_bundle(&export_request(id, purpose), &AllowExport)
+                .unwrap(),
+            BundleExport::Redacted(_)
+        ));
+    }
+}
+#[test]
+fn export_ambiguous_hold_cancelled_and_planned_are_per_attempt() {
+    let mut store = kairotensor::Store::in_memory().unwrap();
+    let budget = store.create_token_budget(1000).unwrap();
+    let foreign = store
+        .begin_attempt("private", "scope", "main", &[])
+        .unwrap();
+    store
+        .reserve_dispatch(budget, foreign, b"FOREIGN_REQUEST", 37, 50)
+        .unwrap();
+    store.settle(foreign, b"FOREIGN_OUTPUT", 40).unwrap();
+    let id = store.begin_attempt("a", "s", "main", &[]).unwrap();
+    store
+        .reserve_dispatch(budget, id, b"\xff request", 3, 20)
+        .unwrap();
+    let b = complete(
+        store
+            .export_decision_bundle(
+                &export_request(id, BundlePurpose::DiagnosticReplay),
+                &AllowExport,
+            )
+            .unwrap(),
+    );
+    assert_eq!(b.attempts.len(), 1);
+    assert_eq!(b.attempts[0].accounting.hold_bound, 23);
+    assert_eq!(b.attempts[0].accounting.charge, 0);
+    assert_eq!(b.attempts[0].accounting.budget_reference, Some(budget));
+    let wire = String::from_utf8(b.to_json().unwrap()).unwrap();
+    for name in [
+        "token_limit",
+        "spent_tokens",
+        "reserved_tokens",
+        "FOREIGN",
+        "private",
+    ] {
+        assert!(!wire.contains(name));
+    }
+    let recovery = store
+        .create_recovery("r", budget, "a", "s", "other")
+        .unwrap();
+    let phase = match store.begin_recovery_attempt(recovery, &[]).unwrap() {
+        kairotensor::RecoveryStart::New { attempt, .. } => attempt,
+        _ => panic!(),
+    };
+    let b = complete(
+        store
+            .export_decision_bundle(
+                &export_request(phase, BundlePurpose::DiagnosticReplay),
+                &AllowExport,
+            )
+            .unwrap(),
+    );
+    assert_eq!(b.attempts[0].recovery.as_ref().unwrap().state, "planned");
+    assert_eq!(b.attempts[0].accounting.quote, None);
+    store
+        .reserve_recovery_attempt(phase, b"prepared", 4, 10)
+        .unwrap();
+    store.cancel_recovery_attempt(phase).unwrap();
+    let b = complete(
+        store
+            .export_decision_bundle(
+                &export_request(phase, BundlePurpose::DiagnosticReplay),
+                &AllowExport,
+            )
+            .unwrap(),
+    );
+    assert_eq!(b.attempts[0].accounting.hold_bound, 0);
+    assert_eq!(
+        b.attempts[0]
+            .accounting
+            .quote
+            .as_ref()
+            .unwrap()
+            .input_tokens,
+        4
+    );
+    assert_eq!(b.attempts[0].dispatch_request, None);
+    assert_eq!(store.token_budget_state(budget).unwrap().reserved, 23);
+}
+#[test]
+fn export_oversized_source_payload_request_and_reason_redact_generically() {
+    for which in 0..4 {
+        let mut store = kairotensor::Store::in_memory().unwrap();
+        let large = "x".repeat(MAX_PAYLOAD_BYTES + 1);
+        let id = store
+            .observe(
+                if which == 0 { &large } else { "source" },
+                if which == 1 {
+                    large.as_bytes()
+                } else {
+                    b"input"
+                },
+            )
+            .unwrap();
+        store.set_admitted("a", "s", id, true).unwrap();
+        let a = store.begin_attempt("a", "s", "main", &[id]).unwrap();
+        store
+            .record_dispatch(
+                a,
+                if which == 2 {
+                    large.as_bytes()
+                } else {
+                    b"request"
+                },
+            )
+            .unwrap();
+        store
+            .reject_invalid(
+                a,
+                b"output",
+                1,
+                "v",
+                if which == 3 { &large } else { "reason" },
+            )
+            .unwrap();
+        assert_eq!(
+            store
+                .export_decision_bundle(
+                    &export_request(a, BundlePurpose::DiagnosticReplay),
+                    &AllowExport
+                )
+                .unwrap(),
+            BundleExport::Redacted(RedactedBundleV1 {
+                requested_attempt: a,
+                reason: RedactionReason::Unavailable
+            })
+        );
+    }
+}
+#[test]
+fn export_inherited_closure_is_exact_and_current_requires_every_output() {
+    use std::cell::RefCell;
+    struct Inspect(RefCell<Option<DiagnosticReadRequest>>);
+    impl DiagnosticAuthorizer for Inspect {
+        fn authorize(&self, r: &DiagnosticReadRequest) -> Result<bool, BundleError> {
+            *self.0.borrow_mut() = Some(r.clone());
+            Ok(true)
+        }
+    }
+    let mut store = kairotensor::Store::in_memory().unwrap();
+    let evidence = store
+        .observe_and_admit_many("a", "s", &[("source", b"data")])
+        .unwrap()[0];
+    let first = store
+        .begin_attempt("a", "s", "main", &[evidence, evidence])
+        .unwrap();
+    store.settle(first, b"first", 1).unwrap();
+    let (next, _) = store.begin_resume("a", "s", "main", &[]).unwrap();
+    store.settle(next, b"next", 2).unwrap();
+    let inspect = Inspect(RefCell::new(None));
+    let b = complete(
+        store
+            .export_decision_bundle(
+                &export_request(next, BundlePurpose::DiagnosticReplay),
+                &inspect,
+            )
+            .unwrap(),
+    );
+    assert_eq!(
+        b.attempts.iter().map(|a| a.id).collect::<Vec<_>>(),
+        [next, first]
+    );
+    let selection = inspect.0.borrow();
+    let selection = selection.as_ref().unwrap();
+    assert_eq!(selection.root_attempt, next);
+    assert_eq!(selection.purpose, BundlePurpose::DiagnosticReplay);
+    assert_eq!(
+        selection
+            .attempts
+            .iter()
+            .map(|a| a.attempt)
+            .collect::<Vec<_>>(),
+        [next, first]
+    );
+    assert_eq!(
+        selection.attempts[1].inputs,
+        [
+            SelectedInput {
+                position: 0,
+                occurrence_id: evidence
+            },
+            SelectedInput {
+                position: 1,
+                occurrence_id: evidence
+            }
+        ]
+    );
+    assert_eq!(selection.attempts[1].head, Some(next));
+    assert_eq!(selection.attempts[1].revision, 2);
+    assert_eq!(selection.attempts[1].captured_revision, 0);
+    assert!(matches!(
+        store
+            .export_decision_bundle(
+                &export_request(next, BundlePurpose::CurrentRead),
+                &AllowExport
+            )
+            .unwrap(),
+        BundleExport::Redacted(_)
+    ));
+}
+
+fn export_database() -> std::path::PathBuf {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    std::env::temp_dir().join(format!(
+        "kairotensor-decision-export-{}-{}.sqlite",
+        std::process::id(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ))
+}
+
+#[test]
+fn export_cross_scope_closure_requires_exact_authority_and_all_consuming_admissions() {
+    use std::cell::Cell;
+    struct Check {
+        called: Cell<bool>,
+        root: i64,
+        origin: i64,
+        evidence: i64,
+    }
+    impl DiagnosticAuthorizer for Check {
+        fn authorize(&self, r: &DiagnosticReadRequest) -> Result<bool, BundleError> {
+            self.called.set(true);
+            assert_eq!(r.actor, "a");
+            assert_eq!(r.scope, "s");
+            assert_eq!(
+                r.attempts
+                    .iter()
+                    .map(|a| (a.attempt, a.actor.as_str(), a.scope.as_str()))
+                    .collect::<Vec<_>>(),
+                [(self.root, "a", "s"), (self.origin, "foreign", "other")]
+            );
+            for a in &r.attempts {
+                assert_eq!(
+                    a.inputs,
+                    [SelectedInput {
+                        position: 0,
+                        occurrence_id: self.evidence
+                    }]
+                );
+            }
+            Ok(true)
+        }
+    }
+    let path = export_database();
+    let mut store = kairotensor::Store::open(&path).unwrap();
+    let evidence = store
+        .observe_and_admit_many("a", "s", &[("shared", b"payload")])
+        .unwrap()[0];
+    store
+        .set_admitted("foreign", "other", evidence, true)
+        .unwrap();
+    let (origin, _) = store
+        .begin_model_attempt("foreign", "other", "main", &[evidence], "contract")
+        .unwrap();
+    store.resolve_model_attempt(origin, b"request").unwrap();
+    store.settle(origin, b"response", 4).unwrap();
+    let (root, _) = store
+        .begin_model_attempt("a", "s", "main", &[evidence], "contract")
+        .unwrap();
+    // Construct a legal imported historical cross-scope reuse edge. The public
+    // model-reuse producer is narrower; the exporter must not assume that policy.
+    let db = rusqlite::Connection::open(&path).unwrap();
+    db.execute(
+        "INSERT INTO model_reuses(attempt_id,origin_attempt) VALUES(?1,?2)",
+        rusqlite::params![root, origin],
+    )
+    .unwrap();
+    db.execute(
+        "INSERT INTO deliveries(attempt_id,disposition,output,usage) VALUES(?1,'accepted',?2,0)",
+        rusqlite::params![root, b"response".as_slice()],
+    )
+    .unwrap();
+    db.execute(
+        "UPDATE branches SET head=?1,revision=1 WHERE actor='a' AND scope='s'",
+        [root],
+    )
+    .unwrap();
+    let auth = Check {
+        called: Cell::new(false),
+        root,
+        origin,
+        evidence,
+    };
+    assert!(matches!(
+        store
+            .export_decision_bundle(&export_request(root, BundlePurpose::CurrentRead), &auth)
+            .unwrap(),
+        BundleExport::Redacted(_)
+    ));
+    assert!(!auth.called.get());
+    let b = complete(
+        store
+            .export_decision_bundle(
+                &export_request(root, BundlePurpose::DiagnosticReplay),
+                &auth,
+            )
+            .unwrap(),
+    );
+    assert!(auth.called.get());
+    assert_eq!(b.evidence.len(), 1);
+    assert_eq!(
+        b.evidence[0].authorized_scopes,
+        [
+            AuthorizedScope {
+                actor: "a".into(),
+                scope: "s".into()
+            },
+            AuthorizedScope {
+                actor: "foreign".into(),
+                scope: "other".into()
+            }
+        ]
+    );
+    store
+        .set_admitted("foreign", "other", evidence, false)
+        .unwrap();
+    assert!(matches!(
+        store
+            .export_decision_bundle(
+                &export_request(root, BundlePurpose::DiagnosticReplay),
+                &auth
+            )
+            .unwrap(),
+        BundleExport::Redacted(_)
+    ));
+}
+
+#[allow(dead_code)]
+#[path = "../examples/incident_store_bridge/adapter.rs"]
+mod export_bridge;
+#[test]
+fn export_bridge_uses_actual_fixture_manifest_retry_and_immutable_bytes() {
+    use export_bridge::*;
+    let path = export_database();
+    let mut f = Fixture::new(kairotensor::Store::open(&path).unwrap()).unwrap();
+    let initial = prepare_incident_attempt(&mut f.store, f.recovery, &f.ids, &f.contract).unwrap();
+    f.store
+        .reserve_recovery_attempt(
+            initial.attempt,
+            &initial.request,
+            initial.preparation.input_tokens,
+            initial.preparation.output_cap,
+        )
+        .unwrap();
+    let run = f
+        .store
+        .run_timed_recovery(
+            initial.attempt,
+            &initial.preparation,
+            || tick(200),
+            |request| Ok::<_, String>(initial.measure(request, b"bad")),
+        )
+        .unwrap();
+    assert!(matches!(
+        run,
+        kairotensor::RecoveryRun::Settled {
+            disposition: kairotensor::Disposition::InvalidOutput,
+            ..
+        }
+    ));
+    let retry = prepare_incident_attempt(&mut f.store, f.recovery, &f.ids, &f.contract).unwrap();
+    // A planned retry has no quote/request in the ledger until reservation.
+    let request = BundleRequest {
+        actor: ACTOR.into(),
+        scope: SCOPE.into(),
+        attempt: retry.attempt,
+        purpose: BundlePurpose::DiagnosticReplay,
+    };
+    let planned = complete(
+        f.store
+            .export_decision_bundle(&request, &AllowExport)
+            .unwrap(),
+    );
+    assert_eq!(planned.attempts.len(), 2);
+    assert_eq!(
+        planned.attempts[0]
+            .recovery
+            .as_ref()
+            .unwrap()
+            .predecessor_id,
+        Some(initial.attempt)
+    );
+    assert_eq!(
+        planned.attempts[0]
+            .immutable_manifest
+            .as_ref()
+            .unwrap()
+            .sha256,
+        initial.manifest_sha256
+    );
+    f.store
+        .reserve_recovery_attempt(
+            retry.attempt,
+            &retry.request,
+            retry.preparation.input_tokens,
+            retry.preparation.output_cap,
+        )
+        .unwrap();
+    let b = complete(
+        f.store
+            .export_decision_bundle(&request, &AllowExport)
+            .unwrap(),
+    );
+    assert_eq!(
+        b.attempts[0]
+            .recovery
+            .as_ref()
+            .unwrap()
+            .request
+            .as_ref()
+            .unwrap()
+            .decode()
+            .unwrap(),
+        retry.request
+    );
+    assert!(b.attempts[0].dispatch_request.is_none());
+    assert_eq!(
+        b.attempts[1]
+            .dispatch_request
+            .as_ref()
+            .unwrap()
+            .decode()
+            .unwrap(),
+        initial.request
+    );
+    assert_eq!(b.attempts[0].accounting.unit, AccountingUnit::FixtureBytes);
+    let db = rusqlite::Connection::open(&path).unwrap();
+    let raw: (String, String) = db
+        .query_row(
+            "SELECT configuration,runtime_json FROM recovery_timing_bindings WHERE recovery_id=?1",
+            [f.recovery],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    for a in &b.attempts {
+        assert_eq!(
+            a.timing_configuration.as_ref().unwrap().decode().unwrap(),
+            raw.0.as_bytes()
+        );
+        assert_eq!(
+            a.immutable_runtime.as_ref().unwrap().decode().unwrap(),
+            raw.1.as_bytes()
+        );
+        assert_eq!(
+            a.immutable_manifest.as_ref().unwrap().sha256,
+            retry.manifest_sha256
+        );
+        assert_eq!(a.inputs[0].role, InputRole::Context);
+    }
+    assert_eq!(
+        b.attempts[0].validator.as_ref().unwrap().provenance,
+        ValidatorProvenance::DeclaredContract
+    );
+    assert_eq!(
+        b.attempts[1].validator.as_ref().unwrap().provenance,
+        ValidatorProvenance::RecordedRejection
+    );
+    let replay = validate_recorded_bundle(&b);
+    assert_eq!(replay.consistency, ReplayStatus::Matched);
+    assert_eq!(replay.reconstruction, ReplayStatus::Matched);
+    // Data mutation leaves the captured immutable fingerprint unchanged: never
+    // attach a recognized manifest/roles/fixture units from a near match.
+    db.execute(
+        "UPDATE evidence SET payload=?1 WHERE id=?2",
+        rusqlite::params![b"changed".as_slice(), f.ids[1]],
+    )
+    .unwrap();
+    let changed = complete(
+        f.store
+            .export_decision_bundle(&request, &AllowExport)
+            .unwrap(),
+    );
+    for a in changed.attempts {
+        assert!(a.immutable_manifest.is_none());
+        assert_eq!(a.accounting.unit, AccountingUnit::Unknown);
+        assert!(a.inputs.iter().all(|i| i.role == InputRole::Unknown));
+    }
+}
+
+#[test]
+fn export_missing_retry_predecessor_redacts_instead_of_inventing_complete_history() {
+    let path = export_database();
+    let mut store = kairotensor::Store::open(&path).unwrap();
+    let budget = store.create_token_budget(100).unwrap();
+    let run = store
+        .create_recovery("r", budget, "a", "s", "main")
+        .unwrap();
+    let id = match store.begin_recovery_attempt(run, &[]).unwrap() {
+        kairotensor::RecoveryStart::New { attempt, .. } => attempt,
+        _ => panic!(),
+    };
+    // Adversarial persisted state: ordinal 1 exists without its required phase 0.
+    rusqlite::Connection::open(&path)
+        .unwrap()
+        .execute(
+            "UPDATE recovery_attempts SET ordinal=1 WHERE attempt_id=?1",
+            [id],
+        )
+        .unwrap();
+    assert!(matches!(
+        store
+            .export_decision_bundle(
+                &export_request(id, BundlePurpose::DiagnosticReplay),
+                &AllowExport
+            )
+            .unwrap(),
+        BundleExport::Redacted(_)
+    ));
+}
+#[test]
+fn export_large_text_source_is_enveloped_as_bytes_not_json_text() {
+    let mut store = kairotensor::Store::in_memory().unwrap();
+    let source = "s".repeat(3 * 1024 * 1024);
+    let e = store.observe(&source, b"input").unwrap();
+    store.set_admitted("a", "s", e, true).unwrap();
+    let id = store.begin_attempt("a", "s", "main", &[e]).unwrap();
+    store.settle(id, b"output", 0).unwrap();
+    let b = complete(
+        store
+            .export_decision_bundle(
+                &export_request(id, BundlePurpose::CurrentRead),
+                &DenyDiagnostics,
+            )
+            .unwrap(),
+    );
+    assert_eq!(b.evidence[0].source.decode().unwrap(), source.as_bytes());
+}
+#[test]
+fn export_missing_payload_dependency_cycle_and_closure_limit_redact() {
+    for scenario in 0..3 {
+        let path = export_database();
+        let mut store = kairotensor::Store::open(&path).unwrap();
+        let e = store
+            .observe_and_admit_many("a", "s", &[("secret", b"payload")])
+            .unwrap()[0];
+        let first = store.begin_attempt("a", "s", "main", &[e]).unwrap();
+        store.settle(first, b"output", 0).unwrap();
+        let (mut root, _) = store.begin_resume("a", "s", "main", &[]).unwrap();
+        store.settle(root, b"output", 0).unwrap();
+        let db = rusqlite::Connection::open(&path).unwrap();
+        match scenario {
+            0 => {
+                db.execute("DELETE FROM deliveries WHERE attempt_id=?1", [first])
+                    .unwrap();
+            }
+            1 => {
+                db.execute(
+                    "UPDATE attempts SET parent=id,inherited_from=id WHERE id=?1",
+                    [root],
+                )
+                .unwrap();
+            }
+            2 => {
+                for _ in 0..127 {
+                    root = store.begin_resume("a", "s", "main", &[]).unwrap().0;
+                    store.settle(root, b"output", 0).unwrap();
+                }
+            }
+            _ => unreachable!(),
+        }
+        assert!(matches!(
+            store
+                .export_decision_bundle(
+                    &export_request(root, BundlePurpose::DiagnosticReplay),
+                    &AllowExport
+                )
+                .unwrap(),
+            BundleExport::Redacted(_)
+        ));
+    }
+}
+#[test]
+fn export_aggregate_envelopes_are_bounded_and_sql_corruption_is_an_error() {
+    let mut store = kairotensor::Store::in_memory().unwrap();
+    let payload = vec![0; 3 * 1024 * 1024];
+    let mut ids = Vec::new();
+    for _ in 0..3 {
+        let id = store.observe("source", &payload).unwrap();
+        store.set_admitted("a", "s", id, true).unwrap();
+        ids.push(id);
+    }
+    let id = store.begin_attempt("a", "s", "main", &ids).unwrap();
+    assert!(matches!(
+        store
+            .export_decision_bundle(
+                &export_request(id, BundlePurpose::DiagnosticReplay),
+                &AllowExport
+            )
+            .unwrap(),
+        BundleExport::Redacted(_)
+    ));
+    let path = export_database();
+    let mut store = kairotensor::Store::open(&path).unwrap();
+    let id = store.begin_attempt("a", "s", "main", &[]).unwrap();
+    store.settle(id, b"output", 0).unwrap();
+    rusqlite::Connection::open(&path)
+        .unwrap()
+        .execute(
+            "UPDATE deliveries SET output='CORRUPTION_CANARY' WHERE attempt_id=?1",
+            [id],
+        )
+        .unwrap();
+    assert!(
+        matches!(
+            store
+                .export_decision_bundle(
+                    &export_request(id, BundlePurpose::DiagnosticReplay),
+                    &DenyDiagnostics
+                )
+                .unwrap(),
+            BundleExport::Redacted(_)
+        ),
+        "denial must not load corrupt payload bytes"
+    );
+    let error = store
+        .export_decision_bundle(
+            &export_request(id, BundlePurpose::DiagnosticReplay),
+            &AllowExport,
+        )
+        .unwrap_err();
+    assert!(matches!(error, BundleError::Store(_)));
+    assert!(!error.to_string().contains("CANARY"));
+}
+#[test]
+fn export_report_binding_replays_exactly_without_invented_units() {
+    let mut store = kairotensor::Store::in_memory().unwrap();
+    let e = store
+        .observe_and_admit_many(
+            "a",
+            "s",
+            &[("report", br#"{"release":"r1","passed":2,"total":2}"#)],
+        )
+        .unwrap()[0];
+    let id = store.begin_report_verdict("a", "s", "main", &[e]).unwrap();
+    store.commit_report_verdict(id).unwrap();
+    let b = complete(
+        store
+            .export_decision_bundle(
+                &export_request(id, BundlePurpose::CurrentRead),
+                &DenyDiagnostics,
+            )
+            .unwrap(),
+    );
+    let report = validate_recorded_bundle(&b);
+    assert_eq!(report.reconstruction, ReplayStatus::Matched);
+    assert_eq!(report.validation, ReplayStatus::Matched);
+    assert_eq!(
+        b.attempts[0].accounting.unit,
+        AccountingUnit::LogicalSupport
+    );
+    assert_eq!(
+        b.attempts[0].validator.as_ref().unwrap().provenance,
+        ValidatorProvenance::DeterministicBinding
+    );
+}
+#[test]
+fn export_retains_noncanonical_timing_and_runtime_bytes() {
+    use export_bridge::*;
+    let path = export_database();
+    let mut f = Fixture::new(kairotensor::Store::open(&path).unwrap()).unwrap();
+    let second = f
+        .store
+        .create_recovery("raw timing", f.budget, ACTOR, SCOPE, "other")
+        .unwrap();
+    let db = rusqlite::Connection::open(&path).unwrap();
+    // Explicit adversarial persisted fixture: valid JSON with retained whitespace,
+    // inserted before attempts exist, respecting the immutable timing triggers.
+    db.execute("INSERT INTO recovery_timing_bindings SELECT ?1, '  ' || configuration || char(10),clock_domain,start_ms,deadline_ms, ' ' || runtime_json || char(10),calibration_id,max_duration_ms,safety_margin_ms,max_input_tokens,output_cap,measured_at_ms,expires_at_ms,last_observed_ms FROM recovery_timing_bindings WHERE recovery_id=?2",rusqlite::params![second,f.recovery]).unwrap();
+    let id = match f.store.begin_recovery_attempt(second, &f.ids).unwrap() {
+        kairotensor::RecoveryStart::New { attempt, .. } => attempt,
+        _ => panic!(),
+    };
+    let request = BundleRequest {
+        actor: ACTOR.into(),
+        scope: SCOPE.into(),
+        attempt: id,
+        purpose: BundlePurpose::DiagnosticReplay,
+    };
+    let b = complete(
+        f.store
+            .export_decision_bundle(&request, &AllowExport)
+            .unwrap(),
+    );
+    let raw: (String, String) = db
+        .query_row(
+            "SELECT configuration,runtime_json FROM recovery_timing_bindings WHERE recovery_id=?1",
+            [second],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(
+        b.attempts[0]
+            .timing_configuration
+            .as_ref()
+            .unwrap()
+            .decode()
+            .unwrap(),
+        raw.0.as_bytes()
+    );
+    assert_eq!(
+        b.attempts[0]
+            .immutable_runtime
+            .as_ref()
+            .unwrap()
+            .decode()
+            .unwrap(),
+        raw.1.as_bytes()
+    );
+    assert!(raw.0.starts_with("  "));
+    assert!(raw.1.ends_with('\n'));
+    assert!(b.attempts[0].immutable_manifest.is_some());
+}
+
+#[test]
+fn export_manifest_expansion_is_bounded_before_replicating_case_metadata() {
+    use export_bridge::*;
+    let mut f = Fixture::new(kairotensor::Store::in_memory().unwrap()).unwrap();
+    let (mut context, _) = pinned_case("cal-01").unwrap();
+    context.case_id = "c".repeat(250_000);
+    context.evidence_ids = (0..20).map(|n| format!("e{n}")).collect();
+    let raw = context.to_json().unwrap();
+    let mut ids = f
+        .store
+        .observe_and_admit_many(ACTOR, SCOPE, &[("context", raw.as_slice())])
+        .unwrap();
+    for _ in 0..20 {
+        ids.extend(
+            f.store
+                .observe_and_admit_many(ACTOR, SCOPE, &[("report", b"small")])
+                .unwrap(),
+        );
+    }
+    let id = match f.store.begin_recovery_attempt(f.recovery, &ids).unwrap() {
+        kairotensor::RecoveryStart::New { attempt, .. } => attempt,
+        _ => panic!(),
+    };
+    let request = BundleRequest {
+        actor: ACTOR.into(),
+        scope: SCOPE.into(),
+        attempt: id,
+        purpose: BundlePurpose::DiagnosticReplay,
+    };
+    assert!(matches!(f.store.export_decision_bundle(&request,&AllowExport).unwrap(),BundleExport::Redacted(_)),"a bounded context must not expand into an unbounded candidate manifest before the fingerprint comparison");
+}

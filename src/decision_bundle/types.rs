@@ -294,3 +294,76 @@ pub struct ReplayReport {
     pub reevaluated_validator: Option<String>,
     pub attempts: Vec<AttemptReplay>,
 }
+
+/// Caller identity must be authenticated by the embedding runtime.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BundleRequest {
+    pub actor: String,
+    pub scope: String,
+    pub attempt: i64,
+    pub purpose: BundlePurpose,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BundlePurpose {
+    CurrentRead,
+    DiagnosticReplay,
+}
+
+/// Ephemeral exact selection, never a persisted or transferable access grant.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DiagnosticReadRequest {
+    pub actor: String,
+    pub scope: String,
+    pub root_attempt: i64,
+    pub purpose: BundlePurpose,
+    pub attempts: Vec<SelectedAttempt>,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectedAttempt {
+    pub attempt: i64,
+    pub actor: String,
+    pub scope: String,
+    pub branch: i64,
+    pub head: Option<i64>,
+    pub revision: i64,
+    pub current_epoch: i64,
+    pub captured_revision: i64,
+    pub captured_epoch: i64,
+    pub inputs: Vec<SelectedInput>,
+}
+/// Repeated occurrences retain their consuming attempt and compacted position.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectedInput {
+    pub position: i64,
+    pub occurrence_id: i64,
+}
+
+pub trait DiagnosticAuthorizer {
+    /// Synchronous trusted policy; must not reenter/mutate this Store or use the
+    /// network. Approval covers precisely this retained-snapshot selection.
+    fn authorize(&self, request: &DiagnosticReadRequest) -> Result<bool, super::BundleError>;
+}
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DenyDiagnostics;
+impl DiagnosticAuthorizer for DenyDiagnostics {
+    fn authorize(&self, _: &DiagnosticReadRequest) -> Result<bool, super::BundleError> {
+        Ok(false)
+    }
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(tag = "status", content = "bundle", rename_all = "snake_case")]
+pub enum BundleExport {
+    Complete(DecisionBundleV1),
+    Redacted(RedactedBundleV1),
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct RedactedBundleV1 {
+    pub requested_attempt: i64,
+    pub reason: RedactionReason,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RedactionReason {
+    Unavailable,
+}
