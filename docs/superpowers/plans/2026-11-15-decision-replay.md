@@ -73,6 +73,12 @@ charge and hold bound; unknown measured usage stays null. Never invent times.
 The integrity manifest binds the versioned ordered record serialization and
 root selection; include a digest excluding its own digest field. Preserve all
 original raw byte envelopes; reserialization of embedded bytes is forbidden.
+Define that outer serialization as versioned compact UTF-8 JSON with recursively
+sorted object keys, unchanged array order, no Unicode normalization and no ASCII
+escaping of non-ASCII characters. `source_bundle_sha256` hashes this canonical
+complete representation, including the integrity field, rather than claiming to
+hash an arbitrary original transport file. File-byte digests remain separate
+artifact receipts. Document this encoding and share exact golden bytes with C3.
 
 `ReplayReport` has independent consistency, reconstruction and validation
 results; recorded_disposition, validator_provenance, missing_requirements,
