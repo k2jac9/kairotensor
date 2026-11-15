@@ -60,7 +60,7 @@ Measured main-branch snapshot: 20fab84a6baa525452191ecf80eeee339f0b5ac7, https:/
 
 [1] Moreau, L. and Missier, P. (eds.), 2013. PROV-DM: The PROV Data Model. W3C Recommendation. https://www.w3.org/TR/prov-dm/
 
-[2] Coalition for Content Provenance and Authenticity, 2025. C2PA Technical Specification 2.4. https://spec.c2pa.org/specifications/specifications/2.4/specs/C2PA_Specification.html
+[2] Coalition for Content Provenance and Authenticity, 2026. C2PA Technical Specification 2.4. https://spec.c2pa.org/specifications/specifications/2.4/specs/C2PA_Specification.html
 
 [3] KairoTensor, 2026. Selective revision implementation and tests. https://github.com/k2jac9/kairotensor
 
