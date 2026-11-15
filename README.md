@@ -28,6 +28,13 @@ The Rust store provides three ordered batch operations. Each call commits in one
 
 Evidence ingestion and rule publication are separate commit boundaries. A caller can reuse IDs from a successful import if rule registration fails. For an existing catalogue, bulk grants update witness counts immediately. Use `revise_support` for an affected head whose verdict needs a new publication. The selective revision example exercises bulk setup followed by an atomic withdrawal.
 
+## Current eligibility
+
+`Store::explain_current(actor, scope, branch)` explains why a head is ready,
+empty, or needs review without loading its payload or changing historical
+receipts and usage. It shares the authoritative gate with current reads and
+resume. [Reason codes and snapshot contract](docs/current-eligibility.md)
+
 ## Selective revision
 
 The second example asks whether a test run has a reproduction record. An original report **and** its input manifest qualify together. A self-contained record from a second run also qualifies on its own. Withdrawing the original report preserves the accepted reproduction result through the second run. In the same transaction, the separate check that requires the original report publishes `unsupported`.

@@ -59,8 +59,18 @@ fn rule_state(db: &Connection, head: i64) -> Result<Option<RuleState>> {
     .optional()
 }
 
-pub(crate) fn is_current(db: &Connection, head: i64) -> Result<bool> {
-    Ok(rule_state(db, head)?.is_some_and(|state| state.current == state.published))
+pub(crate) enum SupportStatus {
+    NotSupport,
+    SameVerdict,
+    ChangedVerdict,
+}
+
+pub(crate) fn inspect_current(db: &Connection, head: i64) -> Result<SupportStatus> {
+    Ok(match rule_state(db, head)? {
+        None => SupportStatus::NotSupport,
+        Some(state) if state.current == state.published => SupportStatus::SameVerdict,
+        Some(_) => SupportStatus::ChangedVerdict,
+    })
 }
 
 // Called exactly once per effective transition, in the admission writer's

@@ -1,6 +1,8 @@
 //! Local versioned evidence memory with actor-scoped admission and atomic publication.
 
 mod attempts;
+mod eligibility;
+pub use eligibility::{CurrentExplanation, EligibilityProof, EligibilityReason, EligibilityState};
 mod timed_recovery;
 pub use timed_recovery::{RecoveryReadiness, RecoveryRuntime, RecoveryCalibration, RecoveryTiming, RecoveryClock, RecoveryPreparation, TimingRefusal, TimedRecoveryClaim};
 mod report_verdict;

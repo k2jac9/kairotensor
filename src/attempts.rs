@@ -82,18 +82,16 @@ pub(crate) fn ensure_branch(
 }
 
 // The caller retains one SQLite snapshot throughout the gate and payload read.
-fn current_head(db: &Connection, branch: &Branch, epoch: i64) -> Result<Current> {
-    let Some(head) = branch.head else {
-        return Ok(Current::Empty);
-    };
-    let certified_epoch: i64 = db.query_row(
-        "SELECT view_epoch FROM attempts WHERE id = ?1",
-        [head],
-        |r| r.get(0),
-    )?;
-    if certified_epoch != epoch && !crate::support::is_current(db, head)? {
-        return Ok(Current::NeedsReview);
+fn current_head(db: &Connection, branch: Option<&Branch>, epoch: i64) -> Result<Current> {
+    let explanation = crate::eligibility::evaluate(db, branch, epoch)?;
+    match explanation.state {
+        crate::EligibilityState::Empty => return Ok(Current::Empty),
+        crate::EligibilityState::NeedsReview => return Ok(Current::NeedsReview),
+        crate::EligibilityState::Ready => {}
     }
+    let head = explanation.head_id.expect("ready gate has a head");
+    #[cfg(test)]
+    eligibility_snapshot_tests::before_payload(db, &explanation);
     db.query_row(
         "SELECT output FROM deliveries WHERE attempt_id = ?1 AND disposition = 'accepted'",
         [head],
@@ -327,7 +325,7 @@ impl Store {
         let branch =
             find_branch(&tx, actor, scope, branch)?.ok_or_else(|| invalid("no head to resume"))?;
         let epoch = view_epoch(&tx, actor, scope)?;
-        let output = match current_head(&tx, &branch, epoch)? {
+        let output = match current_head(&tx, Some(&branch), epoch)? {
             Current::Empty => return Err(invalid("no head to resume")),
             Current::NeedsReview => return Err(invalid("head must be rebuilt before resume")),
             Current::Ready(output) => output,
@@ -341,10 +339,8 @@ impl Store {
     /// Return only bytes eligible at this read's snapshot boundary.
     pub fn read_current(&mut self, actor: &str, scope: &str, branch: &str) -> Result<Current> {
         let tx = self.conn.transaction()?;
-        let result = match find_branch(&tx, actor, scope, branch)? {
-            None => Current::Empty,
-            Some(branch) => current_head(&tx, &branch, view_epoch(&tx, actor, scope)?)?,
-        };
+        let branch = find_branch(&tx, actor, scope, branch)?;
+        let result = current_head(&tx, branch.as_ref(), view_epoch(&tx, actor, scope)?)?;
         tx.commit()?;
         Ok(result)
     }
@@ -618,5 +614,154 @@ mod tests {
         drop(restarted);
         std::fs::remove_file(path).unwrap();
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod eligibility_snapshot_tests {
+    use super::*;
+    use crate::{CurrentExplanation, EligibilityState};
+    use std::cell::RefCell;
+    use std::path::PathBuf;
+    use std::rc::Rc;
+    use std::sync::{
+        atomic::{AtomicU64, Ordering},
+        mpsc,
+    };
+    use std::time::Duration;
+
+    type PayloadBoundary = Box<dyn FnOnce(&Connection, &CurrentExplanation)>;
+    thread_local! {
+        static PAYLOAD_BOUNDARY: RefCell<Option<PayloadBoundary>> = RefCell::new(None);
+    }
+
+    pub(super) fn before_payload(db: &Connection, explanation: &CurrentExplanation) {
+        PAYLOAD_BOUNDARY.with(|hook| {
+            if let Some(hook) = hook.borrow_mut().take() {
+                hook(db, explanation);
+            }
+        });
+    }
+
+    struct Database(PathBuf);
+    impl Database {
+        fn new() -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            Self(std::env::temp_dir().join(format!(
+                "kairotensor-snapshot-{}-{}.sqlite",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            )))
+        }
+    }
+    impl Drop for Database {
+        fn drop(&mut self) {
+            for suffix in ["", "-wal", "-shm"] {
+                let _ = std::fs::remove_file(format!("{}{suffix}", self.0.display()));
+            }
+        }
+    }
+
+    // Channel barriers have a timeout only to diagnose missing hooks/writer failures;
+    // scheduling and the concurrent commit never depend on elapsed time or sleeps.
+    fn concurrent_read(replace: bool) -> Result<()> {
+        let file = Database::new();
+        let mut reader = Store::open(&file.0)?;
+        reader.conn.pragma_update(None, "journal_mode", "WAL")?;
+        let id = reader.observe_and_admit_many("a", "s", &[("source", b"input")])?[0];
+        let first = reader.begin_attempt("a", "s", "b", &[id])?;
+        reader.settle(first, b"old snapshot output", 1)?;
+        let mut writer = Store::open(&file.0)?;
+        let (gate_tx, gate_rx) = mpsc::channel();
+        let (commit_tx, commit_rx) = mpsc::channel();
+        let worker = std::thread::spawn(move || -> Result<Option<i64>> {
+            gate_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("read reached gate barrier");
+            let replacement = if replace {
+                let next = writer.begin_attempt("a", "s", "b", &[id])?;
+                writer.settle(next, b"new snapshot output", 2)?;
+                Some(next)
+            } else {
+                writer.set_admitted("a", "s", id, false)?;
+                None
+            };
+            commit_tx.send(()).unwrap();
+            Ok(replacement)
+        });
+        let captured = Rc::new(RefCell::new(None));
+        let captured_at_boundary = captured.clone();
+        PAYLOAD_BOUNDARY.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(move |db, explanation| {
+                gate_tx.send(()).unwrap();
+                commit_rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .expect("writer committed at barrier");
+                assert!(
+                    !db.is_autocommit(),
+                    "payload boundary must retain an active transaction"
+                );
+                assert_eq!(
+                    view_epoch(db, "a", "s").unwrap(),
+                    explanation.current_epoch,
+                    "payload boundary must retain the gate scope epoch"
+                );
+                let branch = find_branch(db, "a", "s", "b").unwrap().unwrap();
+                assert_eq!(
+                    branch.head, explanation.head_id,
+                    "payload boundary must retain the gate head"
+                );
+                assert_eq!(
+                    Some(branch.revision),
+                    explanation.branch_revision,
+                    "payload boundary must retain the gate branch revision"
+                );
+                *captured_at_boundary.borrow_mut() = Some(explanation.clone());
+            }))
+        });
+        let result = reader.read_current("a", "s", "b")?;
+        let replacement = worker.join().unwrap()?;
+        let explanation = captured
+            .borrow()
+            .clone()
+            .expect("actual read payload boundary was reached");
+        assert_eq!(explanation.state, EligibilityState::Ready);
+        assert_eq!(explanation.head_id, Some(first));
+        assert_eq!(explanation.branch_revision, Some(1));
+        assert_eq!(explanation.current_epoch, 1);
+        assert_eq!(
+            result,
+            Current::Ready(b"old snapshot output".to_vec()),
+            "gate metadata and payload must come from the same snapshot"
+        );
+        if let Some(replacement) = replacement {
+            assert_eq!(
+                reader.explain_current("a", "s", "b")?.head_id,
+                Some(replacement)
+            );
+            assert_eq!(
+                reader.explain_current("a", "s", "b")?.branch_revision,
+                Some(2)
+            );
+            assert_eq!(
+                reader.read_current("a", "s", "b")?,
+                Current::Ready(b"new snapshot output".to_vec())
+            );
+        } else {
+            assert_eq!(reader.explain_current("a", "s", "b")?.current_epoch, 2);
+            assert_eq!(reader.read_current("a", "s", "b")?, Current::NeedsReview);
+            assert!(reader.begin_resume("a", "s", "b", &[]).is_err());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn revocation_snapshot_never_exposes_payload() -> Result<()> {
+        concurrent_read(false)
+    }
+
+    #[test]
+    fn head_replacement_keeps_metadata_and_output_in_one_snapshot() -> Result<()> {
+        concurrent_read(true)
     }
 }
