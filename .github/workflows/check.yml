@@ -46,6 +46,11 @@ jobs:
 
       - name: Verify synthetic recovery policy comparison
         run: python3 scripts/recovery_policy_eval.py --fixture
+      - name: Exercise typed policy activation and rollback without model calls
+        run: |
+          python3 scripts/recovery_policy_eval.py --activation-fixture > "$RUNNER_TEMP/policy-activation-fixture.json"
+          cargo run --locked --offline --example policy_activation -- --fixture "$RUNNER_TEMP/policy-activation-fixture.json" --out "$RUNNER_TEMP/policy-activation"
+          python3 scripts/recovery_policy_eval.py --archived-v1-refusal > "$RUNNER_TEMP/archived-v1-promotion-refusal.json"
       - name: Collect and score Store-backed synthetic recovery trajectories
         run: |
           cargo run --locked --example recovery_policy_eval -- --trace "$RUNNER_TEMP/recovery-policy-trace.json"

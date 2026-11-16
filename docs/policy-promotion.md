@@ -62,3 +62,63 @@ SQLite failures remain errors. Refusals and errors never partially activate.
 Positive fixtures demonstrate synthetic registry mechanics only. They are not
 observed policy superiority, live model results, production release acceptance or
 a migration of an owner's live database. Existing acceptance gates remain required.
+
+
+## Offline typed fixture
+
+Run the separate fixture with no model or provider calls:
+
+```sh
+python3 scripts/recovery_policy_eval.py --activation-fixture > /tmp/policy-activation-fixture.json
+cargo run --locked --offline --example policy_activation -- \
+  --fixture /tmp/policy-activation-fixture.json --out /tmp/policy-activation-demo
+python3 scripts/recovery_policy_eval.py --archived-v1-refusal
+```
+
+Choose a new output directory; the example refuses an existing directory instead
+of opening an owner database. Local builds still require the workstation storage
+admission wrapper. The example retains its exact synthetic input, SQLite fixture,
+prepared requests and result JSON. CI runs it explicitly alongside the existing
+offline steps. These are configured checks; remote CI execution is separate.
+
+The `policy-activation-fixture/1` envelope contains a complete deliberately
+synthetic `PolicyEvaluation`, generated with the existing D1 codec and evaluator
+identity. The example registers known `always_stop` and `affordable_retry`
+artifacts, bootstraps the baseline, records a complete identical-row baseline-only
+evaluation and a qualifying paired evaluation, promotes, then rolls back to the
+previous occurrence at revision 3. Synthetic row counters are attestations for
+registry mechanics: they are **not feasible named-policy replay or measured
+superiority**. Their frozen semantic labels never enter execution requests.
+
+Execution uses a separate `policy-report-fixture/1` manifest: exactly one `Policy`
+occurrence in position 0, followed by `Report` occurrences. It binds the active
+version, revision, exact evidence occurrence ID, artifact digest, compatibility
+contract and original baseline manifest digest, plus each ordered input occurrence
+and payload hash. All occurrences pass through ordinary Store recovery capture.
+Preparation refuses filtering, reordering, role/hash mismatch, unsupported contract
+or an identical-byte policy acquired as a different occurrence. It validates the
+captured policy artifact against a fresh active selection immediately before
+preparation. Only the captured Reports become `ci_reports`; policy bytes are never
+parsed as a Report or inserted into that payload.
+
+The immutable request includes this manifest, a computation digest, the fixed
+protocol feedback and `fixture-byte-runtime/1` identity with a byte quote and
+output cap. Normal Store claim and settlement freshness gates still decide
+permission to dispatch and publish after preparation. The demonstration shows a
+policy switch fencing an old prepared claim, an old duplicate `Accepted` receipt
+labelled `historicalAccepted` while the current head needs review, and an unresolved
+claimed attempt retaining its exact hold through promotion, rollback and database
+reopen. Unsent work may be cancelled; an uncertain claimed send cannot be reclaimed
+or cancelled. Rollback advances revision and does not make old work current.
+
+`--archived-v1-refusal` reads the retained actual v1 ZIP's `trace.json`, preserves
+its archive/trace hashes, and invokes the unchanged explicit v2 converter without
+supplying invented binding facts. It returns `Incomplete`: v1 fields alone do not
+establish frozen answerability, eligibility, units or observed references. This
+is a refusal at the conversion boundary, so no insertable `PolicyEvaluation` or
+Store promotion request is manufactured. Frozen-v1 default modes, archived schemas
+1/2, output and the Report-only collector remain unchanged.
+
+The typed policy fixture has its own role and validation contract. Existing
+`incident/1` decision export/replay and diagnostic support do not cover it; no
+incident validator binding or unsupported replay claim is attached to this demo.
