@@ -80,6 +80,8 @@ python3 scripts/project_runtime.py --budget-gib 2 cargo build --offline --locked
 For compiled IPC tests, set `KAIROTENSOR_PILOT_TEST_BINARY` to that exact built
 example while running the Python suite. This test-only variable enables three
 zero-model integration tests; without it, that class is explicitly skipped.
+The hosted workflow builds this executable and binds that variable in all five
+runtime lanes, so these integration checks are included in the broad suite.
 The public fixture command invokes the binary's deterministic adapter and labels
 its accounting units synthetic:
 
