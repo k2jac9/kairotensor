@@ -164,6 +164,37 @@ class RuntimeMatrixTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'override'):
             self.m.lane_environment(lane,self.root/'aliases',{}, {'PATH':os.environ.get('PATH',''),'CC':'/other/cc'})
 
+    def manifest(self):
+        repo=self.root/'repo';repo.mkdir()
+        (repo/'Cargo.lock').write_text('fixture lock')
+        subprocess.run(['git','init','-q',str(repo)],check=True)
+        subprocess.run(['git','-C',str(repo),'add','.'],check=True)
+        subprocess.run(['git','-C',str(repo),'-c','user.name=Fixture','-c','user.email=fixture@invalid','commit','-qm','fixture'],check=True)
+        commit=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip()
+        identity={'path':str(self.tool),'sha256':self.sha(self.tool)}
+        lanes=[{'role':role,'checkout':str(repo),'rustc':self.identity,'cargo':self.identity,
+                'python':self.identity,'provenance':[identity]}
+               for role in ['stable','rust-upcoming','rust-previous','python-upcoming','python-previous']]
+        return {'schema':'kairotensor-runtime-matrix/1','lanes':lanes,
+                'source':{'commit':commit,'files':{'Cargo.lock':self.sha(repo/'Cargo.lock')},'lock_sha256':self.sha(repo/'Cargo.lock')},
+                'commands':self.m.command_inventory(),'native_files':[identity],
+                **{k:identity for k in ['wrapper','storage_guard','cargo_recipe','bundle','attestations']}}
+
+    def test_complete_manifest_rejects_omitted_command(self):
+        m=self.manifest();m['commands'].pop()
+        with self.assertRaisesRegex(ValueError,'inventory'): self.m.check_manifest(m)
+
+    def test_unavailable_lane_emits_no_pass_or_commands(self):
+        m=self.manifest();lane=copy.deepcopy(m['lanes'][0]);lane['cargo']['path']=str(self.root/'unavailable')
+        r=self.m.run_lane(m,lane,self.root/'result')
+        self.assertEqual(r['status'],'Unexecuted');self.assertEqual(r['commands'],[])
+        self.assertTrue((self.root/'result'/'receipt.json').is_file())
+
+    def test_receipt_binds_whole_manifest(self):
+        m=self.manifest();receipt={'role':'stable','source':m['source'],'status':'Pass','manifest_sha256':'0'*64}
+        with self.assertRaisesRegex(ValueError,'manifest'):
+            self.m.verify_receipt(m,m['lanes'][0],receipt)
+
     def test_inventory_contains_all_distinct_commands(self):
         commands=self.m.command_inventory()
         ids=[c['id'] for c in commands]

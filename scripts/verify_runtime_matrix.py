@@ -270,7 +270,8 @@ def run_lane(m,lane,out):
     out=Path(out);out.mkdir(parents=True,exist_ok=False)
     root=Path(lane['checkout']); outputs=out/'outputs';outputs.mkdir()
     result={'role':lane['role'],'source':m['source'],'status':'Unexecuted','commands':[],
-            'host':{'platform':platform.platform(),'machine':platform.machine()},'new_model_calls':0}
+            'host':{'platform':platform.platform(),'machine':platform.machine()},'new_model_calls':0,
+            'manifest_sha256':hashlib.sha256(json.dumps(m,sort_keys=True).encode()).hexdigest()}
     save(out/'receipt.json',result)
     try:
         check_manifest(m)
@@ -318,6 +319,8 @@ def run_lane(m,lane,out):
 
 def verify_receipt(m,lane,receipt):
     check_manifest(m)
+    if receipt.get('manifest_sha256')!=hashlib.sha256(json.dumps(m,sort_keys=True).encode()).hexdigest():
+        raise ValueError('receipt manifest identity mismatch')
     if receipt.get('role')!=lane['role'] or receipt.get('source')!=m['source'] or receipt.get('status')!='Pass':
         raise ValueError('wrong source/role/status in receipt')
     if not receipt.get('source_verified_after'): raise ValueError('missing source verification')
