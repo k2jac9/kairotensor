@@ -136,3 +136,157 @@ rollback exercise, observation window, retirement date and owner acceptance are
 not established. The project technical owner owns these adoption gaps, with
 independent review required before promotion. Adding `--locked` does not close
 them or retire historical pins or rollback assets.
+
+## G1 isolated qualification — 2026-11-16
+
+The preceding A0 record is historical and remains unchanged. This section binds
+new local offline checks to their actual source; it does not activate a runtime
+selection, claim hosted CI, qualify model workloads or establish a live service.
+
+Accepted entry/rollback source S0 is
+`794f64e5f9702987cd2502b86776b28f8a8d97c5`. The unchanged current lock SHA-256 is
+`72282fc2776662e44b2e7b4003c2c582211296d663fdaecbd5b768dc09bc63aa`.
+The initial verifier source S1 was
+`26045ce65a3d1b495f50635da28d961ef71058bb`. Its previous-Rust attempt remains
+Failed: all application commands it launched exited zero, but the new verifier
+incorrectly rejected an empty successful controller stderr log. Root authorized
+a narrow correction: recursively hash every artifact file, permit empty logs
+beside at least one nonempty directory result, and continue rejecting missing or
+all-empty artifacts and explicitly required empty result files. Regression tests
+were added before the correction (`353ff2f2673b59df8402bf8dd3e10e4735a40470`).
+Subsequent retained revisions corrected JSON tuple/list receipt persistence
+(`ab8e162d335eabd11006b4a9d8bd9f3482dbdbb6`) and rejected contradictory
+recorded cwd, runtime environment, runner and child-Python provenance. The final
+common executable source is `dd52954fff73484c7fe7dafc474ac706af69c59d`, with 42
+verifier regressions. Earlier receipts remain historical; the documentation-only
+successor does not relabel them.
+
+The packet is
+`/home/neo/Projects/kairotensor-artifacts/reliability-implementation-20261115/task-g1/`.
+`task-1-report.md` inventories every executed command and retained failure.
+`required-command-inventory.json`, its independent root review, and the final
+source manifest bind the unchanged 40-command workload. This includes all of
+`check.yml`, compiled recovery/decision/policy runners, all-target locked Rust,
+reference/oracle suites, all Python suites with explicit runner paths, offline
+examples/audits/activation fixtures, E1 planning/recorded scoring and the new
+verifier unit suite. Focused suites repeat subsets of full discovery; their
+counts are reported separately and are not added as distinct tests.
+
+These checks establish internally consistent local attestations, not
+cryptographic issuer authentication or proof of host execution. The verifier
+accepts an explicit `kairotensor-runtime-matrix/1` manifest. Its
+`source` binds a committed revision, every tracked-file digest and the lock.
+Five `lanes` bind roles, registered checkout paths, absolute actual Rust/Cargo/
+Python executables, expected version output, SHA-256 and archive/closure
+provenance. Wrapper/guard/recipe/native-library and external E1 input identities
+are explicit. Mandatory `host_path` freezes ordered nonempty absolute PATH
+directories. Command cwd and selected environment are checked; runner identities
+come from the retained compiler-artifact log; structured parent/child Python
+real paths and exact versions, raw probe output/exit and alias targets are
+verified. `commands` must equal the complete built-in inventory. The verifier
+never installs a runtime or substitutes a PATH runtime; it creates verified
+private aliases for child Rust/Python selection. Missing prerequisites are
+Unexecuted, started failures remain Failed, and a Pass requires every required
+command/result, nonzero test counts, no skipped/ignored/filtered tests, exact
+source before/after, unchanged identities and independently re-readable logs
+and artifacts. Receipts bind the complete manifest, not only a reported status.
+Fake executable tests exercise refusals and command identity only; they are not
+runtime qualification evidence.
+
+Use `python3 scripts/verify_runtime_matrix.py --manifest <manifest.json>
+--output <new-evidence-directory>` for a new qualification run, or add
+`--lane <role> --verify-receipt <receipt.json>` to validate an existing lane's
+bound artifacts. The Python used to invoke the verifier is operational; each
+workload interpreter is selected by the manifest. These are qualification
+interfaces, not G2's future ordinary-development launcher or accepted selection.
+
+### Runtime and source evidence
+
+Intake refreshed primary Rust stable/nightly manifests and official release
+records, plus Python's supported-release list and latest previous/preview
+redirects. Selections were Rust 1.100.0; nightly-2026-11-16 / 1.102.0-nightly
+(commit `5f4effd57`, replacing the prior dated Nov15 research selection); previous
+1.99.1; Python 3.15.2, 3.16.0a2 and 3.14.10. Ongoing support for the previous
+Rust line remains unknown. Raw bytes, response times and digests are retained
+under `upstream-intake/`, with exact component URLs/digests in
+`selected-upstream-identities.json`. Download declarations are distinguished from
+verified archives and actual launched binaries.
+
+The measured host is NixOS 26.05 (Yarara), build
+`26.05.20261108.ac588ef`, Linux x86_64. The wrapper's `nixos26.05-x86_64`
+output component is a static label, not a fresh host measurement. Actual binary,
+ELF loader, library, standard-library import and native GCC identities are
+retained in runtime inspection receipts. Compiler identities use separate
+registered checkouts/keys. Python-varied reuse requires unchanged compiler,
+source, lock, native dependencies and profile, with every test process rerun.
+All Cargo operations used the approved `kairotensor-cargo --budget-gib 2` route,
+zero debug symbols and disabled incremental compilation. Host defaults, existing
+runtime slots, source contracts, dependency pins and CI were preserved.
+
+| Role | Actual Rust | Actual Python | Final source result |
+| --- | --- | --- | --- |
+| stable | `rustc 1.100.0 (0ef1bc386 2026-11-09)` | `Python 3.15.2` | Pass: 40/40 commands; CLI revalidation exit 0 |
+| rust-upcoming | `rustc 1.102.0-nightly (5f4effd57 2026-11-13)` | `Python 3.15.2` | Pass: 40/40 commands; CLI revalidation exit 0 |
+| rust-previous | `rustc 1.99.1 (58cf8f9c3 2026-10-13)` | `Python 3.15.2` | Pass: 40/40 commands; CLI revalidation exit 0 |
+| python-upcoming | `rustc 1.100.0 (0ef1bc386 2026-11-09)` | `Python 3.16.0a2` | Pass: 40/40 commands; CLI revalidation exit 0 |
+| python-previous | `rustc 1.100.0 (0ef1bc386 2026-11-09)` | `Python 3.14.10` | Pass: 40/40 commands; CLI revalidation exit 0 |
+
+All five rows bind the original immutable `matrix-qualified.json` and their
+`qualified-v2/matrix/<role>/receipt.json`. Every row ran 357 Rust tests, 18
+reference tests, 8 oracle tests and 335 full Python tests (293 existing plus
+42 verifier tests), with zero skips/ignored/filtered tests. Focused counts
+24/42/15/19/7 repeat subsets. `final-matrix-rollup.json` binds all five receipt
+SHAs, source/lock and unchanged-runtime equality; `all-final-command-results.json`
+contains every exact argv/environment/cwd/exit/log/artifact/count record. All
+200 final command executions exited zero. Preview Python uses Astral
+python-build-standalone release 20261110, a third-party CPython build, and passed
+actual loader/standard-library checks without patching. No hosted CI is claimed.
+
+### Executed recovery and retention
+
+The isolated registered `g1-rollback-s0` checkout built S0's original locked
+library with retained Rust 1.99.1 and Python 3.15.2. An explicitly authorized,
+artifact-only `rollback_probe.rs` created one accepted current branch and a
+separate claimed unresolved recovery through actual Store APIs. The closed
+database was copied to backup and restored, then reopened twice through Store.
+Both checks returned the exact accepted bytes, spent 7/reserved 12, the same
+unresolved attempt, no second claim and `cancel=false`; no backend was invoked.
+Original, backup and restored final bytes remained identical. The fixture digest
+is `b32b32f06e8f8fe78211560a3ad76c16aae4d8b55060513323fd7533441a8e29`.
+This proves the bounded local fixture restore, not reversal of external effects.
+
+The full old Rust sysroot was copied under the unique G1 runtime prefix and all
+210 file hashes matched. Eight explicit Nix GC roots retain Python and native
+closures, with closure metadata and loader identities. Operational receipts are
+under `/home/neo/.local/state/kairotensor/runtime/g1-20261116-s0794f64e/`, with
+provenance copies in the packet. No retirement date or deletion is authorized.
+The first probe compile's incorrect dependency search path and all source/lane/
+acquisition failures remain retained; later success does not overwrite them.
+
+### Owned gaps and next review
+
+G2 owns portable pins, normal project launch selection, CI changes, independent
+acceptance and any local accepted-selection activation. No such activation
+occurred in G1. Seven-day observation dates begin only at an actual activation;
+retirement requires a separate owner decision. Root is the technical owner
+acting under Alejandro's project authority; the next weekly source-freshness and
+gap review is due 2026-11-23, and freshness must be checked again before promotion.
+
+The six other workflows (`benchmark`, `handoff`, `recovery-calibration`,
+`recovery-policy`, `registration-cache`, `token-caps`), historical explicit ML
+Python 3.11 environments, hosted execution, model/provider consumers and any
+separately promised older consumers remain unqualified by this core matrix.
+A future root Rust toolchain pin can affect workflows that invoke rustup-managed
+Cargo; each workflow still needs its own runtime/consumer evidence. No model
+inference, provider calls, dependency bulk update, storage exception extension,
+cleanup, old-runtime removal or live database work occurred. Inherited Rust
+warnings and bounded metadata/tooling failures remain in the logs.
+
+One operational evidence defect is retained in `controller-log-collision.json`: an
+older controller progress log and standalone preflight display were overwritten
+while adapting an operational script. The progress log was reconstructed into a
+new path and matched its previously retained SHA exactly. The old standalone
+preflight display bytes could not be recovered; its original exit/SHA and all
+inner command/admission receipts remain. The final matrix uses a fresh exclusively
+created packet with direct process exits and complete fresh admission evidence.
+The missing historical display is not a passing receipt or silently reconstructed.
