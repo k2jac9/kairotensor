@@ -137,13 +137,50 @@ class PreparedControllerTests(unittest.TestCase):
         self.assertTrue(report['audit_complete'],report);self.assertFalse(report['complete'],report)
         self.assertEqual(report['ledger_charged_units'],180,report);self.assertEqual(report['late_receipts'],0,report)
         self.assertEqual(json.loads((self.out/'receipt-0.json').read_text())['observed_ns'],50)
-    def test_worker_load_failure_and_hang(self):
+    def test_worker_load_failure_never_claims(self):
         report=self.execute('load_failure')
         self.assertEqual(report['claimed_slots'],0,report);self.assertEqual(report['ledger_charged_units'],0,report)
-        self.out=Path(self.temp.name)/'hang'
-        report=run_prepared(self.out,approval=InvocationApproval('offline_fake_dependencies'),fault='hang_generation',budget_ms=2000,audit_reserve_ms=500)
-        self.assertFalse(report['complete'],report);self.assertEqual(report['unresolved_hold_units'],269,report)
+    def test_worker_hang_after_claim_retains_hold_and_is_reaped(self):
+        import signal,time
+        from contextlib import closing
+        from unittest.mock import patch
+        import incident_calibration_controller as ledger
+        original_clock=ledger.now_ns
+        expired_at=None;claim_observed_at=None
+        def expire_after_claim(mode):
+            nonlocal expired_at,claim_observed_at
+            if expired_at is not None:return expired_at
+            try:
+                with closing(sqlite3.connect(f'file:{self.out}/ledger.sqlite?mode=ro',uri=True,timeout=0)) as db:
+                    claimed=db.execute("SELECT count(*) FROM events WHERE event='claimed'").fetchone()[0]
+            except sqlite3.OperationalError:
+                # The real child may not have created/initialized its ledger yet.
+                claimed=0
+            if claimed:
+                claim_observed_at=time.monotonic()
+                expired_at=json.loads((self.out/'manifest.json').read_text())['deadline_ns']
+                return expired_at
+            return original_clock(mode)
+        # Give startup the usual bounded fixture window. Only the supervising
+        # test process's clock advances after a real durable claim; the child,
+        # worker, pipes, ledger and process-group watchdog remain unchanged.
+        # A two-second global budget previously expired before any claim on CI.
+        with patch.object(ledger,'now_ns',expire_after_claim):
+            report=run_prepared(self.out,approval=InvocationApproval('offline_fake_dependencies'),fault='hang_generation',budget_ms=30000,audit_reserve_ms=1000)
+        self.assertIsNotNone(claim_observed_at,report)
+        self.assertLess(time.monotonic()-claim_observed_at,5,report)
+        self.assertFalse(report['complete'],report);self.assertTrue(report['audit_complete'],report)
+        self.assertEqual(report['claimed_slots'],1,report);self.assertEqual(report['settled_slots'],0,report)
+        self.assertEqual(report['unresolved_hold_units'],269,report)
+        self.assertEqual(report['ledger_charged_units'],0,report);self.assertEqual(report['known_receipt_units'],0,report)
+        self.assertEqual(report['known_observation_units'],0,report);self.assertEqual(report['new_model_calls'],0,report)
+        self.assertFalse(any(self.out.glob('backend-receipt-*.json')))
+        self.assertFalse(any(self.out.glob('receipt-*.json')))
+        self.assertTrue(report['supervisor']['timed_out'],report)
+        self.assertTrue(report['supervisor']['deadline_overrun'],report)
         self.assertTrue(report['supervisor']['child_reaped'],report)
+        self.assertTrue(report['supervisor']['group_terminated'],report)
+        self.assertEqual(report['supervisor']['exit_code'],-signal.SIGKILL,report)
     def test_no_live_cli_or_artifact_grant(self):
         import subprocess,sys
         script=Path(__file__).with_name('incident_transformers_controller.py')

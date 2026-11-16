@@ -39,3 +39,24 @@ workflow's changed checkout still needs its own future execution evidence.
 
 Source-bound logs and upstream selection responses are retained under the
 project artifact packet `submission-finalization-mkpl39bc/ci-fix/`.
+
+The combined PR #18 Python-previous lane at `10f618c` exposed another startup
+assumption: the prepared-worker hang test spent its two-second global budget
+before claiming a slot. The supervisor correctly killed the child with no
+claimed work and no hold; the test incorrectly expected a post-claim hold.
+The load-failure check is now separate. The hang test waits for a real durable
+claim within the usual bounded fixture startup window, then advances only the
+supervising test process's clock to the unchanged manifest deadline. The real
+child, worker, pipes, ledger and process-group termination remain in use. It
+requires exactly one claim, the 269-unit hold, no receipts or settlement, zero
+model calls, and a timed-out, reaped child killed by the supervisor.
+
+A retained reproduction delays the real child's readiness by 2.1 seconds:
+the original test fails with the hosted zero-claim result, and the corrected
+test passes with that same delay. All 14 prepared-controller tests and all
+438 Python scripts tests passed locally using the accepted Python runtime and
+existing verified Rust fixture binaries. Production code and runtime guards
+are unchanged. Evidence is retained in
+`submission-finalization-mkpl39bc/pr18/integrated/fixture-fix/`; exact-head hosted
+checks remain required. The injected supervisor clock is deterministic test
+evidence, not a real-model timing measurement.
