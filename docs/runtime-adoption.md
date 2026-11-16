@@ -1,5 +1,8 @@
 # Runtime adoption and reproducible baseline
 
+Maintenance successor: [example warnings and log preservation](verification-maintenance.md).
+The dated qualification records below describe their original source revisions.
+
 Checked on 2026-11-15. This change freezes a locally verified dependency
 resolution and requires Cargo to honor it in the existing CI commands. Runtime
 migration, hosted CI execution, release acceptance and rollback qualification

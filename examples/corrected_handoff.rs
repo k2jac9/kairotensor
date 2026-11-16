@@ -1,5 +1,6 @@
 //! Run with `cargo run --example corrected_handoff -- [--live] [--trace FILE]`.
 //! All release data is synthetic. The adapter only generates text.
+#![deny(dead_code)]
 #[path = "corrected_handoff/adapter.rs"]
 mod adapter;
 

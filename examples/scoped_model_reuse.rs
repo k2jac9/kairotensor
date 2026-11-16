@@ -1,5 +1,6 @@
 //! cargo run --example scoped_model_reuse -- [--live | --replay-invalid] [--trace FILE]
 //! Synthetic, single-writer fixture. Both model tasks only produce text.
+#![deny(dead_code)]
 #[path = "corrected_handoff/adapter.rs"]
 mod adapter;
 

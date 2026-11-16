@@ -286,7 +286,9 @@ def execute_command(command, root, env, logs):
             'started_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
             'environment':{k:env[k] for k in [*PROFILE,'PATH','RUSTC','RUNNER_TEMP','KAIROTENSOR_RECOVERY_RUNNER','KAIROTENSOR_DECISION_REPLAY'] if k in env},
             'timeout':False,'exit':None}
-    with stdout.open('wb') as out,stderr.open('wb') as err:
+    # Claim both outputs before dispatch. A prior file or symlink is evidence,
+    # never permission to truncate it. Keep any partial claim after a refusal.
+    with stdout.open('xb') as out,stderr.open('xb') as err:
         try:
             p=subprocess.Popen(command['argv'],cwd=root,env=env,stdout=out,stderr=err,start_new_session=True)
             try: record['exit']=p.wait(timeout=command['timeout'])

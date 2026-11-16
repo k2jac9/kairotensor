@@ -1,5 +1,6 @@
 """Behavioral checks use tiny executables, never qualification evidence."""
 import copy
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import importlib.util
 import json
@@ -8,6 +9,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 
 SPEC = importlib.util.spec_from_file_location('matrix', Path(__file__).with_name('verify_runtime_matrix.py'))
@@ -38,7 +40,74 @@ class RuntimeMatrixTests(unittest.TestCase):
                 'timeout': 5, 'artifacts': []}
 
     def run_command(self, command):
-        return self.m.execute_command(command, self.root, os.environ.copy(), self.root / 'logs')
+        logs = tempfile.mkdtemp(prefix='logs-', dir=self.root)
+        return self.m.execute_command(command, self.root, os.environ.copy(), logs)
+
+    def test_existing_log_refuses_dispatch_and_preserves_bytes(self):
+        for name in ['test.stdout', 'test.stderr']:
+            with self.subTest(name=name):
+                logs = self.root / name
+                logs.mkdir()
+                existing = logs / name
+                existing.write_bytes(b'original evidence\x00\xff')
+                marker = self.root / ('sent-' + name)
+                command = self.command(f'from pathlib import Path; Path({str(marker)!r}).touch()', 'fixture')
+                with self.assertRaises(FileExistsError):
+                    self.m.execute_command(command, self.root, os.environ.copy(), logs)
+                self.assertEqual(existing.read_bytes(), b'original evidence\x00\xff')
+                self.assertFalse(marker.exists())
+
+    def test_redirected_output_collision_preserves_target(self):
+        target = self.root / 'old-preflight.log'
+        target.write_bytes(b'original preflight')
+        marker = self.root / 'sent'
+        command = self.command(f'from pathlib import Path; Path({str(marker)!r}).touch()', 'fixture')
+        for symlink in [False, True]:
+            with self.subTest(symlink=symlink):
+                output = self.root / 'redirect' if symlink else target
+                if symlink:
+                    output.symlink_to(target)
+                command['stdout_path'] = str(output)
+                with self.assertRaises(FileExistsError):
+                    self.run_command(command)
+                self.assertEqual(target.read_bytes(), b'original preflight')
+                self.assertFalse(marker.exists())
+
+    def test_repeated_command_keeps_original_receipt_valid(self):
+        command = self.command('print("Ran 2 tests\\nOK")')
+        logs = self.root / 'logs'
+        record = self.m.execute_command(command, self.root, os.environ.copy(), logs)
+        with self.assertRaises(FileExistsError):
+            self.m.execute_command(command, self.root, os.environ.copy(), logs)
+        self.m.check_command_receipt(command, record)
+
+    def test_concurrent_command_log_claim_has_one_winner(self):
+        marker = self.root / 'dispatches'
+        command = self.command(
+            f'from pathlib import Path\nwith Path({str(marker)!r}).open("ab") as f: f.write(b"sent\\n")\nprint("Ran 2 tests\\nOK")')
+        barrier = threading.Barrier(2)
+        def run():
+            barrier.wait(timeout=5)
+            try:
+                return self.m.execute_command(command, self.root, os.environ.copy(), self.root / 'logs')
+            except FileExistsError:
+                return None
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda _: run(), range(2)))
+        winners = [record for record in results if record is not None]
+        self.assertEqual(len(winners), 1)
+        self.assertEqual(marker.read_bytes(), b'sent\n')
+        self.m.check_command_receipt(command, winners[0])
+
+    def test_existing_lane_directory_preserves_receipt(self):
+        manifest = self.manifest()
+        out = self.root / 'result'
+        out.mkdir()
+        receipt = out / 'receipt.json'
+        receipt.write_bytes(b'prior lane receipt')
+        with self.assertRaises(FileExistsError):
+            self.m.run_lane(manifest, manifest['lanes'][0], out)
+        self.assertEqual(receipt.read_bytes(), b'prior lane receipt')
 
     def test_wrong_binary_digest_refused(self):
         self.identity['sha256'] = '0' * 64

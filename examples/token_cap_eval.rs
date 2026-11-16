@@ -1,7 +1,7 @@
 //! Run without arguments for a zero-inference archived token-budget boundary check.
 //! Use --live --family NAME --trace FILE for actual independent capped generations.
 #[allow(dead_code)]
-#[path = "corrected_handoff/adapter.rs"]
+#[path = "corrected_handoff/prepared_adapter.rs"]
 mod adapter;
 #[path = "token_cap_eval/cases.rs"]
 mod cases;
