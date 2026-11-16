@@ -9,6 +9,13 @@ contribution bullets and a numbered results table, and links the reviewer packag
 The abstract and original result paragraphs are unchanged. No result below is
 silently added to the paper.
 
+The reference-inspired editorial successor adds a concrete opening, Figure 1,
+finding labels and an appendix reproducibility table. The author provenance
+declaration moves intact to that appendix. Consistent typography and tighter
+spacing reduce the report to seven pages: five main, one references, one appendix.
+Numbering is applied to the PDF export; the native editable Doc retains the same
+content and diagram. See the new editorial verification receipt for exact hashes.
+
 ## Integrated implementation
 
 PRs [20](https://github.com/k2jac9/kairotensor/pull/20),

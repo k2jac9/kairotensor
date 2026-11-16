@@ -10,6 +10,10 @@ integration and points to the separately reported pilot.
 
 The final report's Table 1 summarizes the atomic-revision, scoped-reuse and
 recovery rows below. Its values are existing observations, not new experiments.
+Figure 1 illustrates the two scoped-reuse correction paths in row three; its
+caption retains the same-branch, explicit-contract and admission-history checks.
+Appendix Table 2 distinguishes retained artifacts, offline recomputation and
+claims requiring fresh evidence. Neither addition supplies a new model result.
 The [combined reviewer package](https://drive.google.com/file/d/1Nc2X8NwHdDpKTSU2kknw0V_V5cqOEBOP/view)
 contains a current report package with the unchanged measured-source archive and
 raw evidence, plus the separate pilot and integrated-source supplements. Access
