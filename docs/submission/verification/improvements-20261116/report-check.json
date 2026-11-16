@@ -1,0 +1,24 @@
+{
+  "document_revision": "AHj4eMQw_hyQIRahlYtzjyvb79_98CW8JWz3jon9x0ArTa_W82jp354MHPBFgBMShqQtFt1fwK5JFsPqb9KAs_i7SEuxDAgIShs8H4AoVp8",
+  "pdf_sha256": "da591098a638a0cddee86bcc1e42a5e7ec8bfd912d7768ae4bf5e38ce26705ca",
+  "pdf_bytes": 165283,
+  "pdf_pages": 8,
+  "main_pages_including_title": 6,
+  "reference_pages": [
+    7
+  ],
+  "appendix_pages": [
+    8
+  ],
+  "abstract_words": 192,
+  "abstract_unchanged": true,
+  "original_result_paragraphs_unchanged": 4,
+  "contribution_bullets": 3,
+  "native_table_cells_matched_to_manuscript": 12,
+  "evidence_link_is_pdf_annotation": true,
+  "new_model_calls": 0,
+  "event_submitted": false,
+  "visual_review": "All eight pages reviewed; contributions, caption/table, references and appendix legible. Pages 1-3 text/layout unchanged by final spacing-only edit.",
+  "reviewer_access": "Pending sharing change and anonymous verification; link presence does not prove access.",
+  "previous_pdf_sha256": "a755007e453b633cae4f19d38fd1c1f557c365a04d07ddfffb52d5753bf10c5a"
+}

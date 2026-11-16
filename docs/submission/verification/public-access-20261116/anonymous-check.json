@@ -1,0 +1,50 @@
+{
+  "checked_at_utc": "2026-11-16T08:36:20.491715+00:00",
+  "authentication": "none; no Authorization header or cookies; environment proxy disabled",
+  "checks": [
+    {
+      "name": "repository",
+      "url": "https://api.github.com/repos/k2jac9/kairotensor",
+      "status": 200,
+      "final_url": "https://api.github.com/repos/k2jac9/kairotensor",
+      "bytes": 5061,
+      "sha256": "aa5e2a1eb1aed22d0599dcf85b2c5a45e8657fb0307ff587d8533aa06ad108e3",
+      "content_type": "application/json; charset=utf-8",
+      "private": false,
+      "visibility": "public",
+      "default_branch": "main",
+      "html_url": "https://github.com/k2jac9/kairotensor",
+      "pushed_at": "2026-11-16T07:32:55Z"
+    },
+    {
+      "name": "readme",
+      "url": "https://raw.githubusercontent.com/k2jac9/kairotensor/main/README.md",
+      "status": 200,
+      "final_url": "https://raw.githubusercontent.com/k2jac9/kairotensor/main/README.md",
+      "bytes": 15687,
+      "sha256": "aab4d29de9d90d22d03865cca51fadbd9bd7205ef71948ce11268e3f4d2d4a3d",
+      "content_type": "text/plain; charset=utf-8"
+    },
+    {
+      "name": "measured_source",
+      "url": "https://raw.githubusercontent.com/k2jac9/kairotensor/20fab84a6baa525452191ecf80eeee339f0b5ac7/README.md",
+      "status": 200,
+      "final_url": "https://raw.githubusercontent.com/k2jac9/kairotensor/20fab84a6baa525452191ecf80eeee339f0b5ac7/README.md",
+      "bytes": 14057,
+      "sha256": "2a0a280b78091f542e9b0256577c856f5ebf35f70f08351415e359cd8ef6b8fe",
+      "content_type": "text/plain; charset=utf-8",
+      "matches_pinned_source": true
+    },
+    {
+      "name": "remote_report",
+      "url": "https://raw.githubusercontent.com/k2jac9/kairotensor/main/docs/submission/kairotensor-report.pdf",
+      "status": 200,
+      "final_url": "https://raw.githubusercontent.com/k2jac9/kairotensor/main/docs/submission/kairotensor-report.pdf",
+      "bytes": 139531,
+      "sha256": "a755007e453b633cae4f19d38fd1c1f557c365a04d07ddfffb52d5753bf10c5a",
+      "content_type": "application/octet-stream",
+      "is_pdf": true,
+      "matches_final_editorial_pdf": false
+    }
+  ]
+}

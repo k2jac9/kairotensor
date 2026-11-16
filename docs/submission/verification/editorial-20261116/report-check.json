@@ -1,0 +1,33 @@
+{
+  "base": "eebfdef26be08f4edb9fc6d975fcea20f0ffd04f",
+  "native_revision": "AHj4eMS4SUmUDkRDSWnGiE15rtWgxLibLMBLnn8yvBaZle3sk6DE5gWF8lYv5Vrljf_w-Lq53M9vcTtojtDHTyAFVYhPJ3REKsamLvh9pNc",
+  "native_export_sha256": "8f211cacfe61610edbb240f0b85871ae5f0abf05d9d22f11d18ce73e0c0eac51",
+  "pdf_sha256": "86bf058fcaf0cf5ed886af7b198a7a6aff9978bac5e2994a5a217e9f8d4c692c",
+  "pdf_bytes": 256985,
+  "pdf_pages": 7,
+  "main_pages_including_title": 5,
+  "references_page": 6,
+  "appendix_page": 7,
+  "abstract_words": 192,
+  "abstract_unchanged": true,
+  "original_result_paragraphs_preserved": 4,
+  "provenance_declaration_preserved": true,
+  "reproducibility_table_cells_verified": 8,
+  "page_numbers_verified": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "pdf_body_pixels_unchanged_by_numbering": true,
+  "links_unchanged_by_numbering": true,
+  "visual_review": "All seven pages inspected; diagram/caption together, both tables legible, section openings retained with their text.",
+  "native_export_warning": "Duplicate title destination h.bzdusysp7krw in Google export, with two positions on the same title page. pypdf logs normalization; original retained. Text, URI links and all body pixels verified unchanged.",
+  "new_model_calls": 0,
+  "application_tests_rerun": false,
+  "event_submitted": false,
+  "reviewer_access": "Requires fresh permission and anonymous-read verification; earlier check was owner-only."
+}

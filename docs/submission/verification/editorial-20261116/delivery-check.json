@@ -1,0 +1,64 @@
+{
+  "cloud_readback": {
+    "checked_at_utc": "2026-11-16T08:30:25.103732+00:00",
+    "authenticated_downloads": [
+      {
+        "file_id": "1dTGN3-QSCzFGtf2vwILFT7V1CRl_CmIQ",
+        "bytes": 256985,
+        "sha256": "86bf058fcaf0cf5ed886af7b198a7a6aff9978bac5e2994a5a217e9f8d4c692c",
+        "matches_local": true
+      },
+      {
+        "file_id": "1Nc2X8NwHdDpKTSU2kknw0V_V5cqOEBOP",
+        "bytes": 3580195,
+        "sha256": "40c645a87766ad7e054a5c7a6e918b2a5349cd9396f7daf7b32a8f1fd35eb700",
+        "matches_local": true
+      }
+    ],
+    "public_access_verified": false
+  },
+  "package": {
+    "all_payloads_read_back_and_hashed": true,
+    "broken_markdown_links": [],
+    "measured_source_sha256": "e5928a4daf5b9d68cfbec0f58afdfd53d65f4202e3f1c5d54a4284baa1c0b821",
+    "old_packages_unchanged": true,
+    "original_report_payloads": 45,
+    "outer_payloads": 20,
+    "pilot_manifest_payloads": 149,
+    "private_submission_fields_included": false,
+    "public_access_verified": false,
+    "raw_evidence_and_historical_receipts_unchanged": true,
+    "report_manifest_payloads": 54,
+    "report_zip_sha256": "96e7d160131f57615ab341103fa8438f92e324cb1fac6129c673acad41daba27",
+    "zip": "KairoTensor-submission-evidence-20261116.zip",
+    "zip_bytes": 3580195,
+    "zip_sha256": "40c645a87766ad7e054a5c7a6e918b2a5349cd9396f7daf7b32a8f1fd35eb700"
+  },
+  "anonymous_read": {
+    "checked_at_utc": "2026-11-16T08:29:58.751850+00:00",
+    "authentication_sent": false,
+    "inherited_proxy_used": false,
+    "files": [
+      {
+        "file_id": "1dTGN3-QSCzFGtf2vwILFT7V1CRl_CmIQ",
+        "status": 200,
+        "final_host": "accounts.google.com",
+        "content_type": "text/html; charset=utf-8",
+        "bytes": 946902,
+        "exact_payload_matches": false
+      },
+      {
+        "file_id": "1Nc2X8NwHdDpKTSU2kknw0V_V5cqOEBOP",
+        "status": 200,
+        "final_host": "accounts.google.com",
+        "content_type": "text/html; charset=utf-8",
+        "bytes": 946622,
+        "exact_payload_matches": false
+      }
+    ],
+    "all_exact_payloads_accessible": false
+  },
+  "event_submission_receipt": null,
+  "repository_visibility_changed": false,
+  "scope": "Post-upload receipt retained outside the already-hashed evidence bundle."
+}

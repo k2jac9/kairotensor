@@ -1,5 +1,9 @@
 # KairoTensor submission guide
 
+[Read the PDF](kairotensor-report.pdf) · [Read the manuscript](report.md) · [Inspect the evidence](EVIDENCE.md) · [Project overview](../../README.md)
+
+> **Evidence-grounded revision for agent memory.** A study of which saved work remains eligible after its declared support changes, with measured costs, one bounded reuse example, and preserved negative results.
+
 **KairoTensor: Evidence-Grounded Revision for Agent Memory**
 
 Alejandro Castellanos, Independent Research
@@ -7,6 +11,10 @@ Alejandro Castellanos, Independent Research
 Apart Research AI x Epistemics Research Sprint, 13-15 November 2026
 
 Recommended track: **Track 2: Trust Infrastructure**
+
+For the integrated repository, separate correction-pilot supplement and delivery
+status checked on 16 November, see [Current status](CURRENT_STATUS.md). The paper
+and historical verification receipts below retain their original source boundary.
 
 KairoTensor records the evidence supplied to an agent computation and checks
 whether a saved result remains eligible after a correction or withdrawal. The
@@ -24,8 +32,10 @@ are separately attributed in manifests and the report.
 The measured main-branch snapshot is
 `20fab84a6baa525452191ecf80eeee339f0b5ac7`. Historical experiments use the source
 identities in [EVIDENCE.md](EVIDENCE.md). These submission documents were prepared
-after that snapshot. Later reliability commits, unmerged PR #18 and active
-AutoScientist runs are excluded from the reported results.
+after that snapshot. Later reliability commits, the hosted adapter introduced by
+PR #18, the separate correction pilot and AutoScientist runs are excluded from
+the reported results. PR #18 has since merged; that integration does not change
+which experiments the paper reports.
 
 ## Review
 
@@ -44,16 +54,52 @@ The 16 November finalization adds Doyle's truth maintenance system and de Kleer'
 assumption-based TMS to the related work. The contribution is the durable
 integration of declared evidence dependence at the model execution boundary;
 dependency tracking itself is established prior work. Measured outcomes are
-unchanged. The report retains a 192-word abstract, five pages through code and
-data, one reference page, and one page with the ethics appendix and LLM statement.
+unchanged. The final template review adds three explicit contribution bullets,
+Table 1 with observed outcomes and limits, an evidence-package link, and scope
+wording that remains accurate after PR #18 merged. The following editorial pass
+opens with the concrete correction example, adds Figure 1 and a reproducibility
+table, labels the four findings, and uses consistent serif typography and compact
+spacing. The unchanged author provenance declaration is now in the appendix.
+The report retains a 192-word abstract and every original results paragraph; it
+has five pages through code and data, one reference page, and one page with the
+ethics appendix, provenance, Table 2 and LLM statement. The five main pages are
+below the eight-page limit and above the four-page recommendation.
 
 New receipts are in [verification/finalization-20261116](verification/finalization-20261116/README.md).
 The original 15 November receipts remain unchanged and describe the earlier
-six-page export. They are historical records, not checks of the final PDF.
+six-page export. Those receipts and the first 16 November seven-page finalization
+are historical records. [Template-review verification](verification/improvements-20261116/README.md)
+checks the previous eight-page PDF. [Editorial verification](verification/editorial-20261116/README.md)
+checks the current seven-page successor. These dated records are retained.
 
-The repository was private when the package was prepared. The owner plans to
-make it public; this preparation does not change visibility or submit an entry.
-Reviewers need the ZIP or repository access to inspect the evidence.
+The native Google Doc remains editable. Numbered PDF delivery adds a footer to
+the native export using the [pinned export helper](assets/README.md); every body
+pixel, text passage and URI link is checked against that export. A direct future
+Docs export will need that numbering step again. Figure source and rendering
+assets are included in the reviewer package.
+
+## Public source and delivery
+
+The [repository](https://github.com/k2jac9/kairotensor) and
+[measured snapshot](https://github.com/k2jac9/kairotensor/tree/20fab84a6baa525452191ecf80eeee339f0b5ac7)
+are public. Anonymous source reads succeeded on 16 November at 08:36 UTC;
+[the receipt](verification/public-access-20261116/anonymous-check.json) records
+that observation. Use the [PDF in this revision](kairotensor-report.pdf) and the
+[evidence index](EVIDENCE.md) as the primary reviewer entry points.
+
+The presentation successor uses original navy/cyan/violet/amber repository
+artwork and restrained teal accents in the seven-page paper. It changes public
+source links and presentation, preserving the abstract, results, author declaration
+and measured source. [Presentation verification](verification/presentation-20261116/README.md)
+records the export and checks. Earlier PDFs and verification receipts remain
+historical; use the hashes in the current receipt when comparing copies.
+
+The optional [Drive PDF](https://drive.google.com/file/d/1dTGN3-QSCzFGtf2vwILFT7V1CRl_CmIQ/view)
+and [combined evidence package](https://drive.google.com/file/d/1Nc2X8NwHdDpKTSU2kknw0V_V5cqOEBOP/view)
+are stable delivery targets. Their permissions are separate from GitHub; public
+Drive access requires its own anonymous read check. GitHub source and the paper's
+pinned evidence links do not depend on Drive sharing. No event entry has been
+submitted by this preparation.
 
 ## Verification scope
 
@@ -78,7 +124,10 @@ tokens and zero unresolved reservations. Its bytes were unchanged after auditing
 No new inference was run in preparing this package. A successful audit is not
 independent authentication of model or hardware execution.
 
-The newer incident-routing calibration remains unexecuted. The current CI does
-not implement the complete stable/preview/previous-stable compatibility matrix;
-no such matrix is claimed here. Historical model/runtime pins are retained for
-reproduction, not presented as current release recommendations.
+The incident-routing model-quality evaluation remains unexecuted. The measured
+snapshot's CI predates the complete stable/upcoming/previous compatibility matrix.
+The integrated Rust/Python matrix subsequently passed at `109798d`; its exact
+source and coverage are recorded in [Current status](CURRENT_STATUS.md). Those
+checks do not qualify the separate ML runtime or establish model performance.
+Historical model/runtime pins are retained for reproduction, not presented as
+current release recommendations.

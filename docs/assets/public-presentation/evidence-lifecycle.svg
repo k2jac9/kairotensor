@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="410" viewBox="0 0 1320 410" role="img" aria-labelledby="title desc">
+  <title id="title">From evidence occurrence to current eligibility</title>
+  <desc id="desc">Evidence occurrence, scoped admission, frozen attempt, claim and settlement, and current eligibility. A change in admitted evidence triggers current checks. Incurred usage and unresolved holds remain recorded. This conceptual sequence simplifies the full contracts.</desc>
+  <defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="none" stroke="#AEBED9" stroke-width="1.3"/></marker></defs>
+  <rect width="1320" height="410" rx="20" fill="#0B1023"/>
+  <g font-family="DejaVu Sans, Arial, sans-serif">
+    <text x="42" y="49" fill="#C1CBE0" font-size="16" letter-spacing="3">FOLLOW THE DECLARED EVIDENCE</text>
+    <g fill="#131E36" stroke="#35445F"><rect x="40" y="80" width="224" height="167" rx="12"/><rect x="294" y="80" width="224" height="167" rx="12"/><rect x="548" y="80" width="224" height="167" rx="12"/><rect x="802" y="80" width="224" height="167" rx="12"/><rect x="1056" y="80" width="224" height="167" rx="12"/></g>
+    <g fill="none" stroke="#AEBED9" stroke-width="1.5" marker-end="url(#arrow)"><path d="M269 163H288"/><path d="M523 163H542"/><path d="M777 163H796"/><path d="M1031 163H1050"/></g>
+    <g font-size="17" font-weight="700"><text x="60" y="113" fill="#66E4EA">01 / OCCURRENCE</text><text x="314" y="113" fill="#66E4EA">02 / ADMISSION</text><text x="568" y="113" fill="#C4AFFB">03 / ATTEMPT</text><text x="822" y="113" fill="#F5CE7A">04 / EXECUTION</text><text x="1076" y="113" fill="#66E4EA">05 / ELIGIBILITY</text></g>
+    <g fill="#F4F6FC" font-size="23" font-weight="700"><text x="60" y="155">Identify</text><text x="314" y="155">Qualify</text><text x="568" y="155">Freeze</text><text x="822" y="155">Account</text><text x="1076" y="155">Recheck</text></g>
+    <g fill="#C1CBE0" font-size="16"><text x="60" y="192">Distinct event IDs</text><text x="60" y="216">Exact payload bytes</text><text x="314" y="192">Actor and scope</text><text x="314" y="216">Admit or withdraw</text><text x="568" y="192">Ordered inputs</text><text x="568" y="216">Exact request</text><text x="822" y="192">Claim and settle</text><text x="822" y="216">Usage and holds</text><text x="1076" y="192">Current read / resume</text><text x="1076" y="216">Explicit reuse gate</text></g>
+    <path d="M405 250V286H1167V250" fill="none" stroke="#C4AFFB" stroke-width="1.5" stroke-dasharray="5 5"/>
+    <text x="787" y="314" text-anchor="middle" fill="#C4AFFB" font-size="17">Evidence changes trigger new checks.</text>
+    <path d="M42 340H1278" stroke="#35445F"/>
+    <text x="42" y="376" fill="#F5CE7A" font-size="17">Incurred usage and unresolved holds remain recorded.</text><text x="1278" y="376" fill="#AEBED9" text-anchor="end" font-size="15">Eligibility ≠ truth</text>
+  </g>
+</svg>

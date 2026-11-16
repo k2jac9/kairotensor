@@ -1,0 +1,22 @@
+digraph correction_paths {
+  graph [rankdir=LR, bgcolor="white", pad="0.12", nodesep="0.34", ranksep="0.38", splines=ortho, outputorder=edgesfirst];
+  node [shape=box, style="rounded,filled", fontname="Liberation Serif", fontsize=13,
+        color="#526475", fillcolor="#F4F6F8", penwidth=0.8, margin="0.14,0.12"];
+  edge [color="#526475", arrowsize=0.65, penwidth=0.9];
+
+  policy [label="Policy corrected\nReport unchanged", group="top"];
+  reuse [label="Reuse report judgment\nwhen contract checks pass", group="top", fillcolor="#EDF3F6"];
+  plan1 [label="New planner call\nusing corrected policy", group="top"];
+  report [label="Report replaced", group="bottom"];
+  fresh [label="Fresh report judgment", group="bottom", fillcolor="#F8F2E9"];
+  plan2 [label="New planner call\nusing new judgment", group="bottom"];
+
+  {rank=same; policy; report;}
+  {rank=same; reuse; fresh;}
+  {rank=same; plan1; plan2;}
+  policy -> reuse -> plan1;
+  report -> fresh -> plan2;
+  policy -> report [style=invis];
+  reuse -> fresh [style=invis];
+  plan1 -> plan2 [style=invis];
+}

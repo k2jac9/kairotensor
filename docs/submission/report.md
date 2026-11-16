@@ -8,11 +8,17 @@ Agents often retain conclusions after the evidence underlying them changes. We s
 
 ## 1. Introduction
 
-An agent may make a decision from a set of observations and later receive a correction. Saving the answer alone loses a practical question: which evidence did the computation actually receive, and is the result still eligible when a source is withdrawn? Reusing an obsolete continuation can carry a superseded claim into subsequent actions even when the new evidence is available.
+The problem. A deployment agent judges a test report and then chooses a release plan under a policy. If the policy changes, the plan needs revision, but the report judgment may still be usable. If the report itself is replaced, the old judgment must not silently carry over. The useful question is therefore not just what the agent answered, but which supplied evidence still permits reusing its work.
 
-KairoTensor investigates a narrower, operational question: can a local store keep a durable record of an agent computation's declared evidence and refuse stale reads or continuations, while permitting explicitly bounded reuse? The prototype provides an occurrence-level evidence ledger, revision-checked branches, and a deterministic alternative-witness mechanism. It does not authenticate evidence or infer what a model internally attended to. The caller must authenticate actors, supply all relevant dependencies, validate outputs, and correctly report usage.
+Our approach. KairoTensor records the evidence supplied to an agent computation and checks whether its saved result remains eligible after a correction or withdrawal. Its Rust/SQLite store preserves evidence occurrences, branch histories, frozen requests and usage. Reuse is an explicit operation under a closed, versioned computation contract; an ordinary read does not automatically revalidate a cached model result. Eligibility does not authenticate a source, establish truth or reveal what the model internally attended to. The caller must authenticate actors, declare all relevant inputs, validate outputs and report usage.
 
-Alejandro Castellanos confirms that no KairoTensor-specific ideas, code or experiments predate the sprint. The repository history begins on 13 November 2026, and the measured revision and model experiments were committed on 13-14 November. This provenance statement is the author's declaration; commit timestamps alone cannot establish when work began. This report covers the measured snapshot 20fab84a6baa525452191ecf80eeee339f0b5ac7. Later reliability work, the unmerged hosted-integration branch and active AutoScientist runs are excluded from the reported results.
+Our contributions are:
+
+- A durable Rust/SQLite execution contract that records declared evidence and refuses stale results while retaining incurred usage.
+- A reproducible synthetic comparison of revision strategies that distinguishes equivalent publication histories from a lighter baseline.
+- A bounded model-reuse demonstration with a changed-input control, alongside negative recovery results that expose output-format and deadline limitations.
+
+This report covers the measured snapshot 20fab84a6baa525452191ecf80eeee339f0b5ac7. Subsequent reliability and hosted-integration work, the separate correction pilot, and AutoScientist training are outside this report's measured scope.
 
 ## 2. Related work
 
@@ -36,21 +42,37 @@ The revision benchmark uses file-backed SQLite, synthetic rules with two three-p
 
 The model reuse example separates a test-report judgment from a deployment planner. A policy correction changes the planner's input but not the report judgment's closed, versioned inputs. Reuse requires the same request bytes, candidate list, contract and relevant admissions; changing the report is a negative control. The live example uses Qwen2.5-1.5B-Instruct, model and tokenizer revision 989aa7980e4cf806f80c7fef2b1adb7bc71aa306, CPU, two threads, PyTorch 2.6.0+cpu and Transformers 4.48.3. Route timings begin after evidence-view preparation and model loading. One revised-prompt run compares repair and fresh rebuild; it is not a randomized population study [7].
 
+Figure 1 shows the two correction paths used in the model-reuse experiment.
+
+![Two correction paths: policy correction permits checked reuse; report replacement requires fresh judgment.](assets/correction-paths.png)
+
+Figure 1. Policy-only correction permits checked reuse; replacing the report requires fresh judgment [7]. Reuse is opt-in and same-branch, with matching versioned contract, exact request bytes, ordered candidates/inputs and admission history. The reused judgment is one accepted realization, not an independent sample or proof of truth.
+
 ## 4. Results
 
-In the atomic revision experiment, 128 rules with 32 dense edits took a median 1,972.5 ms for per-branch edits versus 146.7 ms for atomic edits. The median paired speedup was 13.46 times, range 13.24–13.56 across six trials. For 1,024 rules and 128 sparse edits, it was 1.40 times, range 1.34–1.68. Atomic edits improved edit time in all 30 matched comparisons. The lighter full scan had the lowest total time in every matched trial; for the dense cell its median total was 27.8 ms versus 369.1 ms for atomic indexed revision. The baseline's reduced historical contract prevents attributing the difference to indexing alone [6].
+Table 1 summarizes the three main experimental findings.
 
-In a later bulk setup experiment, the 1,024-rule fixture's median setup time was 3,690 ms using individual production calls versus 214 ms using bulk calls. The median paired setup ratio was 16.62, range 14.89–34.55, across six trials. The scan retained the lowest median total in all five cells and finished first in 29 of 30 matched trials [6]. These are fixed synthetic, single-writer traces on hosted machines, not a general break-even result.
+Table 1. Observed outcomes and their limits [6-8]. Timings, token counts and success rates describe separate experiments; they are not a combined performance measure.
 
-In the revised-prompt model example, repair reused one report judgment, made one new call and used 145 input plus 48 output tokens. A clean rebuild made two calls and used 326 input plus 78 output tokens. Both produced the same checked canary plan; the observed savings were 211 of 404 tokens. Replacing the report forced a fresh judgment and a hold decision. The earlier prompt had produced an incorrect passing status for an 11/12 report, which the validator rejected; the prompt was revised before the reported successful run. Each route is one observation, not evidence of typical savings or semantic reliability [7].
+| Experiment | Observed result | Scope and limitation |
+| --- | --- | --- |
+| Atomic revision | Dense cell: 13.46x median paired edit-time speedup (range 13.24-13.56). | Six paired trials; fixed synthetic trace. Lighter full scan wins total time. |
+| Model-result reuse | Repair: 1 call / 193 tokens. Fresh: 2 calls / 404 tokens. Same checked plan. | One observation per route after prompt revision; no general savings estimate. |
+| Recovery policies | Each of three policies: 0/6 held-out successes. | Shared trajectories; strict JSON failures; every retry late. |
 
-A separate frozen recovery-policy evaluation illustrates the remaining model risk. Ten synthetic cases generated 20 Qwen calls. All responses included Markdown fences and failed the unchanged strict JSON contract. On the six held-out cases, the stop, affordable-retry and evidence-gated-retry policies each had zero successes. These policy outcomes are paired replays of shared trajectories, not independent policy arms. All retry receipts arrived after the 60-second operation deadline; the deadline was soft and did not interrupt dispatched calls [8].
+**Atomic revision reduced edit time.** In the atomic revision experiment, 128 rules with 32 dense edits took a median 1,972.5 ms for per-branch edits versus 146.7 ms for atomic edits. The median paired speedup was 13.46 times, range 13.24–13.56 across six trials. For 1,024 rules and 128 sparse edits, it was 1.40 times, range 1.34–1.68. Atomic edits improved edit time in all 30 matched comparisons. The lighter full scan had the lowest total time in every matched trial; for the dense cell its median total was 27.8 ms versus 369.1 ms for atomic indexed revision. The baseline's reduced historical contract prevents attributing the difference to indexing alone [6].
+
+**Bulk setup reduced initialization cost.** In a later bulk setup experiment, the 1,024-rule fixture's median setup time was 3,690 ms using individual production calls versus 214 ms using bulk calls. The median paired setup ratio was 16.62, range 14.89–34.55, across six trials. The scan retained the lowest median total in all five cells and finished first in 29 of 30 matched trials [6]. These are fixed synthetic, single-writer traces on hosted machines, not a general break-even result.
+
+**Scoped reuse saved work in one correction.** In the revised-prompt model example, repair reused one report judgment, made one new call and used 145 input plus 48 output tokens. A clean rebuild made two calls and used 326 input plus 78 output tokens. Both produced the same checked canary plan; the observed savings were 211 of 404 tokens. Replacing the report forced a fresh judgment and a hold decision. The earlier prompt had produced an incorrect passing status for an 11/12 report, which the validator rejected; the prompt was revised before the reported successful run. Each route is one observation, not evidence of typical savings or semantic reliability [7].
+
+**Frozen recovery failed the contract and deadline.** A separate frozen recovery-policy evaluation illustrates the remaining model risk. Ten synthetic cases generated 20 Qwen calls. All responses included Markdown fences and failed the unchanged strict JSON contract. On the six held-out cases, the stop, affordable-retry and evidence-gated-retry policies each had zero successes. These policy outcomes are paired replays of shared trajectories, not independent policy arms. All retry receipts arrived after the 60-second operation deadline; the deadline was soft and did not interrupt dispatched calls [8].
 
 ## 5. Discussion and limitations
 
 The implementation makes evidence dependence explicit at an application boundary and preserves the cost of work that becomes unusable. The measurements show that atomic batching can improve a costly per-branch path without establishing that indexed revision beats a lighter scan. The model example shows that a carefully scoped cached judgment can be reused in one controlled correction, not that agent decisions improve in the wild. The strict recovery failures show how validation, model formatting and time budgets can dominate the usefulness of such a mechanism.
 
-Future work should evaluate real correction streams and user decisions, test concurrency and adversarial callers, compare equally durable baselines, and run preregistered, independently measured model evaluations. The frozen incident-routing workload and bounded controller on main are offline preparations; they do not establish model performance. A reviewer package contains the pinned source snapshot, evidence index and offline verification commands. Repository and workflow links require access while the repository remains private.
+Future work should evaluate real correction streams and user decisions, test concurrency and adversarial callers, compare equally durable baselines, and run preregistered, independently measured model evaluations. The frozen incident-routing workload and bounded controller on main are offline preparations; they do not establish model performance. A reviewer package contains the pinned source snapshot, evidence index and offline verification commands. The repository and measured source snapshot are publicly accessible.
 
 ## 6. Conclusion
 
@@ -59,6 +81,8 @@ Versioned evidence and conservative checks can prevent this prototype from servi
 ## Code and data
 
 Measured main-branch snapshot: 20fab84a6baa525452191ecf80eeee339f0b5ac7, https://github.com/k2jac9/kairotensor. Raw benchmark CSVs, prompts, model traces and evaluation protocols are in docs/benchmarks and docs/evaluations. Historical CI executions use their recorded source commits, not the current main commit. The accompanying reviewer package preserves the source archive and its checksum; exact experimental sources and commands are documented in [6-8].
+
+Public source and evidence: [measured snapshot 20fab84](https://github.com/k2jac9/kairotensor/tree/20fab84a6baa525452191ecf80eeee339f0b5ac7). The public snapshot includes the measured source and raw evidence; no GitHub sign-in is required.
 
 ## References
 
@@ -81,6 +105,20 @@ Measured main-branch snapshot: 20fab84a6baa525452191ecf80eeee339f0b5ac7, https:/
 ## Appendix: Limitations and Dual-Use / Ethical Considerations
 
 An operator could use admission controls to suppress inconvenient evidence, present a selective record as complete, or convey unwarranted authority through a provenance-like interface. The store does not establish source authenticity, prevent tampering by a privileged operator, detect omitted dependencies, guarantee semantic correctness, or erase copies already delivered. Deployment would need access control, independent auditing, transparent inclusion and exclusion policies, and protection for stored sensitive information. These are recommendations, not implemented protections. The reported examples use synthetic reports and deployment data; this statement does not establish the privacy properties of future applications.
+
+### Provenance of the work
+
+Alejandro Castellanos confirms that no KairoTensor-specific ideas, code or experiments predate the sprint. The repository history begins on 13 November 2026, and the measured revision and model experiments were committed on 13-14 November. This provenance statement is the author's declaration; commit timestamps alone cannot establish when work began.
+
+### Reproducibility boundary
+
+Table 2. What the retained evidence can establish [6-8]. Recomputing a recorded result is distinct from re-executing a model or independently authenticating its execution.
+
+| Evidence class | Available check and limit |
+| --- | --- |
+| Retained artifacts | Pinned source, benchmark CSVs, archived model requests/responses and the recovery ledger. Hashes identify bytes; stored metadata is not independent authentication. |
+| Recomputed offline | Benchmark summaries and archived recovery consistency checks can be repeated with zero model calls. They reproduce calculations on recorded data. |
+| Requires fresh evidence | Re-executing model requests, estimating typical accuracy or savings, representative latency, provider billing and authentic execution require further evidence. Archived traces alone do not establish these claims. |
 
 ## LLM usage statement
 

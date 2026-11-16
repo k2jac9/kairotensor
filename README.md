@@ -1,175 +1,101 @@
+<p align="center">
+  <img src="docs/assets/public-presentation/hero.svg" alt="KairoTensor. Evidence changes. Decisions should respond. An abstract diagram of evidence paths branching through time." width="100%">
+</p>
+
 # KairoTensor
 
-Kairotensor is a Rust framework for versioned evidence memory. Its first component is a local SQLite store that records which observations an agent used and checks whether a saved result is still eligible to read or resume after evidence changes.
+**Evidence-grounded revision for agent memory.** A Rust and SQLite research prototype for deciding when an agent's stored work remains eligible after its declared evidence changes.
 
-## AI x Epistemics sprint submission
+[Read the paper](docs/submission/kairotensor-report.pdf) · [Inspect the evidence](docs/submission/EVIDENCE.md) · [Explore the contracts](docs/README.md) · [Run the examples](#run-it-locally)
 
-Author: **Alejandro Castellanos**, **Independent Research**.
+[![Contract CI](https://github.com/k2jac9/kairotensor/actions/workflows/check.yml/badge.svg?branch=main)](https://github.com/k2jac9/kairotensor/actions/workflows/check.yml)
 
-The author confirms that no KairoTensor-specific ideas, code or experiments
-predate the 13-15 November 2026 sprint. The implementation and reported experiments
-were developed during the sprint. This is an author declaration, not a conclusion
-inferred solely from Git timestamps. Third-party dependencies and cited prior work
-remain identified in their manifests and the report.
+**Alejandro Castellanos · Independent Research**<br>
+AI × Epistemics Research Sprint, November 2026 · Trust Infrastructure
 
-The [submission guide](docs/submission/README.md) maps the report's claims to raw
-evidence and offline reproduction commands. It includes a real Qwen reuse example
-and the failed frozen recovery evaluation; neither establishes general improvement
-in agent accuracy. Measured source is pinned to
-`20fab84a6baa525452191ecf80eeee339f0b5ac7`; submission documentation is additional.
+> **Research question**<br>
+> When evidence changes, can an agent retire conclusions that have lost their declared support, preserve work that remains eligible, and account for the cost of correction?
 
-## Run the withdrawal example
+## The moment a decision goes stale
 
-With stable Rust, Cargo, and a C compiler for bundled SQLite, run these commands from the repository root.
+A deployment agent reads a test report, judges the result, and chooses a release plan under a policy. Then the policy changes.
+
+The plan needs revision. The test-report judgment may still be reusable under an explicit contract. If the **report itself** is replaced, that judgment needs fresh computation. If support disappears, the appropriate outcome can be **unsupported**; withdrawal does not establish the opposite proposition.
+
+KairoTensor records that distinction at the execution boundary. It captures ordered evidence occurrences, freezes the adapter request, checks publication and subsequent access, and retains usage when attempted work becomes stale or invalid.
+
+<p align="center">
+  <img src="docs/assets/public-presentation/evidence-lifecycle.svg" alt="Five stages: evidence occurrences, admission in an actor and scope, frozen attempt and request, claim and settlement, and current eligibility. Evidence changes trigger new checks; incurred usage and unresolved holds remain recorded." width="100%">
+</p>
+
+*Conceptual lifecycle, not a performance plot. Timed recovery has additional reserve, claim and runtime checks; a diagram or stored receipt grants no dispatch authority.*
+
+## What the system contributes
+
+| Layer | Implemented behavior | Contract |
+| --- | --- | --- |
+| **Evidence and eligibility** | Distinct acquisition occurrences, scoped admissions, current-read checks and explanations without payloads. | [Current eligibility](docs/current-eligibility.md) |
+| **Atomic correction** | Expected-epoch admission batches; changed support verdicts publish once against the final view. Unchanged verdicts retain their attempt and charge. | [Atomic correction](docs/atomic-correction.md) |
+| **Explicit reuse** | Same-branch reuse of an accepted model response with matching versioned contract, ordered candidates/inputs, request bytes and admission history. | [Scoped model reuse](docs/scoped-model-reuse.md) |
+| **Execution and accounting** | Frozen requests, token reservations, durable send claims and deadline checks. Potentially sent work retains its hold until reconciliation permits settlement. | [Runtime boundary](docs/recovery-runtime.md) |
+| **Replay and policy** | Authorized decision export, offline recorded validation, and evaluated policy activation with revision checks. | [Decision replay](docs/decision-replay.md) · [Policy promotion](docs/policy-promotion.md) |
+
+These are application contracts over **declared dependencies**. Eligibility does not establish truth, authenticate the source, discover omitted inputs, or reveal what a model internally attended to. The embedding runtime authenticates actors and diagnostic access; the caller validates outputs and reports usage. A historical accepted receipt does not grant current access.
+
+## What we measured
+
+The paper reports the frozen source [`20fab84`](https://github.com/k2jac9/kairotensor/tree/20fab84a6baa525452191ecf80eeee339f0b5ac7). Later reliability features are integrated into the current repository and remain separate from those measurements.
+
+| Experiment | Observation | Interpretation and limit |
+| --- | --- | --- |
+| **Atomic revision** | **13.46×** median paired edit-time speedup for 32 dense edits across 128 rules, versus per-branch revision; six paired trials. | The lighter full scan had the lowest **total** time in all 30 matched trials. History contracts differ. [Protocol and samples](docs/revision-benchmark.md) |
+| **One model correction** | **193 vs 404 tokens**, one new call versus two; both routes produced the same checked plan. Replacing the report forced fresh judgment. | One synthetic observation per route after a prompt revision. The earlier prompt produced a rejected error. No estimate of typical savings. [Prompts and traces](docs/scoped-model-reuse.md) |
+| **Frozen recovery** | **0/6 held-out successes** for each of three policies. All responses violated the strict JSON contract; all retry receipts were late. | Policies replayed shared trajectories. These are failures of this model/validation/deadline arrangement, not independent policy arms. [Recorded evaluation](docs/evaluations/recovery-policy-v2-2026-11-14.md) |
+
+A [later controlled correction pilot](docs/controlled-correction-results.md) reports four synthetic changes: post-change repair used four calls and 751 reported tokens; fresh recomputation used six calls and 1,167 tokens. It uses a different model/runtime, is outside the paper, and does not establish population accuracy or latency savings.
+
+**The evidence supports a working mechanism, measured implementation tradeoffs, and bounded examples of reuse. It does not establish generally more accurate or trustworthy agent decisions.**
+
+## Run it locally
+
+Use the pinned Rust toolchain in `rust-toolchain.toml`, Cargo, and a C compiler for bundled SQLite. These examples use deterministic fixtures and make no model or provider calls:
 
 ```sh
-cargo run --example withdrawal
-cargo run --example selective_revision
-cargo run --example corrected_handoff
-cargo run --example scoped_model_reuse
-cargo test --all-targets
+cargo run --locked --example withdrawal
+cargo run --locked --example selective_revision
+cargo run --locked --example incident_store_bridge
 ```
 
-The example counts 8 items on one shelf and 4 on another. It starts a second count, then withdraws the second shelf report. The previous total of 12 becomes unavailable for both current reads and resume. The late count still costs two additions. A fresh attempt over the same candidate list sees only the first shelf and publishes 8. The ledger records five additions across all three attempts.
+In `withdrawal`, two shelf reports initially support a total of 12. Withdrawing the second report makes the old total unavailable for current reads and resume. A fresh attempt returns 8. Work that finished too late remains in the ledger: five additions across the three attempts.
 
-## Bulk setup
-
-The Rust store provides three ordered batch operations. Each call commits in one SQLite transaction. An error in any item rolls back every write in that call, including index updates and usage records.
-
-| Operation | Use it when |
-| --- | --- |
-| `observe_and_admit_many(actor, scope, observations)` | Import new source/payload pairs and grant access to their occurrences. The returned IDs follow input order. Repeating the import creates new occurrences, even for identical bytes. |
-| `admit_many(actor, scope, evidence_ids)` | Grant access to observations already in storage. Each effective grant advances the view epoch once. Repeated IDs and already-admitted IDs add no events. |
-| `publish_support_many(actor, scope, rules)` | Register support rules and publish their initial verdicts together. Every declaration has its own accepted attempt, parent and charge. Repeating a branch name creates successive versions in input order. |
-
-Evidence ingestion and rule publication are separate commit boundaries. A caller can reuse IDs from a successful import if rule registration fails. For an existing catalogue, bulk grants update witness counts immediately. Use `revise_support` for an affected head whose verdict needs a new publication. The selective revision example exercises bulk setup followed by an atomic withdrawal.
-
-## Current eligibility
-
-`Store::explain_current(actor, scope, branch)` explains why a head is ready,
-empty, or needs review without loading its payload or changing historical
-receipts and usage. It shares the authoritative gate with current reads and
-resume. [Reason codes and snapshot contract](docs/current-eligibility.md)
-
-## Selective revision
-
-The second example asks whether a test run has a reproduction record. An original report **and** its input manifest qualify together. A self-contained record from a second run also qualifies on its own. Withdrawing the original report preserves the accepted reproduction result through the second run. In the same transaction, the separate check that requires the original report publishes `unsupported`.
-
-| Operation | Contract |
-| --- | --- |
-| `publish_support(actor, scope, branch, alternatives)` | Publish a fixed rule over observation IDs. Every ID in one group must be admitted. Any complete group suffices. |
-| `set_admitted_and_revise(actor, scope, evidence, admitted)` | Apply one membership edit and publish changed support verdicts in one transaction. Return the changed branch names, accepted attempt IDs, and verdicts. |
-| `support_consumers(actor, scope, evidence)` | List current support-rule branches that name this occurrence in this actor's scope. A listed branch may retain another witness. |
-| `revise_support(actor, scope, branch)` | Return the same accepted attempt ID if its verdict still holds. Publish a new attempt if the verdict changed. |
-
-The built-in rule checks **availability of declared witnesses**. The caller defines which observations qualify for the question. `unsupported` means every declared alternative lacks at least one admitted observation. Missing and withheld IDs have the same effect. The store never needs the payload bytes to answer this rule.
-
-SQLite updates the affected clause counts in the same transaction as admission or withdrawal. Reads and resumes check the verdict against the current view. In-flight opaque work still goes through the original epoch check. Opening a v1 through v9 database migrates it to schema v10. Existing heads and usage records retain their identities.
-
-Use `set_admitted_and_revise` when readers should see the membership update and all affected support heads in the same database snapshot. Any failure rolls back the entire edit. A witness that keeps the same verdict retains its head and cost. Repeating the desired membership while it is already current returns an empty change list. An intervening reversal makes a subsequent call a new edit. The original `set_admitted` and `revise_support` remain available for deferred revision.
-
-The store charges one unit per premise checked during rule registration and one for a changed verdict published by revision. Reusing a head adds no delivery or charge. These logical units exclude index maintenance and read checks. The integration suite compares the incremental answers with fresh databases and an independent evaluator across every admission subset of four observations.
-
-## Corrected handoff
-
-The deployment planner example captures exact dispatch bytes and their source IDs, retires an accepted staging continuation, then asks for a canary plan. A clean rebuild provides a second answer against the same release checklist. Run with the deterministic adapter or the pinned local CPU model. [Example, commands and evaluation](docs/corrected-handoff.md)
-
-## Reusing a model result
-
-A caller may reuse a previously validated model response for a closed, versioned computation on a branch. For example, a deployment policy can change while an independent test-report judgment remains eligible. In a live Qwen fixture, repairing the plan used one call and 193 tokens; a clean rebuild used two calls and 404 tokens. Replacing the report forced a fresh judgment and the release was held. [Contract and live evaluation](docs/scoped-model-reuse.md)
-
-The [live evaluation prompt catalogue](docs/evaluation-prompts.md) includes the original and revised instructions, exact user payloads, checkpoint history, and the request used at each step.
-
-## Token preflight and budgets
-
-The local Qwen worker can tokenize a frozen chat before generation and return its exact prompt count. Kairotensor can reserve that count plus the enforced output cap in a token budget. An affordable request uses the prepared inputs; an unaffordable request can discard them without running the model. On delivery, the ledger charges actual prompt and completion tokens and releases the unused reservation. Unresolved dispatched work retains its reservation.
-
-The `token_cap_eval` example compares four output caps on synthetic reports and replays the archived 403/404-token boundary. [Experiment protocol](docs/token-cap-protocol.md) · [Results and reproduction commands](docs/token-cap-results.md)
-
-## Evidence-backed deterministic verdict
-
-The [deterministic verdict route](docs/deterministic-verdict.md) derives a complete
-CI verdict from one admitted report without a model call. It refuses incomplete
-candidate manifests and checks evidence freshness again at publication. Historical
-commit receipts are separate from current read eligibility. Run
-`cargo run --example deterministic_verdict` for the zero-model-call demonstration.
-
-## Frozen semantic workload (offline)
-
-The [incident-routing smoke workload](docs/incident-routing-workload.md) prepares
-versioned evidence-grounded routing requests and audits recorded responses against
-a strict frozen contract. Its 12 authored cases separate calibration from heldout
-scoring. Preparation performs no inference; synthetic fixture scores are not model
-performance measurements, and declared evidence eligibility is not Store authentication.
-The [prepared-request bridge](docs/incident-prepared-bridge.md) connects these
-prompts to the existing worker protocol with offline lifecycle tests and emits a
-bounded, unexecuted calibration proposal. It does not grant Store send authority.
-The [offline calibration controller](docs/incident-calibration-controller.md)
-tests durable send claims, retained uncertain usage and independent process
-termination against fixed fake workers. It has no live model launch path.
-The [versioned Transformers backend](docs/incident-transformers-backend.md)
-connects the bounded controller to pinned local-model APIs, with execution denied
-by default. Its automated checks use fake dependencies only; real calibration
-still requires provisioned assets and separately approved execution.
-The [proposed GitHub/NixOS comparison](docs/calibration-host-matrix.md) lists
-matching requirements, readiness gates and unapproved per-host bounds.
-The [offline Adaption adapter](docs/incident-adaption-backend.md) exercises a
-distinct hosted-response contract and synthetic accounting, without credentials,
-network requests, or live execution authority.
-The [one-request hosted runner](docs/incident-hosted-runner.md) adds fixed-origin
-HTTPS code and a bounded child process, tested only with mocked HTTP and canned
-receipts. Live use requires separate approval and a verified billing bound.
-
-## Implemented contracts
-
-The [durable recovery APIs and example](docs/budgeted-recovery.md) connect
-validation failure to one retry or abstention. Recovery IDs, retry slots,
-reservations and single-use send claims survive restart and serialize competing
-workers. Only proven-unsent work can be cancelled. Run
-`cargo run --example budgeted_recovery` for the deterministic fixture, or add
-`--live` for the pinned Qwen worker. The fixture is not a live performance result.
-
-The opt-in [deadline-aware recovery gate](docs/deadline-aware-recovery.md) binds
-the original clock domain and deadline to a runtime/calibration profile, checks
-remaining time after acquiring the writer lock, and refuses uncovered requests.
-Its offline example uses synthetic timing, not measured inference performance:
-`cargo run --example deadline_aware_recovery`. The [runtime send boundary](docs/recovery-runtime.md)
-adds a concrete Linux boot clock and a final post-claim check before one backend
-invocation, without treating uncertain sends as free or retryable. The
-[offline end-to-end runner](docs/timed-recovery-runner.md) joins this path to the
-existing fixture Adapter with durable audit files and fault scenarios; live mode
-is explicitly refused.
-
-The [recovery-policy evaluation protocol](docs/recovery-policy-protocol.md) defines
-an offline paired comparison with explicit accounting and deadline checks. Run
-`python3 scripts/recovery_policy_eval.py --fixture` for synthetic contract cases,
-not model-performance measurements. The [Store-backed collector](docs/recovery-policy-runner.md)
-adds a versioned corpus, raw traces and a durable ledger; live collection is opt-in.
-
-| Operation | Behavior |
-| --- | --- |
-| `observe`, `set_admitted` | Record a distinct observation occurrence and change visibility for one actor and scope. Repeating an admission leaves the view epoch unchanged. |
-| `begin_from_candidates` | Select admitted inputs from an ordered list and freeze their bytes, the view epoch and the expected branch head in one transaction. This also covers a selection that returns zero inputs. |
-| `begin_attempt` | Require every explicit input to be admitted. Record the ordered IDs and start fresh, with no inherited output. |
-| `read_current`, `begin_resume` | Check the accepted head against the current view before returning bytes. A resume records which accepted output it inherited. |
-| `record_dispatch` | Freeze the exact serialized adapter request for a still-eligible pending attempt. The request stays linked to the ordered source occurrences. |
-| `create_token_budget`, `token_budget_state` | Set a ceiling in input-plus-output tokens and read the amount spent and still reserved. |
-| `reserve_dispatch` | Atomically reserve the measured input plus the configured output cap and authorize dispatch. A denial records the decision and consumes no capacity. |
-| `create_recovery`, `begin_recovery_attempt` | Bind a stable operation key and allocate at most the original attempt plus one retry after invalid output. |
-| `reserve_recovery_attempt`, `recovery_reservation` | Stage exact request/quote and read an unsent reservation for verified re-preparation. |
-| `claim_recovery_dispatch`, `cancel_recovery_attempt` | Serialize send permission against cancellation; only one claimant can send, and only unclaimed work releases capacity. |
-| `settle` | Validate the captured branch and view, record the delivery and usage, and advance the head only on acceptance. Identical retries return the first disposition. Conflicting retries fail. |
-| `reject_invalid` | Record a dispatched response that failed validation, including the versioned validator, reason, exact returned bytes, and final usage. Keep the current branch head. |
-
-The caller authenticates actors for every operation. For opaque computations the caller also validates outputs and measures usage. Settlement distinguishes acceptance, stale views, stale branch heads and validator rejection. A rejected answer also records whether its captured view and branch were current at settlement. Each branch belongs to one actor and scope. An effective admission or revocation in that scope conservatively invalidates an opaque head. A fresh computation can reuse raw evidence that is still admitted. Withdrawal governs future reads from this store. Previously delivered bytes may still exist in a caller.
-
-## Reference and next milestone
-
-[The v0 design](docs/memory-v0.md) describes the larger research program. The Python reference under `reference/` covers additional proposed behavior, including alternative derivations and exact categorical belief revision. Its original fixtures run with the Python standard library.
+For the full local contract suite and the independent reference/oracle checks:
 
 ```sh
+cargo test --locked --all-targets
 python3 -m unittest discover -s reference -p test_memory.py
 python3 reference/belief_oracle.py
 ```
 
-On the three-way benchmark, atomic revision reduced median edit time by 13.46× for 32 dense edits on 128 rules, compared with the per-branch API. For 128 sparse edits on 1,024 rules, the corresponding gain was 1.40×. The batched full scan still had the lowest total time in all 30 matched trials. On a subsequent matched run with 1,024 rules, bulk setup took a median 214 ms versus 3,690 ms for single-item setup. Both production paths retained per-occurrence admission events, branch lineage and logical charges. [Benchmark, measurements, and reproduction commands](docs/revision-benchmark.md)
+The [CI workflow](.github/workflows/check.yml) also runs the Python scripts and fixture integration stages across pinned stable, upcoming and previous runtime lanes. The badge links to current results; fixture passes are not live model-performance evidence. On this owner's workstation, use the [qualified launcher and storage workflow](docs/runtime-adoption.md) before heavy builds.
+
+## Why this is an epistemics problem
+
+An answer can remain in memory after its justification changes. Durable provenance helps identify the supplied evidence; revision rules determine which saved work may still be used. KairoTensor studies their integration with exact model requests, conservative continuation checks and accounting for failed or superseded work.
+
+This builds on established ideas in [truth maintenance](https://doi.org/10.1016/0004-3702(79)90008-0) and [assumption-based truth maintenance](https://doi.org/10.1016/0004-3702(86)90080-9). The contribution under study is an execution-boundary integration, not a new truth-maintenance formalism. See the paper's [related work and limitations](docs/submission/report.md#2-related-work).
+
+## Research map
+
+| If you want to… | Start here |
+| --- | --- |
+| Review the sprint submission | [Paper](docs/submission/kairotensor-report.pdf) · [Editable manuscript](docs/submission/report.md) · [Reviewer guide](docs/submission/README.md) |
+| Trace a claim to raw evidence | [Evidence index](docs/submission/EVIDENCE.md) · [Benchmark CSVs](docs/benchmarks/) · [Evaluation records](docs/evaluations/) |
+| Understand or embed the Store | [Contract guide](docs/store-guide.md) · [Documentation index](docs/README.md) |
+| Inspect the semantic integration | [Store-backed incident bridge](docs/incident-store-bridge.md) · [Frozen workload](docs/incident-routing-workload.md) |
+| Audit later reliability work | [Review guide](docs/reliability-review-guide.md) · [Dated submission status](docs/submission/CURRENT_STATUS.md) |
+
+Next research steps are controlled comparisons after evidence changes, equally durable baselines, broader task families, and independently measured model execution. Hosted adapters and AutoScientist work do not become paper results merely by existing or finishing.
+
+## Authorship and disclosure
+
+Alejandro Castellanos confirms that no KairoTensor-specific ideas, code or experiments predate the 13–15 November 2026 sprint. This is the author's declaration; timestamps alone cannot establish when work began. Third-party dependencies and prior work remain identified in their manifests and citations. AI assistance supported development and writing; the author is responsible for the claims and submission. See the paper's [provenance, ethics and LLM usage statements](docs/submission/report.md#appendix-limitations-and-dual-use--ethical-considerations).

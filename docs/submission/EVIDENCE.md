@@ -3,8 +3,24 @@
 Paths below are relative to the measured source root. The accompanying source
 archive is an exact snapshot of `20fab84a6baa525452191ecf80eeee339f0b5ac7`.
 CI collection success and model-task success are separate outcomes. Later
-reliability commits, unmerged PR #18 and active AutoScientist runs are outside
-this measured snapshot and are excluded from the report's outcomes.
+reliability commits, the hosted adapter from PR #18, the separate correction pilot
+and AutoScientist runs are outside this measured snapshot and are excluded from
+the report's outcomes. [Current status](CURRENT_STATUS.md) describes the later
+integration and points to the separately reported pilot.
+
+The final report's Table 1 summarizes the atomic-revision, scoped-reuse and
+recovery rows below. Its values are existing observations, not new experiments.
+Figure 1 illustrates the two scoped-reuse correction paths in row three; its
+caption retains the same-branch, explicit-contract and admission-history checks.
+Appendix Table 2 distinguishes retained artifacts, offline recomputation and
+claims requiring fresh evidence. Neither addition supplies a new model result.
+The [combined reviewer package](https://drive.google.com/file/d/1Nc2X8NwHdDpKTSU2kknw0V_V5cqOEBOP/view)
+contains a current report package with the unchanged measured-source archive and
+raw evidence, plus the separate pilot and integrated-source supplements. Drive access
+must be checked independently of the package's byte manifest. The public
+[measured source](https://github.com/k2jac9/kairotensor/tree/20fab84a6baa525452191ecf80eeee339f0b5ac7)
+also contains the original artifacts. The current presentation changes headings,
+layout accents and source links; it adds no empirical result.
 
 | Report claim | Raw evidence and protocol | Result and limit |
 | --- | --- | --- |

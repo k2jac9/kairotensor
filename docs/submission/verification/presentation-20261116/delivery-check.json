@@ -1,0 +1,43 @@
+{
+  "scope": "Post-upload receipt, kept outside the already-hashed reviewer package",
+  "package": {
+    "corrected_pilot_unchanged": true,
+    "historical_receipts_preserved": 39,
+    "measured_source_sha256": "e5928a4daf5b9d68cfbec0f58afdfd53d65f4202e3f1c5d54a4284baa1c0b821",
+    "outer_links": 12,
+    "outer_payloads": 23,
+    "pilot_payloads": 149,
+    "private_submission_fields_included": false,
+    "report_links": 27,
+    "report_payloads": 58,
+    "report_zip_sha256": "a692df5ae8207491ba212c459554c95fff41538e9527c2dae780515ce5128733",
+    "zip_bytes": 3804246,
+    "zip_sha256": "e9723df1e39c310ac899fad1bf42e808c4aed7f15b1a63be3e6cd939bb334d9b"
+  },
+  "cloud": {
+    "checked_at_utc": "2026-11-16T08:47:21.938353+00:00",
+    "authenticated_readback": [
+      {
+        "file": "kairotensor-report.pdf",
+        "sha256": "5350a885ee9be61300b2743ef35f78bed674e283578a5c4aa487edd4f0b9b476",
+        "bytes": 256329,
+        "matches_cloud": true
+      },
+      {
+        "file": "KairoTensor-submission-evidence-20261116.zip",
+        "sha256": "e9723df1e39c310ac899fad1bf42e808c4aed7f15b1a63be3e6cd939bb334d9b",
+        "bytes": 3804246,
+        "matches_cloud": true
+      }
+    ],
+    "public_drive_access_verified": false,
+    "repository_public_verified_separately": true
+  },
+  "visual_review": [
+    "seven PDF pages",
+    "SVG hero and lifecycle",
+    "GitHub-rendered Markdown in approximate light and dark browser styles"
+  ],
+  "new_application_tests": false,
+  "new_model_calls": 0
+}

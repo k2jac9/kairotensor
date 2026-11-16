@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="540" viewBox="0 0 1440 540" role="img" aria-labelledby="title desc">
+  <title id="title">KairoTensor — Evidence changes. Decisions should respond.</title>
+  <desc id="desc">An original abstract illustration of evidence paths branching through time. Cyan, violet and amber paths converge around a bright node on a dark navy field. This is conceptual artwork, not measured data.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#080D1F"/><stop offset=".58" stop-color="#141C39"/><stop offset="1" stop-color="#222342"/></linearGradient>
+    <radialGradient id="aura"><stop stop-color="#577EC0" stop-opacity=".32"/><stop offset="1" stop-color="#577EC0" stop-opacity="0"/></radialGradient>
+    <linearGradient id="signal"><stop stop-color="#66E4EA"/><stop offset=".6" stop-color="#C4AFFB"/><stop offset="1" stop-color="#F5CE7A"/></linearGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse"><path d="M48 0H0V48" fill="none" stroke="#ABC3ED" stroke-opacity=".06"/></pattern>
+  </defs>
+  <rect width="1440" height="540" rx="24" fill="url(#bg)"/>
+  <rect width="1440" height="540" rx="24" fill="url(#grid)"/>
+  <ellipse cx="1150" cy="255" rx="430" ry="340" fill="url(#aura)"/>
+  <g fill="none" stroke="#90A6D2" stroke-width="1" opacity=".22">
+    <ellipse cx="1160" cy="255" rx="215" ry="180" transform="rotate(-23 1160 255)"/>
+    <ellipse cx="1160" cy="255" rx="260" ry="120" transform="rotate(31 1160 255)"/>
+    <ellipse cx="1160" cy="255" rx="155" ry="225" transform="rotate(29 1160 255)"/>
+  </g>
+  <g fill="none" stroke-linecap="round">
+    <path d="M870 412C940 412 946 300 1030 300S1110 208 1180 208 1240 100 1382 100" stroke="url(#signal)" stroke-width="3"/>
+    <path d="M864 130C972 130 990 208 1180 208S1270 360 1382 360" stroke="#66E4EA" stroke-width="2" opacity=".75"/>
+    <path d="M932 455C1022 455 1070 365 1116 310S1152 208 1180 208" stroke="#C4AFFB" stroke-width="2"/>
+    <path d="M1030 300C1130 300 1210 440 1376 440" stroke="#F5CE7A" stroke-width="2" stroke-dasharray="5 10" opacity=".65"/>
+  </g>
+  <g fill="#0B1023" stroke-width="3"><circle cx="870" cy="412" r="7" stroke="#66E4EA"/><circle cx="864" cy="130" r="7" stroke="#66E4EA"/><circle cx="1030" cy="300" r="9" stroke="#C4AFFB"/><circle cx="1382" cy="100" r="7" stroke="#F5CE7A"/><circle cx="1382" cy="360" r="7" stroke="#66E4EA"/></g>
+  <circle cx="1180" cy="208" r="25" fill="#66E4EA" opacity=".12"/><circle cx="1180" cy="208" r="11" fill="#EAFDFD"/>
+  <g font-family="DejaVu Sans, Arial, sans-serif">
+    <text x="72" y="87" fill="#66E4EA" font-size="17" letter-spacing="4">AGENT MEMORY · EVIDENCE REVISION</text>
+    <text x="66" y="204" fill="#F4F6FC" font-size="90" font-weight="700" letter-spacing="-4">KairoTensor</text>
+    <text x="72" y="284" fill="#F4F6FC" font-size="36">Evidence changes.</text>
+    <text x="72" y="334" fill="#C4AFFB" font-size="36">Decisions should respond.</text>
+    <path d="M72 385H750" stroke="url(#signal)" stroke-width="2"/>
+    <text x="72" y="431" fill="#C1CBE0" font-size="19">A research prototype for justified reuse and accountable revision.</text>
+    <text x="72" y="483" fill="#AEBED9" font-size="15" letter-spacing="2">RUST + SQLITE   /   LOCAL EVIDENCE   /   EXPLICIT CONTRACTS</text>
+  </g>
+</svg>
