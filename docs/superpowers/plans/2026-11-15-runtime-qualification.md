@@ -72,9 +72,23 @@ toolchains remain an explicit adoption gap; they do not become an invented pass.
 
 ### Task 2: Pin qualified project defaults and CI lanes
 
-**Files:** create `rust-toolchain.toml`, `.python-version`;
+**Files:** create `rust-toolchain.toml`, `.python-version`,
+`scripts/project_runtime.py`, `scripts/test_project_runtime.py`;
 modify `.github/workflows/check.yml`, `docs/runtime-adoption.md`.
 No application source or dependency resolution change.
+
+The project launcher uses an explicit accepted local runtime-selection manifest
+with absolute executable paths, hashes and versions, distinct from the immutable
+source-bound qualification receipt. Verify all identities before launch, bind
+selected Rust/Cargo and child python3 on a private PATH, and route Cargo through
+the approved storage wrapper. Ordinary editable source is recorded honestly and
+does not inherit the old source's qualification. Never silently install/fallback,
+change host defaults or commit workstation paths as portable CI identities.
+The system Rust commands are rustup proxies and may honor pins; test actual
+resolution instead of assuming they override them. Python child selection still
+requires explicit verification. Document the durable project invocation.
+Meaningful launcher tests cover absent/wrong identity, selected child Python,
+editable source without false qualification, and admitted Cargo routing.
 
 - [ ] If stable qualification passed, pin its exact Rust release in
   rust-toolchain.toml with the minimal required components, and exact Python

@@ -44,6 +44,14 @@ def score_ablations(plan, outcomes): ...
 ```
 
 Accept only a complete bounded C bundle with all selected evidence available.
+Initial public applicability is the direct root of the known initial incident/1
+contract: no retry, inherited/reused output, policy-bearing or opaque contract.
+Validate roles from the exact context/source manifest, runtime/timing binding,
+recorded validator provenance and reconstructed request bytes; the existing
+Python byte reader alone is insufficient. Preserve full source comparison
+identities and refuse unsupported contracts. Ancestor computations are never
+scheduled implicitly. These checks establish declared-contract consistency,
+not full Rust ledger validation or renewed access/send authority.
 `selected_ids=None` selects all distinct selectable Report/Evidence occurrences
 only when there are at most four. Otherwise require an explicit selection.
 Context/Policy/InheritedOutput and structural lineage do not count toward that
@@ -53,6 +61,9 @@ select a subset when the bundle contains more than four,
 rather than silently truncating dependencies. Repeated occurrences at several
 positions are one ablated item whose scheduled removal covers every occurrence
 position; identical bytes under distinct IDs remain distinct items.
+The known incident/1 contract requires unique occurrence IDs, so its public
+planner refuses repeated IDs. Test repeated-position grouping in the internal
+schedule helper only; do not invent a new public contract or relax incident/1.
 
 Plan schema `decision-ablation-plan/1`: source bundle digest, ordered selected IDs,
 trials (positive integer <=100), include_pairs boolean, max_calls integer <=10,000,
@@ -76,6 +87,13 @@ producer-supplied normalized result values; it is not a scientific-truth validat
 Treat normalized results as recorded attestations. Exact duplicate
 trial IDs and unknown IDs refuse; missing trials make report Incomplete. Different
 scorer/runtime/validator identities make comparison Incomparable.
+
+Before scoring, independently regenerate the complete bounded plan schedule,
+including every baseline/single/enabled-pair repeat, variant digest and trial ID.
+Require exact rows and scheduled count within max_calls even if a caller rehashed
+a mutated plan. Reject removed baseline repetitions/pairs, duplicate repeat
+indices, incorrect variant digests or false counts. This verifies plan consistency;
+without the source bundle the scorer does not reauthenticate source applicability.
 
 Score only if every baseline trial is recorded and all baseline semantic results
 agree. Each variant records changed/unchanged/failed/unknown counts out of all r

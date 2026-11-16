@@ -206,6 +206,11 @@ method that opens a nested transaction. Withdraw old/admit new, revise final
 changed support heads, update pointer and append event in the same transaction.
 New revision = old+1 (bootstrap1), checked for overflow. No edits to claims,
 reservations or deliveries. Head/evaluation lookup is always scope-bound.
+The admitted registered-policy set in this exact actor/scope/purpose must be
+empty before bootstrap and exactly the current head occurrence before other
+transitions. A third inactive version admitted externally also yields
+AdmissionMismatch; do not silently repair it. Other purposes are outside this
+consistency check. Test that case alongside withdrawn-head/admitted-target cases.
 
 - [ ] Add failing empty-registry bootstrap, concurrent bootstrap, B-beats-A with
   C active, stale revision, missing baseline evaluation, incompatible rollback,
