@@ -58,6 +58,18 @@ passes, and 203 script tests with 28 skips (175 executed, no failures). Some
 script tests require separately built Rust examples and are skipped without them.
 Resource warnings about unclosed SQLite connections are retained in the receipts.
 
+The 16 November finalization reran these exact commands after unpacking the
+reviewer package, using Python 3.15.2. It observed the same 18 reference passes,
+8 oracle passes, and 203 script tests with 28 skips. Two unclosed-SQLite-connection
+resource warnings were emitted. The new stdout/stderr and exact runtime identity
+are retained under `verification/finalization-20261116/`; the original receipts
+remain unchanged. Both benchmark summary outputs matched the earlier receipt
+bytes, and the recovery archive remained unchanged after the read-only audit.
+
+The final ZIP adds those fresh receipts to the tested payload. Its manifest and
+unpacked source bytes are checked again; the source archive is identical to the
+one used for the fresh command run. No new source build or model call is implied.
+
 ## Full Rust and model reproduction
 
 The repository README and historical workflows contain full Rust commands.

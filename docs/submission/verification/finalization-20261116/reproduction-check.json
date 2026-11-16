@@ -1,0 +1,196 @@
+{
+  "verified_at_utc": "2026-11-16T05:43:12.331296+00:00",
+  "measured_source_commit": "20fab84a6baa525452191ecf80eeee339f0b5ac7",
+  "source_archive_sha256": "e5928a4daf5b9d68cfbec0f58afdfd53d65f4202e3f1c5d54a4284baa1c0b821",
+  "tested_package": "candidate-reviewer-package.zip; final package retains identical measured source bytes",
+  "python_version": "3.15.2 (main, Oct 25 2026, 16:57:51) [GCC 16.2.0]",
+  "python_executable": "/home/neo/.nix-profile/bin/python3",
+  "python_resolved_executable": "/nix/store/w3ps4vf470m69d9l5bcbbipay9insx32-python3-3.15.2/bin/python3.15",
+  "commands": [
+    {
+      "label": "atomic-summary",
+      "command": [
+        "/home/neo/.nix-profile/bin/python3",
+        "scripts/summarize_revision_bench.py",
+        "docs/benchmarks/atomic-revision-2026-11-13.csv"
+      ],
+      "exit_code": 0,
+      "started_at_utc": "2026-11-16T05:42:53.993345+00:00",
+      "elapsed_seconds": 0.029359
+    },
+    {
+      "label": "bulk-summary",
+      "command": [
+        "/home/neo/.nix-profile/bin/python3",
+        "scripts/summarize_revision_bench.py",
+        "docs/benchmarks/bulk-setup-2026-11-13.csv"
+      ],
+      "exit_code": 0,
+      "started_at_utc": "2026-11-16T05:42:54.022719+00:00",
+      "elapsed_seconds": 0.030028
+    },
+    {
+      "label": "recovery-v2-audit",
+      "command": [
+        "/home/neo/.nix-profile/bin/python3",
+        "scripts/audit_recovery_bundle.py",
+        "/home/neo/Projects/kairotensor-artifacts/submission-finalization-mkpl39bc/report/final-b850dFB3/candidate-recovery-audit"
+      ],
+      "exit_code": 0,
+      "started_at_utc": "2026-11-16T05:42:54.052760+00:00",
+      "elapsed_seconds": 0.050662
+    },
+    {
+      "label": "reference-tests",
+      "command": [
+        "/home/neo/.nix-profile/bin/python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "reference",
+        "-p",
+        "test_memory.py"
+      ],
+      "exit_code": 0,
+      "started_at_utc": "2026-11-16T05:42:54.103436+00:00",
+      "elapsed_seconds": 0.110642
+    },
+    {
+      "label": "belief-oracle-tests",
+      "command": [
+        "/home/neo/.nix-profile/bin/python3",
+        "reference/belief_oracle.py"
+      ],
+      "exit_code": 0,
+      "started_at_utc": "2026-11-16T05:42:54.214102+00:00",
+      "elapsed_seconds": 0.045485
+    },
+    {
+      "label": "scripts-tests",
+      "command": [
+        "/home/neo/.nix-profile/bin/python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "scripts",
+        "-p",
+        "test_*.py"
+      ],
+      "exit_code": 0,
+      "started_at_utc": "2026-11-16T05:42:54.259601+00:00",
+      "elapsed_seconds": 18.071512
+    }
+  ],
+  "summary_bytes_match_historical_receipts": true,
+  "recovery_archive_unchanged": true,
+  "recovery_archive_sha256": "74e8895335f304be0db1d8c705b1e448cb0588dd1b1ccff7296e4a2ff6f8af0d",
+  "recovery_audit": {
+    "status": "verified_complete",
+    "cases": 10,
+    "mode": "live_qwen",
+    "actual_backend_calls": 20,
+    "new_model_calls": 20,
+    "charged_tokens": 5241,
+    "outstanding_tokens": 0,
+    "summary": {
+      "calibration": {
+        "always_stop": {
+          "attempts": 4,
+          "charged_tokens": 840,
+          "reserved_tokens": 0,
+          "correct": 0,
+          "on_time": 4,
+          "success": 0,
+          "abstained": 4,
+          "cases": 4,
+          "success_rate": 0.0,
+          "correct_late": 0,
+          "successes_per_charged_token": 0.0
+        },
+        "affordable_retry": {
+          "attempts": 8,
+          "charged_tokens": 2045,
+          "reserved_tokens": 0,
+          "correct": 0,
+          "on_time": 0,
+          "success": 0,
+          "abstained": 4,
+          "cases": 4,
+          "success_rate": 0.0,
+          "correct_late": 0,
+          "successes_per_charged_token": 0.0
+        },
+        "evidence_gated_retry": {
+          "attempts": 7,
+          "charged_tokens": 1736,
+          "reserved_tokens": 0,
+          "correct": 0,
+          "on_time": 1,
+          "success": 0,
+          "abstained": 4,
+          "cases": 4,
+          "success_rate": 0.0,
+          "correct_late": 0,
+          "successes_per_charged_token": 0.0
+        }
+      },
+      "heldout": {
+        "always_stop": {
+          "attempts": 6,
+          "charged_tokens": 1316,
+          "reserved_tokens": 0,
+          "correct": 0,
+          "on_time": 6,
+          "success": 0,
+          "abstained": 6,
+          "cases": 6,
+          "success_rate": 0.0,
+          "correct_late": 0,
+          "successes_per_charged_token": 0.0
+        },
+        "affordable_retry": {
+          "attempts": 12,
+          "charged_tokens": 3196,
+          "reserved_tokens": 0,
+          "correct": 0,
+          "on_time": 0,
+          "success": 0,
+          "abstained": 6,
+          "cases": 6,
+          "success_rate": 0.0,
+          "correct_late": 0,
+          "successes_per_charged_token": 0.0
+        },
+        "evidence_gated_retry": {
+          "attempts": 10,
+          "charged_tokens": 2548,
+          "reserved_tokens": 0,
+          "correct": 0,
+          "on_time": 2,
+          "success": 0,
+          "abstained": 6,
+          "cases": 6,
+          "success_rate": 0.0,
+          "correct_late": 0,
+          "successes_per_charged_token": 0.0
+        }
+      }
+    },
+    "limitations": "Internal consistency audit only; model, tokenizer, timing and source provenance are producer attestations, not authenticated execution evidence."
+  },
+  "new_model_calls_during_reproduction": 0,
+  "fresh_rust_execution": false,
+  "complete_runtime_compatibility_matrix": false,
+  "tested_candidate_package_sha256": "35850b59423c8f38719895b51c260443c945798373799e25155e081b7c8d66ec",
+  "test_counts": {
+    "reference_passed": 18,
+    "belief_oracle_passed": 8,
+    "scripts_total": 203,
+    "scripts_skipped": 28,
+    "scripts_executed_without_failure": 175,
+    "total_executed_without_failure": 201
+  },
+  "unclosed_sqlite_connection_resource_warnings": 2
+}

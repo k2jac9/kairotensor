@@ -18,7 +18,9 @@ eligibility, not truth."
 
 Show the README withdrawal example and selective-revision contract.
 
-"Each evidence occurrence has an identity. A computation captures its selected
+"Dependency tracking has a long history in truth-maintenance systems. Here it is
+integrated with durable records at the model execution boundary. Each evidence
+occurrence has an identity. A computation captures its selected
 inputs and current branch. Settlement and later reads check that this context is
 still applicable. Deterministic rules can name alternative groups of witnesses:
 withdrawing one report need not discard a conclusion if another declared witness

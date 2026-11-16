@@ -2,7 +2,9 @@
 
 Paths below are relative to the measured source root. The accompanying source
 archive is an exact snapshot of `20fab84a6baa525452191ecf80eeee339f0b5ac7`.
-CI collection success and model-task success are separate outcomes.
+CI collection success and model-task success are separate outcomes. Later
+reliability commits, unmerged PR #18 and active AutoScientist runs are outside
+this measured snapshot and are excluded from the report's outcomes.
 
 | Report claim | Raw evidence and protocol | Result and limit |
 | --- | --- | --- |
@@ -11,7 +13,7 @@ CI collection success and model-task success are separate outcomes.
 | Scoped reuse saves calls in one controlled correction | `docs/evaluations/scoped-reuse-qwen-2026-11-13.json`; `docs/scoped-model-reuse.md`; `docs/evaluation-prompts.md` | Repair: one call, 193 tokens. Fresh rebuild: two calls, 404 tokens. Identical checked canary plans. Report replacement forces new judgment and hold. Seven actual generations across all four routes; one observation per route. |
 | Earlier scoped-reuse prompt failed | `docs/evaluations/scoped-reuse-first-qwen-2026-11-13.json`; `docs/scoped-model-reuse.md` | Model labeled an 11/12 report as passing; validator rejected it. The historical attempt remained unsettled. A later zero-call replay records rejection; it does not rewrite the original trace. |
 | Frozen recovery did not succeed | `docs/evaluations/recovery-policy-v2-2026-11-14.zip`; matching `.md` | Ten synthetic cases, 20 recorded Qwen calls, 5,241 charged tokens. All replies fenced and invalid under strict JSON contract. Each policy scores 0/6 held-out successes; policies replay shared trajectories. All retry receipts miss the soft deadline. |
-| Current main has automated contract coverage | `.github/workflows/check.yml`; `reference/test_memory.py`; `reference/belief_oracle.py`; `scripts/test_*.py`; Rust integration tests | Historical exact-main CI plus local Python receipts. New incident calibration is unexecuted; fixture tests are not live-model evidence. |
+| The measured snapshot has automated contract coverage | `.github/workflows/check.yml`; `reference/test_memory.py`; `reference/belief_oracle.py`; `scripts/test_*.py`; Rust integration tests | Historical exact-source CI plus local Python receipts. New incident calibration is unexecuted; fixture tests are not live-model evidence. |
 
 ## Source and execution identities
 
