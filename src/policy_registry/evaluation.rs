@@ -122,8 +122,10 @@ pub fn paired_baseline_matches(
         && recorded.provenance == paired.provenance
         && recorded.baseline_rows == paired.baseline_rows)
 }
-fn manifest(e: &PolicyEvaluation) -> rusqlite::Result<(ComparisonManifest, Vec<FrozenLabel>)> {
-    let m: ComparisonManifest = parse(&e.experiment_manifest, MAX_EVALUATION_BYTES)?;
+pub(super) fn validate_manifest(
+    bytes: &[u8],
+) -> rusqlite::Result<(ComparisonManifest, Vec<FrozenLabel>)> {
+    let m: ComparisonManifest = parse(bytes, MAX_EVALUATION_BYTES)?;
     require(
         m.format == "policy-comparison/1"
             && !m.cases.is_empty()
@@ -251,7 +253,7 @@ fn refused(r: SelectionRefusal) -> SelectionDecision {
 
 pub fn evaluate_policy_comparison(e: &PolicyEvaluation) -> rusqlite::Result<SelectionDecision> {
     shape(e)?;
-    let (m, labels) = manifest(e)?;
+    let (m, labels) = validate_manifest(&e.experiment_manifest)?;
     if e.actor != m.actor
         || e.scope != m.scope
         || e.purpose != m.purpose

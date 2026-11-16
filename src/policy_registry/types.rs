@@ -241,3 +241,59 @@ pub enum SelectionDecision {
     },
     Refused(SelectionRefusal),
 }
+
+/// Trusted management request, never an authorization to send model work.
+#[derive(Clone, Debug, Serialize)]
+pub struct ActivationRequest {
+    pub actor: String,
+    pub scope: String,
+    pub purpose: String,
+    pub expected_active_revision: Option<i64>,
+    pub action: ActivationAction,
+}
+#[derive(Clone, Debug, Serialize)]
+pub enum ActivationAction {
+    Bootstrap {
+        baseline_id: String,
+        baseline_manifest: Vec<u8>,
+        baseline_manifest_sha256: String,
+        reason: String,
+    },
+    Promote {
+        candidate_id: String,
+        evaluation_id: String,
+    },
+    Rollback {
+        target_version_id: String,
+        reason: String,
+    },
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ActivePolicy {
+    pub version_id: String,
+    pub sha256: String,
+    pub evidence_id: i64,
+    pub compatibility_contract_sha256: String,
+    pub revision: i64,
+    pub baseline_manifest_sha256: String,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ActivationResult {
+    Activated { revision: i64 },
+    Refused(ActivationRefusal),
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ActivationRefusal {
+    RevisionConflict,
+    AlreadyInitialized,
+    MissingHead,
+    InvalidArtifact,
+    ScopeMismatch,
+    Incompatible,
+    BaselineMismatch,
+    MissingBaselineEvaluation,
+    EvaluationRefused(SelectionRefusal),
+    NeverActivated,
+    AdmissionMismatch,
+    NoChange,
+}

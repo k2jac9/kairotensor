@@ -207,6 +207,23 @@ fn publish_changed_heads(
     Ok(revisions)
 }
 
+// Internal callers validate shape, occurrences and their own CAS before using
+// this final-state path. This helper never opens or commits a transaction.
+pub(crate) fn apply_admission_edits(
+    tx: &Transaction<'_>, actor: &str, scope: &str, edits: &[AdmissionEdit],
+) -> Result<(i64, Vec<SupportRevision>)> {
+    let mut epoch = view_epoch(tx, actor, scope)?;
+    let mut effective = Vec::new();
+    for edit in edits {
+        if let Some(next) = change_admission(tx, actor, scope, edit.evidence, edit.admitted)? {
+            epoch = next;
+            effective.push(edit.evidence);
+        }
+    }
+    let changes = publish_changed_heads(tx, actor, scope, epoch, &effective)?;
+    Ok((epoch, changes))
+}
+
 // A bulk registration never changes admissions. Bind this cache to its single
 // actor, scope and writer transaction; both missing and visible IDs can repeat.
 fn cached_admissions(mut lookup: impl FnMut(i64) -> Result<bool>) -> impl FnMut(i64) -> Result<bool> {
@@ -393,21 +410,14 @@ impl Store {
             }
         }
         let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let mut epoch = view_epoch(&tx, actor, scope)?;
+        let epoch = view_epoch(&tx, actor, scope)?;
         if epoch != expected_epoch {
             return Ok(BatchRevision::EpochConflict { current_epoch: epoch });
         }
         for edit in edits {
             tx.query_row("SELECT 1 FROM evidence WHERE id = ?1", [edit.evidence], |_| Ok(()))?;
         }
-        let mut effective = Vec::new();
-        for edit in edits {
-            if let Some(next) = change_admission(&tx, actor, scope, edit.evidence, edit.admitted)? {
-                epoch = next;
-                effective.push(edit.evidence);
-            }
-        }
-        let changes = publish_changed_heads(&tx, actor, scope, epoch, &effective)?;
+        let (epoch, changes) = apply_admission_edits(&tx, actor, scope, edits)?;
         tx.commit()?;
         Ok(BatchRevision::Applied { epoch, changes })
     }

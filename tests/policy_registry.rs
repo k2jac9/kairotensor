@@ -590,3 +590,722 @@ rowid_replacement_test!(
     "policy_evaluations",
     "oid"
 );
+
+fn request(
+    e: &PolicyEvaluation,
+    revision: Option<i64>,
+    action: ActivationAction,
+) -> ActivationRequest {
+    ActivationRequest {
+        actor: e.actor.clone(),
+        scope: e.scope.clone(),
+        purpose: e.purpose.clone(),
+        expected_active_revision: revision,
+        action,
+    }
+}
+fn bootstrap(e: &PolicyEvaluation) -> ActivationRequest {
+    request(
+        e,
+        None,
+        ActivationAction::Bootstrap {
+            baseline_id: e.baseline_id.clone(),
+            baseline_manifest: e.experiment_manifest.clone(),
+            baseline_manifest_sha256: e.experiment_sha256.clone(),
+            reason: "explicit initial baseline".into(),
+        },
+    )
+}
+fn promote(e: &PolicyEvaluation, revision: i64) -> ActivationRequest {
+    request(
+        e,
+        Some(revision),
+        ActivationAction::Promote {
+            candidate_id: e.candidate_id.clone(),
+            evaluation_id: e.evaluation_id.clone(),
+        },
+    )
+}
+fn baseline(e: &PolicyEvaluation) -> PolicyEvaluation {
+    let mut b = e.clone();
+    b.evaluation_id = format!("{}-baseline", e.evaluation_id);
+    b.candidate_id = b.baseline_id.clone();
+    b.candidate_sha256 = b.baseline_sha256.clone();
+    b.candidate_rows = b.baseline_rows.clone();
+    b
+}
+fn refusal(
+    s: &mut Store,
+    db: &Database,
+    r: &ActivationRequest,
+    want: ActivationRefusal,
+) -> Result<()> {
+    let before = all_table_rows(&db.conn()?)?;
+    assert_eq!(s.activate_policy(r)?, ActivationResult::Refused(want));
+    assert_eq!(all_table_rows(&db.conn()?)?, before);
+    Ok(())
+}
+#[test]
+fn activation_bootstrap_requires_registered_baseline_and_binds_exact_manifest() -> Result<()> {
+    let db = Database::new();
+    let mut s = Store::open(&db.0)?;
+    let e = fixture();
+    assert_eq!(s.active_policy(&e.actor, &e.scope, &e.purpose)?, None);
+    refusal(
+        &mut s,
+        &db,
+        &bootstrap(&e),
+        ActivationRefusal::InvalidArtifact,
+    )?;
+    register_pair(&mut s, &e)?;
+    let mut bad = bootstrap(&e);
+    if let ActivationAction::Bootstrap {
+        baseline_manifest, ..
+    } = &mut bad.action
+    {
+        baseline_manifest.push(b' ');
+    }
+    refusal(&mut s, &db, &bad, ActivationRefusal::InvalidArtifact)?;
+    assert_eq!(
+        s.activate_policy(&bootstrap(&e))?,
+        ActivationResult::Activated { revision: 1 }
+    );
+    let h = s.active_policy(&e.actor, &e.scope, &e.purpose)?.unwrap();
+    assert_eq!(h.version_id, e.baseline_id);
+    assert_eq!(h.sha256, e.baseline_sha256);
+    assert_eq!(h.baseline_manifest_sha256, e.experiment_sha256);
+    assert!(s
+        .read_evidence(&e.actor, &e.scope, h.evidence_id)?
+        .is_some());
+    refusal(
+        &mut s,
+        &db,
+        &bootstrap(&e),
+        ActivationRefusal::AlreadyInitialized,
+    )?;
+    Ok(())
+}
+#[test]
+fn activation_requires_current_baseline_revision_and_complete_baseline_only_evaluation(
+) -> Result<()> {
+    let db = Database::new();
+    let mut s = Store::open(&db.0)?;
+    let e = fixture();
+    register_pair(&mut s, &e)?;
+    s.record_policy_evaluation(&e)?;
+    s.activate_policy(&bootstrap(&e))?;
+    refusal(
+        &mut s,
+        &db,
+        &promote(&e, 2),
+        ActivationRefusal::RevisionConflict,
+    )?;
+    refusal(
+        &mut s,
+        &db,
+        &promote(&e, 1),
+        ActivationRefusal::MissingBaselineEvaluation,
+    )?;
+    s.record_policy_evaluation(&baseline(&e))?;
+    assert_eq!(
+        s.activate_policy(&promote(&e, 1))?,
+        ActivationResult::Activated { revision: 2 }
+    );
+    let rollback = request(
+        &e,
+        Some(2),
+        ActivationAction::Rollback {
+            target_version_id: e.baseline_id.clone(),
+            reason: "return to accepted baseline".into(),
+        },
+    );
+    assert_eq!(
+        s.activate_policy(&rollback)?,
+        ActivationResult::Activated { revision: 3 }
+    );
+    refusal(
+        &mut s,
+        &db,
+        &promote(&e, 1),
+        ActivationRefusal::RevisionConflict,
+    )?;
+    Ok(())
+}
+#[test]
+fn activation_b_beats_a_cannot_replace_current_c() -> Result<()> {
+    let db = Database::new();
+    let mut s = Store::open(&db.0)?;
+    let e = fixture();
+    register_pair(&mut s, &e)?;
+    let m: ComparisonManifest = serde_json::from_slice(&e.experiment_manifest).unwrap();
+    let a = m
+        .policies
+        .iter()
+        .find(|p| p.artifact.sha256 == e.baseline_sha256)
+        .unwrap();
+    s.register_policy_candidate(&PolicyCandidate {
+        version_id: "C".into(),
+        actor: e.actor.clone(),
+        scope: e.scope.clone(),
+        purpose: e.purpose.clone(),
+        artifact: a.artifact.bytes.clone(),
+        sha256: a.artifact.sha256.clone(),
+    })?;
+    s.record_policy_evaluation(&e)?;
+    s.record_policy_evaluation(&baseline(&e))?;
+    let mut init = bootstrap(&e);
+    if let ActivationAction::Bootstrap { baseline_id, .. } = &mut init.action {
+        *baseline_id = "C".into();
+    }
+    s.activate_policy(&init)?;
+    refusal(
+        &mut s,
+        &db,
+        &promote(&e, 1),
+        ActivationRefusal::BaselineMismatch,
+    )
+}
+#[test]
+fn activation_inconsistent_admission_never_repairs_withdrawn_head_target_or_third_version(
+) -> Result<()> {
+    for variant in ["head", "target", "third", "bootstrap"] {
+        let db = Database::new();
+        let mut s = Store::open(&db.0)?;
+        let e = fixture();
+        register_pair(&mut s, &e)?;
+        s.record_policy_evaluation(&e)?;
+        s.record_policy_evaluation(&baseline(&e))?;
+        let mut third = candidate("third");
+        third.actor = e.actor.clone();
+        third.scope = e.scope.clone();
+        s.register_policy_candidate(&third)?;
+        if variant != "bootstrap" {
+            s.activate_policy(&bootstrap(&e))?;
+        }
+        let id = match variant {
+            "head" => &e.baseline_id,
+            "target" => &e.candidate_id,
+            _ => "third",
+        };
+        let eid = db.conn()?.query_row(
+            "SELECT evidence_id FROM policy_versions WHERE version_id=?1",
+            [id],
+            |r| r.get(0),
+        )?;
+        s.set_admitted(&e.actor, &e.scope, eid, variant != "head")?;
+        let r = if variant == "bootstrap" {
+            bootstrap(&e)
+        } else {
+            promote(&e, 1)
+        };
+        refusal(&mut s, &db, &r, ActivationRefusal::AdmissionMismatch)?;
+    }
+    Ok(())
+}
+
+fn activated_fixture() -> Result<(Database, Store, PolicyEvaluation)> {
+    let db = Database::new();
+    let mut s = Store::open(&db.0)?;
+    let e = fixture();
+    register_pair(&mut s, &e)?;
+    s.record_policy_evaluation(&e)?;
+    s.record_policy_evaluation(&baseline(&e))?;
+    assert_eq!(
+        s.activate_policy(&bootstrap(&e))?,
+        ActivationResult::Activated { revision: 1 }
+    );
+    Ok((db, s, e))
+}
+fn activation_race(
+    s: &mut Store,
+    db: &Database,
+    requests: [ActivationRequest; 2],
+    revision: i64,
+    loser: ActivationRefusal,
+) -> Result<()> {
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+    let threads = requests
+        .into_iter()
+        .map(|r| {
+            let path = db.0.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || -> Result<_> {
+                let mut s = Store::open(path)?;
+                barrier.wait();
+                s.activate_policy(&r)
+            })
+        })
+        .collect::<Vec<_>>();
+    let results = threads
+        .into_iter()
+        .map(|t| t.join().unwrap())
+        .collect::<Result<Vec<_>>>()?;
+    assert_eq!(
+        results
+            .iter()
+            .filter(|r| **r == ActivationResult::Activated { revision })
+            .count(),
+        1,
+        "{results:?}"
+    );
+    assert_eq!(
+        results
+            .iter()
+            .filter(|r| **r == ActivationResult::Refused(loser.clone()))
+            .count(),
+        1,
+        "{results:?}"
+    );
+    let e = fixture();
+    assert_eq!(
+        s.active_policy(&e.actor, &e.scope, &e.purpose)?
+            .unwrap()
+            .revision,
+        revision
+    );
+    Ok(())
+}
+#[test]
+fn activation_concurrent_bootstrap_has_one_winner() -> Result<()> {
+    let db = Database::new();
+    let mut s = Store::open(&db.0)?;
+    let e = fixture();
+    register_pair(&mut s, &e)?;
+    activation_race(
+        &mut s,
+        &db,
+        [bootstrap(&e), bootstrap(&e)],
+        1,
+        ActivationRefusal::AlreadyInitialized,
+    )
+}
+#[test]
+fn activation_concurrent_promotions_have_one_winner() -> Result<()> {
+    let (db, mut s, e) = activated_fixture()?;
+    activation_race(
+        &mut s,
+        &db,
+        [promote(&e, 1), promote(&e, 1)],
+        2,
+        ActivationRefusal::RevisionConflict,
+    )
+}
+#[test]
+fn activation_promote_rollback_race_has_one_winner() -> Result<()> {
+    let (db, mut s, e) = activated_fixture()?;
+    s.activate_policy(&promote(&e, 1))?;
+    s.activate_policy(&request(
+        &e,
+        Some(2),
+        ActivationAction::Rollback {
+            target_version_id: e.baseline_id.clone(),
+            reason: "return".into(),
+        },
+    ))?;
+    activation_race(
+        &mut s,
+        &db,
+        [
+            promote(&e, 3),
+            request(
+                &e,
+                Some(3),
+                ActivationAction::Rollback {
+                    target_version_id: e.candidate_id.clone(),
+                    reason: "restore previous activation".into(),
+                },
+            ),
+        ],
+        4,
+        ActivationRefusal::RevisionConflict,
+    )
+}
+#[test]
+fn activation_replaces_admissions_and_publishes_only_final_changed_support() -> Result<()> {
+    let (db, mut s, e) = activated_fixture()?;
+    let old = s
+        .active_policy(&e.actor, &e.scope, &e.purpose)?
+        .unwrap()
+        .evidence_id;
+    let new = db.conn()?.query_row(
+        "SELECT evidence_id FROM policy_versions WHERE version_id=?1",
+        [&e.candidate_id],
+        |r| r.get(0),
+    )?;
+    let union = s.publish_support(&e.actor, &e.scope, "union", &[vec![old], vec![new]])?;
+    let left = s.publish_support(&e.actor, &e.scope, "left", &[vec![old]])?;
+    let right = s.publish_support(&e.actor, &e.scope, "right", &[vec![new]])?;
+    let usage = s.charged_usage()?;
+    s.activate_policy(&promote(&e, 1))?;
+    assert_eq!(s.read_evidence(&e.actor, &e.scope, old)?, None);
+    assert!(s.read_evidence(&e.actor, &e.scope, new)?.is_some());
+    let conn = db.conn()?;
+    for (branch, old_id, changed) in [
+        ("union", union, false),
+        ("left", left, true),
+        ("right", right, true),
+    ] {
+        let head: i64 = conn.query_row(
+            "SELECT head FROM branches WHERE actor=?1 AND scope=?2 AND name=?3",
+            params![e.actor, e.scope, branch],
+            |r| r.get(0),
+        )?;
+        assert_eq!(head != old_id, changed);
+    }
+    assert_eq!(s.charged_usage()?, usage + 2);
+    Ok(())
+}
+#[test]
+fn activation_failures_after_admission_support_and_event_writes_roll_back_every_table() -> Result<()>
+{
+    for (table, when) in [
+        ("admission_events", "AFTER INSERT"),
+        ("support_bindings", "AFTER INSERT"),
+        ("policy_events", "AFTER INSERT"),
+    ] {
+        let (db, mut s, e) = activated_fixture()?;
+        let old = s
+            .active_policy(&e.actor, &e.scope, &e.purpose)?
+            .unwrap()
+            .evidence_id;
+        s.publish_support(&e.actor, &e.scope, "changed", &[vec![old]])?;
+        let sql = db.conn()?;
+        sql.execute_batch(&format!("CREATE TRIGGER fail_activation {when} ON {table} BEGIN SELECT RAISE(ABORT,'injected activation failure'); END;"))?;
+        let before = all_table_rows(&sql)?;
+        assert!(s.activate_policy(&promote(&e, 1)).is_err(), "{table}");
+        assert_eq!(all_table_rows(&sql)?, before, "{table}");
+        drop(s);
+        drop(sql);
+        let _s = Store::open(&db.0)?;
+        assert_eq!(all_table_rows(&db.conn()?)?, before, "{table}");
+    }
+    Ok(())
+}
+#[test]
+fn activation_unknown_evaluators_are_not_promotable_or_baseline_evidence() -> Result<()> {
+    let db = Database::new();
+    let mut s = Store::open(&db.0)?;
+    let mut e = fixture();
+    register_pair(&mut s, &e)?;
+    let mut unknown = baseline(&e);
+    unknown.evaluator_version = "unknown/1".into();
+    s.record_policy_evaluation(&unknown)?;
+    s.record_policy_evaluation(&e)?;
+    s.activate_policy(&bootstrap(&e))?;
+    refusal(
+        &mut s,
+        &db,
+        &promote(&e, 1),
+        ActivationRefusal::MissingBaselineEvaluation,
+    )?;
+    e.evaluation_id = "unknown-pair".into();
+    e.evaluator_version = "unknown/1".into();
+    s.record_policy_evaluation(&e)?;
+    refusal(
+        &mut s,
+        &db,
+        &promote(&e, 1),
+        ActivationRefusal::EvaluationRefused(SelectionRefusal::Incomparable),
+    )
+}
+#[test]
+fn activation_rollback_checks_prior_activation_current_compatibility_and_no_change() -> Result<()> {
+    let (db, mut s, e) = activated_fixture()?;
+    let rb = |id: String, rev| {
+        request(
+            &e,
+            Some(rev),
+            ActivationAction::Rollback {
+                target_version_id: id,
+                reason: "explicit rollback".into(),
+            },
+        )
+    };
+    refusal(
+        &mut s,
+        &db,
+        &rb(e.baseline_id.clone(), 1),
+        ActivationRefusal::NoChange,
+    )?;
+    refusal(
+        &mut s,
+        &db,
+        &rb(e.candidate_id.clone(), 1),
+        ActivationRefusal::NeverActivated,
+    )?;
+    // A valid registered version with a different contract cannot be a rollback target.
+    let mut other = candidate("incompatible");
+    other.actor = e.actor.clone();
+    other.scope = e.scope.clone();
+    let mut artifact = validate_policy_artifact(&other.artifact)?;
+    artifact.compatibility_contract_sha256 = "f".repeat(64);
+    other.artifact = serde_json::to_vec(&artifact).unwrap();
+    other.sha256 = sha(&other.artifact);
+    s.register_policy_candidate(&other)?;
+    refusal(
+        &mut s,
+        &db,
+        &rb(other.version_id, 1),
+        ActivationRefusal::Incompatible,
+    )?;
+    Ok(())
+}
+
+#[test]
+fn activation_epoch_invalidates_captured_work_without_releasing_uncertain_claim() -> Result<()> {
+    use kairotensor::{
+        RecoveryCalibration, RecoveryClock, RecoveryPreparation, RecoveryReadiness,
+        RecoveryRuntime, RecoveryStart, RecoveryTiming, TimedRecoveryClaim, TimingRefusal,
+    };
+    let (db, mut s, e) = activated_fixture()?;
+    let old = s
+        .active_policy(&e.actor, &e.scope, &e.purpose)?
+        .unwrap()
+        .evidence_id;
+    let budget = s.create_token_budget(100)?;
+    let mut attempts = Vec::new();
+    for name in ["uncertain", "opaque"] {
+        let r = s.create_recovery(name, budget, &e.actor, &e.scope, name)?;
+        let RecoveryStart::New { attempt, .. } = s.begin_recovery_attempt(r, &[old])? else {
+            panic!()
+        };
+        assert!(s.reserve_recovery_attempt(attempt, b"exact", 2, 8)?);
+        attempts.push(attempt);
+    }
+    assert_eq!(
+        s.claim_recovery_dispatch(attempts[0])?,
+        Some(b"exact".to_vec())
+    );
+    let timing = RecoveryTiming {
+        clock_domain: "boot".into(),
+        start_ms: 100,
+        deadline_ms: 1000,
+        safety_margin_ms: 20,
+        runtime: RecoveryRuntime {
+            model: "m".into(),
+            model_revision: "r".into(),
+            tokenizer_revision: "t".into(),
+            runtime_version: "v".into(),
+            dtype: "f32".into(),
+            decoding: "greedy".into(),
+            cpu_fingerprint: "a".repeat(64),
+            threads: 1,
+            prompt_fingerprint: "b".repeat(64),
+            readiness: RecoveryReadiness::Warm,
+        },
+        calibration: RecoveryCalibration {
+            id: "cal".into(),
+            max_duration_ms: 100,
+            sample_count: 2,
+            max_input_tokens: 20,
+            output_cap: 8,
+            measured_at_ms: 50,
+            expires_at_ms: 2000,
+        },
+    };
+    let r = s.create_timed_recovery("timed", budget, &e.actor, &e.scope, "timed", &timing)?;
+    let RecoveryStart::New { attempt: timed, .. } = s.begin_recovery_attempt(r, &[old])? else {
+        panic!()
+    };
+    assert!(s.reserve_recovery_attempt(timed, b"exact", 2, 8)?);
+    let prep = RecoveryPreparation {
+        runtime: Some(timing.runtime),
+        calibration_id: Some("cal".into()),
+        request: b"exact".to_vec(),
+        input_tokens: 2,
+        output_cap: 8,
+    };
+    let before = all_table_rows(&db.conn()?)?;
+    assert_eq!(s.token_budget_state(budget)?.reserved, 30);
+    s.activate_policy(&promote(&e, 1))?;
+    let after = all_table_rows(&db.conn()?)?;
+    for table in [
+        "dispatches",
+        "token_reservations",
+        "recovery_attempts",
+        "deliveries",
+        "attempts",
+        "recovery_timing_bindings",
+    ] {
+        assert_eq!(
+            before.iter().find(|r| r.0 == table),
+            after.iter().find(|r| r.0 == table),
+            "{table}"
+        );
+    }
+    assert_eq!(s.token_budget_state(budget)?.reserved, 30);
+    assert!(matches!(s.claim_recovery_dispatch(attempts[1]),
+        Err(rusqlite::Error::SqliteFailure(code, Some(message)))
+            if code.code == rusqlite::ErrorCode::ConstraintViolation
+                && message == "cannot dispatch a stale attempt"));
+    assert!(matches!(
+        s.claim_timed_recovery_dispatch(timed, &prep, || Ok(RecoveryClock {
+            domain: "boot".into(),
+            now_ms: 200
+        }))?,
+        TimedRecoveryClaim::Refused {
+            reason: TimingRefusal::StaleEvidence,
+            ..
+        }
+    ));
+    assert_eq!(
+        db.conn()?.query_row(
+            "SELECT state FROM recovery_attempts WHERE attempt_id=?1",
+            [attempts[0]],
+            |r| r.get::<_, String>(0)
+        )?,
+        "sent"
+    );
+    assert_eq!(s.token_budget_state(budget)?.reserved, 30);
+    drop(s);
+    let s = Store::open(&db.0)?;
+    assert_eq!(s.token_budget_state(budget)?.reserved, 30);
+    Ok(())
+}
+
+#[test]
+fn activation_scope_manifest_and_request_gates_leave_state_unchanged() -> Result<()> {
+    let db = Database::new();
+    let mut s = Store::open(&db.0)?;
+    let e = fixture();
+    register_pair(&mut s, &e)?;
+    refusal(&mut s, &db, &promote(&e, 1), ActivationRefusal::MissingHead)?;
+    let mut invalid = bootstrap(&e);
+    invalid.expected_active_revision = Some(1);
+    let before = all_table_rows(&db.conn()?)?;
+    assert!(s.activate_policy(&invalid).is_err());
+    assert_eq!(before, all_table_rows(&db.conn()?)?);
+    let mut foreign = bootstrap(&e);
+    foreign.scope = "foreign".into();
+    refusal(&mut s, &db, &foreign, ActivationRefusal::ScopeMismatch)?;
+    let mut malformed = bootstrap(&e);
+    if let ActivationAction::Bootstrap {
+        baseline_manifest,
+        baseline_manifest_sha256,
+        ..
+    } = &mut malformed.action
+    {
+        *baseline_manifest = b"{}".to_vec();
+        *baseline_manifest_sha256 = sha(baseline_manifest);
+    }
+    refusal(&mut s, &db, &malformed, ActivationRefusal::InvalidArtifact)?;
+    s.activate_policy(&bootstrap(&e))?;
+    // Equivalent parsed JSON is still a different frozen byte manifest.
+    let mut changed = e.clone();
+    changed.experiment_manifest.push(b' ');
+    changed.experiment_sha256 = sha(&changed.experiment_manifest);
+    s.record_policy_evaluation(&changed)?;
+    s.record_policy_evaluation(&baseline(&changed))?;
+    refusal(
+        &mut s,
+        &db,
+        &promote(&changed, 1),
+        ActivationRefusal::BaselineMismatch,
+    )?;
+    Ok(())
+}
+#[test]
+fn activation_other_purpose_admissions_are_independent() -> Result<()> {
+    let db = Database::new();
+    let mut s = Store::open(&db.0)?;
+    let e = fixture();
+    register_pair(&mut s, &e)?;
+    let mut other = candidate("other-purpose");
+    other.actor = e.actor.clone();
+    other.scope = e.scope.clone();
+    other.purpose = "another-purpose".into();
+    let mut a = validate_policy_artifact(&other.artifact)?;
+    a.purpose = other.purpose.clone();
+    other.artifact = serde_json::to_vec(&a).unwrap();
+    other.sha256 = sha(&other.artifact);
+    s.register_policy_candidate(&other)?;
+    let id = db.conn()?.query_row(
+        "SELECT evidence_id FROM policy_versions WHERE version_id=?1",
+        [&other.version_id],
+        |r| r.get(0),
+    )?;
+    s.set_admitted(&e.actor, &e.scope, id, true)?;
+    assert_eq!(
+        s.activate_policy(&bootstrap(&e))?,
+        ActivationResult::Activated { revision: 1 }
+    );
+    s.record_policy_evaluation(&e)?;
+    s.record_policy_evaluation(&baseline(&e))?;
+    assert_eq!(
+        s.activate_policy(&promote(&e, 1))?,
+        ActivationResult::Activated { revision: 2 }
+    );
+    assert!(s.read_evidence(&e.actor, &e.scope, id)?.is_some());
+    Ok(())
+}
+
+#[test]
+fn activation_incomplete_baseline_only_record_does_not_satisfy_projection_gate() -> Result<()> {
+    let db = Database::new();
+    let mut s = Store::open(&db.0)?;
+    let e = fixture();
+    register_pair(&mut s, &e)?;
+    let mut incomplete = baseline(&e);
+    incomplete.baseline_rows[0].charged = None;
+    incomplete.candidate_rows = incomplete.baseline_rows.clone();
+    s.record_policy_evaluation(&incomplete)?;
+    s.record_policy_evaluation(&e)?;
+    s.activate_policy(&bootstrap(&e))?;
+    refusal(
+        &mut s,
+        &db,
+        &promote(&e, 1),
+        ActivationRefusal::MissingBaselineEvaluation,
+    )
+}
+
+#[test]
+fn activation_bootstrap_rejects_synthetic_production_purpose_without_writes() -> Result<()> {
+    let db = Database::new();
+    let mut s = Store::open(&db.0)?;
+    let mut e = fixture();
+    let mut m: ComparisonManifest = serde_json::from_slice(&e.experiment_manifest).unwrap();
+    e.purpose = "production/recovery-policy".into();
+    m.purpose = e.purpose.clone();
+    for policy in &mut m.policies {
+        let old = policy.artifact.sha256.clone();
+        let mut a = validate_policy_artifact(&policy.artifact.bytes)?;
+        a.purpose = e.purpose.clone();
+        policy.artifact.bytes = serde_json::to_vec(&a).unwrap();
+        policy.artifact.sha256 = sha(&policy.artifact.bytes);
+        if e.baseline_sha256 == old {
+            e.baseline_sha256 = policy.artifact.sha256.clone();
+        }
+        if e.candidate_sha256 == old {
+            e.candidate_sha256 = policy.artifact.sha256.clone();
+        }
+    }
+    e.experiment_manifest = serde_json::to_vec(&m).unwrap();
+    e.experiment_sha256 = sha(&e.experiment_manifest);
+    register_pair(&mut s, &e)?;
+    refusal(&mut s, &db, &bootstrap(&e), ActivationRefusal::Incompatible)
+}
+
+#[test]
+fn activation_bootstrap_unknown_unit_binds_baseline_without_comparison_claim() -> Result<()> {
+    let db = Database::new();
+    let mut s = Store::open(&db.0)?;
+    let mut e = fixture();
+    let mut m: ComparisonManifest = serde_json::from_slice(&e.experiment_manifest).unwrap();
+    m.accounting_unit = AccountingUnit::Unknown;
+    e.experiment_manifest = serde_json::to_vec(&m).unwrap();
+    e.experiment_sha256 = sha(&e.experiment_manifest);
+    register_pair(&mut s, &e)?;
+    assert_eq!(
+        s.activate_policy(&bootstrap(&e))?,
+        ActivationResult::Activated { revision: 1 }
+    );
+    s.record_policy_evaluation(&e)?;
+    s.record_policy_evaluation(&baseline(&e))?;
+    refusal(
+        &mut s,
+        &db,
+        &promote(&e, 1),
+        ActivationRefusal::EvaluationRefused(SelectionRefusal::Incomparable),
+    )
+}
