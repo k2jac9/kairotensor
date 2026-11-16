@@ -378,7 +378,7 @@ The default pointer is
 `~/.local/state/kairotensor/runtime/accepted-selection.json` (or the equivalent
 `XDG_STATE_HOME` path). It is root-owned operational acceptance state, not a file
 committed with workstation paths into portable CI. Before independent review use
-`--selection /home/neo/.local/state/kairotensor/runtime/candidates/g2-20261116/stable.json`.
+`--selection /home/neo/.local/state/kairotensor/runtime/candidates/g2-20261116-r1/stable.json`.
 Missing selection/tool, changed hash/version, unexpected inherited runtime override,
 unbound Cargo config or incompatible qualification binding fails closed with exit
 2. A refused storage admission propagates its actual exit. No automatic install,
@@ -390,6 +390,12 @@ The local JSON schema is `kairotensor-project-runtime/1`. Required fields:
 - `tools`: `rustc`, `cargo`, `python`, each with absolute `path`, SHA-256
   `sha256`, exact stdout `version`, and `version_args` array. These must match
   that role's immutable qualification identities.
+- `host_tools`: exact resolved absolute paths and hashes for `cc`, `gcc`, `c++`,
+  `ar`, `ld`, `git`, `sh`, `bash`, `dirname`, `tr`, `sha256sum`, `cut`, `mkdir`,
+  and `mktemp`. Resolution must agree with the qualification manifest's frozen
+  `host_path`; `cc`/`gcc` must also match its native-file inventory. Private aliases
+  bind these helpers, and Git source inspection uses that same verified environment.
+  Ambient PATH additions cannot select replacement native or Git commands.
 - `qualification_manifest`, `qualification_receipt`, `independent_review`,
   `acceptance`: each an absolute `path` and `sha256`. The receipt must be Pass
   for the manifest's source and role; the acceptance binds that source and review.
@@ -411,8 +417,11 @@ The inherited environment is not logged. Keep credentials out of command argumen
 Editable source is allowed and always marked `qualification: not assessed`;
 it never inherits the frozen source's successful workload. Requested Cargo commands
 route through the approved `kairotensor-cargo --budget-gib N` wrapper; debug symbols
-and incremental compilation are disabled. Runtime/output/profile overrides and
-Cargo configs require a separate reviewed binding. The wrapper handles fresh
+and incremental compilation are disabled. The launcher accepts Cargo build/test/run/check/metadata/locate-project/version
+commands. Install, direct rustc/rustdoc forwarding, runtime/output/profile overrides
+(including `-r` and clustered short flags), and Cargo configs require a separate
+reviewed binding. Use long option forms; only `-q`, `-v`, `-vv`, and `-V` shorthand
+is accepted. Native helper and Git environment overrides also refuse. The wrapper handles fresh
 storage admission; refusal blocks heavy work. Its existing exception expires
 2026-11-17 18:04:38 UTC and must not be extended by this launcher.
 

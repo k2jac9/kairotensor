@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -43,13 +44,15 @@ class ProjectRuntimeTests(unittest.TestCase):
         python = Path(sys.executable).resolve()
         self.tools['python'] = dict(identity(python), version=subprocess.check_output([str(python), '--version'], text=True).strip(), version_args=['--version'])
         self.wrapper = self.root / 'wrapper'
-        self.wrapper.write_text('#!' + str(python) + '\nimport json,sys\nprint(json.dumps(sys.argv[1:]))\nsys.exit(17 if "deny" in sys.argv else 0)\n')
+        self.wrapper.write_text('#!' + str(python) + '\nimport json,sys\nprint(json.dumps(sys.argv[1:]))\nsys.exit(17 if "--deny" in sys.argv else 0)\n')
         self.wrapper.chmod(0o700)
         self.review = self.write('review.md', 'independent fixture review\n')
         self.acceptance = self.write('acceptance.json', {'result': 'G1 accepted', 'accepted_executable_source': self.commit,
                                                        'independent_review': identity(self.review)})
-        self.manifest = {'source': {'commit': self.commit}, 'lanes': [{'role': 'stable', **self.tools, 'provenance': [identity(self.review)]}],
-                         'native_files': [identity(self.review)], 'wrapper': identity(self.wrapper),
+        self.host_tools = {name: identity(Path(shutil.which(name, path=self.env['PATH'])).resolve())
+                           for name in ['cc', 'gcc', 'c++', 'ar', 'ld', 'git', 'sh', 'bash', 'dirname', 'tr', 'sha256sum', 'cut', 'mkdir', 'mktemp']}
+        self.manifest = {'host_path': self.env['PATH'], 'source': {'commit': self.commit}, 'lanes': [{'role': 'stable', **self.tools, 'provenance': [identity(self.review)]}],
+                         'native_files': [identity(self.review), self.host_tools['cc']], 'wrapper': identity(self.wrapper),
                          'storage_guard': identity(self.review), 'cargo_recipe': identity(self.review)}
         self.manifest_path = self.write('manifest.json', self.manifest)
         self.receipt = {'status': 'Pass', 'source': self.manifest['source'], 'role': 'stable',
@@ -58,7 +61,7 @@ class ProjectRuntimeTests(unittest.TestCase):
         for t in self.receipt['tools'].values():
             t['resolved_path'] = str(Path(t['path']).resolve())
         self.receipt_path = self.write('receipt.json', self.receipt)
-        self.selection = {'schema': 'kairotensor-project-runtime/1', 'role': 'stable', 'tools': self.tools,
+        self.selection = {'schema': 'kairotensor-project-runtime/1', 'role': 'stable', 'tools': self.tools, 'host_tools': self.host_tools,
                           'qualification_manifest': identity(self.manifest_path), 'qualification_receipt': identity(self.receipt_path),
                           'independent_review': identity(self.review), 'acceptance': identity(self.acceptance)}
         self.selection_path = self.root / 'selection.json'
@@ -144,7 +147,7 @@ class ProjectRuntimeTests(unittest.TestCase):
         self.assertEqual(self.latest()['command'][0], str(self.wrapper))
 
     def test_admission_failure_is_propagated(self):
-        r = self.run_launcher('--budget-gib', '2', 'cargo', 'deny')
+        r = self.run_launcher('--budget-gib', '2', 'cargo', 'test', '--deny')
         self.assertEqual(r.returncode, 17, r.stderr)
         self.assertEqual(self.latest()['exit'], 17)
 
@@ -158,7 +161,7 @@ class ProjectRuntimeTests(unittest.TestCase):
                 self.assertEqual(r.returncode, 2, r.stderr)
 
     def test_cargo_command_overrides_refuse(self):
-        for args in [('+nightly', 'test'), ('test', '--config=build.rustc="bad"'), ('test', '--target-dir', '/tmp/bad')]:
+        for args in [('+nightly', 'test'), ('test', '--config=build.rustc="bad"'), ('test', '--target-dir', '/tmp/bad'), ('build', '-r'), ('build', '-qr'), ('rustc', '--', '-C', 'opt-level=3'), ('install', 'anything'), ('-C', '/tmp', 'build')]:
             with self.subTest(args=args):
                 self.assertEqual(self.run_launcher('--budget-gib', '2', 'cargo', *args).returncode, 2)
 
@@ -166,6 +169,28 @@ class ProjectRuntimeTests(unittest.TestCase):
         (self.repo / '.cargo').mkdir()
         (self.repo / '.cargo/config.toml').write_text('[build]\nrustc="unexpected"\n')
         self.assertEqual(self.run_launcher('--budget-gib', '2', 'cargo', 'test').returncode, 2)
+
+    def test_shadowed_ambient_native_and_git_commands_are_not_used(self):
+        shadow = self.root / 'shadow'
+        shadow.mkdir()
+        for name in ['cc', 'git']:
+            fake = shadow / name
+            fake.write_text('#!/bin/sh\necho shadowed\nexit 63\n')
+            fake.chmod(0o700)
+        env = dict(self.env, PATH=str(shadow) + os.pathsep + self.env['PATH'])
+        r = self.run_launcher('python', '-c', 'import subprocess; print(subprocess.check_output(["cc", "--version"], text=True))', env=env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn('shadowed', r.stdout)
+        self.assertEqual(self.latest()['host_tools']['cc'], self.host_tools['cc'])
+
+    def test_host_helper_digest_mismatch_refuses(self):
+        self.selection['host_tools']['git']['sha256'] = '0' * 64
+        r = self.run_launcher('identity')
+        self.assertEqual(r.returncode, 2, r.stderr)
+
+    def test_git_environment_source_override_refuses(self):
+        r = self.run_launcher('identity', env=dict(self.env, GIT_DIR=str(self.repo / '.git')))
+        self.assertEqual(r.returncode, 2, r.stderr)
 
     def test_child_command_exit_is_preserved(self):
         r = self.run_launcher('python', '-c', 'raise SystemExit(7)')

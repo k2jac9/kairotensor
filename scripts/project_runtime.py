@@ -10,12 +10,16 @@ import hashlib
 import json
 import math
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
 import uuid
 
 from verify_runtime_matrix import OVERRIDES, PROFILE, check_file, sha
+
+HOST_TOOLS = {'cc', 'gcc', 'c++', 'ar', 'ld', 'git', 'sh', 'bash',
+              'dirname', 'tr', 'sha256sum', 'cut', 'mkdir', 'mktemp'}
 
 
 def load_identity(identity):
@@ -65,15 +69,36 @@ def selection_contract(selection):
         check_file(item)
     if not manifest['native_files'] or not lane['provenance']:
         raise ValueError('missing native provenance')
+    host_path = manifest['host_path']
+    if not isinstance(host_path, str) or any(not part or not Path(part).is_absolute() for part in host_path.split(os.pathsep)):
+        raise ValueError('qualification host PATH requires absolute entries')
+    if set(selection['host_tools']) != HOST_TOOLS:
+        raise ValueError('missing or unexpected native/helper identity')
+    for name, identity in selection['host_tools'].items():
+        path = check_file(identity)
+        resolved = shutil.which(name, path=host_path)
+        if not resolved or Path(resolved).resolve() != path.resolve():
+            raise ValueError('native/helper resolution differs from qualified PATH: ' + name)
+        if not os.access(path, os.X_OK):
+            raise ValueError('native/helper identity is not executable: ' + name)
+    # The actual cc/gcc used by the qualified bundled SQLite build is also bound
+    # by G1's native-file inventory, not merely added to a new local selection.
+    for name in ('cc', 'gcc'):
+        if selection['host_tools'][name] not in manifest['native_files']:
+            raise ValueError('native compiler differs from qualification: ' + name)
     return manifest
 
 
-def runtime_environment(selection, aliases):
+def runtime_environment(selection, manifest, aliases):
     env = dict(os.environ)
     forbidden = OVERRIDES | {'LD_PRELOAD', 'LD_LIBRARY_PATH', 'DYLD_INSERT_LIBRARIES',
-                            'CARGO_BUILD_TARGET', 'CARGO_BUILD_RUSTDOC', 'CARGO_ALIAS_TEST'}
+                            'CARGO_BUILD_TARGET', 'CARGO_BUILD_RUSTDOC', 'CARGO_ALIAS_TEST',
+                            'GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_CONFIG',
+                            'GIT_CONFIG_COUNT', 'GIT_CONFIG_PARAMETERS', 'BASH_ENV', 'ENV',
+                            'NIX_CFLAGS_COMPILE', 'NIX_LDFLAGS'}
     unexpected = [key for key in forbidden if env.get(key)]
-    unexpected += [key for key in env if key.startswith(('CARGO_TARGET_', 'CARGO_PROFILE_', 'CARGO_ALIAS_'))
+    unexpected += [key for key in env if key.startswith(('CARGO_TARGET_', 'CARGO_PROFILE_', 'CARGO_ALIAS_', 'CARGO_BUILD_',
+                                                                       'CC_', 'CXX_', 'AR_', 'CFLAGS_', 'CXXFLAGS_', 'HOST_CC', 'HOST_CXX', 'HOST_AR'))
                    and env[key] and env[key] != PROFILE.get(key)]
     if unexpected:
         raise ValueError('unexpected runtime overrides: ' + ', '.join(sorted(set(unexpected))))
@@ -81,7 +106,9 @@ def runtime_environment(selection, aliases):
     aliases.mkdir(mode=0o700)
     for alias, key in [('rustc', 'rustc'), ('cargo', 'cargo'), ('python3', 'python'), ('python', 'python')]:
         (aliases / alias).symlink_to(selection['tools'][key]['path'])
-    env['PATH'] = str(aliases) + os.pathsep + env.get('PATH', '')
+    for name, identity in selection['host_tools'].items():
+        (aliases / name).symlink_to(identity['path'])
+    env['PATH'] = str(aliases) + os.pathsep + manifest['host_path']
     env['RUSTC'] = selection['tools']['rustc']['path']
     return env
 
@@ -97,9 +124,9 @@ def python_probe(tools, env):
     return {'parent': parent, 'child': child}
 
 
-def source_record(root):
+def source_record(root, env):
     def git(*args):
-        return subprocess.check_output(['git', '-C', str(root), *args], text=True).strip()
+        return subprocess.check_output(['git', '-C', str(root), *args], env=env, text=True).strip()
     tracked = git('ls-files').splitlines()
     return {'root': str(root), 'commit': git('rev-parse', 'HEAD'),
             'dirty': bool(git('status', '--porcelain', '--untracked-files=normal')),
@@ -110,8 +137,11 @@ def source_record(root):
 
 
 def check_cargo_arguments(args, root, env):
-    if not args or any(arg.startswith('+') or arg.split('=')[0] in
-                       {'--config', '--target-dir', '--manifest-path', '--profile', '--release', '--target'} for arg in args):
+    allowed = {'build', 'test', 'run', 'check', 'metadata', 'locate-project', '--version', '-V', 'version'}
+    if (not args or args[0] not in allowed or any(arg.startswith('+')
+                       or (arg.startswith('-') and not arg.startswith('--') and arg not in {'-V', '-q', '-v', '-vv'})
+                       or arg.split('=')[0] in
+                       {'--config', '--target-dir', '--manifest-path', '--profile', '--release', '-r', '--target', '--lockfile-path'} for arg in args)):
         raise ValueError('Cargo requires ordinary commands without runtime/output/profile overrides')
     # Cargo reads every ancestor config and Cargo home; refuse hidden selectors.
     cargo_home = Path(env.get('CARGO_HOME', str(Path.home() / '.cargo'))).absolute()
@@ -139,12 +169,12 @@ def main():
         manifest = selection_contract(selection)
         invocation = args.state_dir.absolute() / 'invocations' / (datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ-') + uuid.uuid4().hex)
         invocation.mkdir(parents=True, mode=0o700)
-        env = runtime_environment(selection, invocation / 'bin')
+        env = runtime_environment(selection, manifest, invocation / 'bin')
         tools = {key: tool_identity(value, env) for key, value in selection['tools'].items()}
         probe = python_probe(tools, env)
-        root = Path(subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], text=True).strip()).resolve()
+        root = Path(subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], env=env, text=True).strip()).resolve()
         record = {'schema': 'kairotensor-project-invocation/1', 'selection': {'path': str(selection_path), 'sha256': sha(selection_path)},
-                  'qualification_source': manifest['source']['commit'], 'source': source_record(root),
+                  'qualification_source': manifest['source']['commit'], 'source': source_record(root, env), 'host_tools': selection['host_tools'],
                   'tools': tools, 'python_probe': probe, 'profile': PROFILE, 'wrapper': manifest['wrapper'],
                   'started_at': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'exit': None}
         receipt_path = invocation / 'receipt.json'
@@ -167,7 +197,7 @@ def main():
         else:
             print(json.dumps({'tools': tools, 'python_probe': probe, 'receipt': str(receipt_path)}, indent=2))
             code = 0
-        for value in tools.values():
+        for value in [*tools.values(), *selection['host_tools'].values()]:
             check_file(value)
         record['exit'] = code
         record['finished_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
