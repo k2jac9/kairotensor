@@ -59,7 +59,7 @@ jobs:
       EXPECTED_CARGO_VERSION: ${{ matrix.cargo-version }}
       EXPECTED_PYTHON_VERSION: ${{ matrix.python-version }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Select exact Rust lane
@@ -158,3 +158,18 @@ jobs:
 
       - name: Exercise prepared backend with fake dependencies only
         run: python3 scripts/incident_transformers_controller.py fixture --out "$RUNNER_TEMP/incident-transformers-fixture"
+
+  checkout-previous:
+    name: checkout previous stable (v6.1.0)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Verify event checkout and required source files
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -f Cargo.lock
+          test -f src/lib.rs

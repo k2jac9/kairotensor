@@ -34,7 +34,8 @@ class ProjectRuntimeTests(unittest.TestCase):
         self.commit = subprocess.check_output(['git', '-C', str(self.repo), 'rev-parse', 'HEAD'], text=True).strip()
         self.state = self.root / 'state'
         self.env = {k: v for k, v in os.environ.items() if not k.startswith(('CARGO_', 'RUST', 'PYTHON', 'KAIROTENSOR_'))
-                    and k not in {'CC', 'CXX', 'AR', 'LD', 'CFLAGS', 'CXXFLAGS', 'LDFLAGS', 'VIRTUAL_ENV', 'CONDA_PREFIX'}}
+                    and k not in {'CC', 'CXX', 'AR', 'LD', 'CFLAGS', 'CXXFLAGS', 'LDFLAGS', 'VIRTUAL_ENV', 'CONDA_PREFIX',
+                                  'LD_LIBRARY_PATH', 'PKG_CONFIG_PATH'}}
         self.env['PYTHONDONTWRITEBYTECODE'] = '1'
         # Isolated Cargo home avoids workstation config influencing the fixture.
         self.env['CARGO_HOME'] = str(self.root / 'cargo-home')
@@ -247,6 +248,19 @@ class ProjectRuntimeTests(unittest.TestCase):
     def test_git_environment_source_override_refuses(self):
         r = self.run_launcher('identity', env=dict(self.env, GIT_DIR=str(self.repo / '.git')))
         self.assertEqual(r.returncode, 2, r.stderr)
+
+    def test_hosted_setup_paths_still_refuse_at_real_launcher_boundary(self):
+        # Fixture setup excludes these ambient Actions values. Production must
+        # still refuse them when explicitly supplied to a real invocation.
+        for name in ('LD_LIBRARY_PATH', 'PKG_CONFIG_PATH'):
+            with self.subTest(name=name):
+                marker = self.root / name
+                result = self.run_launcher('python', '-c',
+                                           f'from pathlib import Path; Path({str(marker)!r}).touch()',
+                                           env=dict(self.env, **{name: '/unbound/fixture/path'}))
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn(name, result.stderr)
+                self.assertFalse(marker.exists())
 
     def assert_native_overrides_refused(self, cases):
         for index, (key, value) in enumerate(cases):
