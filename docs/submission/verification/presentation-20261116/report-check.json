@@ -1,0 +1,26 @@
+{
+  "pdf_pages": 7,
+  "abstract_words": 192,
+  "results_section_unchanged": true,
+  "author_provenance_unchanged": true,
+  "native_pdf_and_markdown_text_verified": true,
+  "native_revision": "AHj4eMSI1LxACd25i8cAOm-KHh0tFKHNhtS2W2pF1Fb7GOUpCq-FY7X-FRSVaig4P375ARk0cB7XbWGlAnqBEiszGqyRGpitc6JigWs_MKQ",
+  "pdf_sha256": "5350a885ee9be61300b2743ef35f78bed674e283578a5c4aa487edd4f0b9b476",
+  "pdf_bytes": 256329,
+  "native_export_sha256": "88a59eb79347a339f3937135baeb08f8aa61d0df529fd37eef4f6220cb4b6e48",
+  "old_readme_contracts_retained": true,
+  "relative_links_checked": 115,
+  "svg_contrast_ratios": {
+    "#F4F6FC": 14.01,
+    "#C1CBE0": 9.29,
+    "#66E4EA": 9.99,
+    "#C4AFFB": 7.84,
+    "#F5CE7A": 10.09,
+    "#AEBED9": 8.05,
+    "print_teal_on_white": 8.19
+  },
+  "svg_has_accessible_titles_descriptions": true,
+  "new_model_calls": 0,
+  "historical_source": "20fab84a6baa525452191ecf80eeee339f0b5ac7",
+  "numbering_warning": "Duplicate title destination in native export; existing helper normalizes it; text and URI annotations checked."
+}

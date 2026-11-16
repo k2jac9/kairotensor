@@ -72,7 +72,7 @@ Table 1. Observed outcomes and their limits [6-8]. Timings, token counts and suc
 
 The implementation makes evidence dependence explicit at an application boundary and preserves the cost of work that becomes unusable. The measurements show that atomic batching can improve a costly per-branch path without establishing that indexed revision beats a lighter scan. The model example shows that a carefully scoped cached judgment can be reused in one controlled correction, not that agent decisions improve in the wild. The strict recovery failures show how validation, model formatting and time budgets can dominate the usefulness of such a mechanism.
 
-Future work should evaluate real correction streams and user decisions, test concurrency and adversarial callers, compare equally durable baselines, and run preregistered, independently measured model evaluations. The frozen incident-routing workload and bounded controller on main are offline preparations; they do not establish model performance. A reviewer package contains the pinned source snapshot, evidence index and offline verification commands. Repository and workflow links require access while the repository remains private.
+Future work should evaluate real correction streams and user decisions, test concurrency and adversarial callers, compare equally durable baselines, and run preregistered, independently measured model evaluations. The frozen incident-routing workload and bounded controller on main are offline preparations; they do not establish model performance. A reviewer package contains the pinned source snapshot, evidence index and offline verification commands. The repository and measured source snapshot are publicly accessible.
 
 ## 6. Conclusion
 
@@ -82,7 +82,7 @@ Versioned evidence and conservative checks can prevent this prototype from servi
 
 Measured main-branch snapshot: 20fab84a6baa525452191ecf80eeee339f0b5ac7, https://github.com/k2jac9/kairotensor. Raw benchmark CSVs, prompts, model traces and evaluation protocols are in docs/benchmarks and docs/evaluations. Historical CI executions use their recorded source commits, not the current main commit. The accompanying reviewer package preserves the source archive and its checksum; exact experimental sources and commands are documented in [6-8].
 
-Reviewer evidence package: [download the source and evidence bundle](https://drive.google.com/file/d/1Nc2X8NwHdDpKTSU2kknw0V_V5cqOEBOP/view). The package includes the pinned source and raw evidence, so reviewing them does not require GitHub access.
+Public source and evidence: [measured snapshot 20fab84](https://github.com/k2jac9/kairotensor/tree/20fab84a6baa525452191ecf80eeee339f0b5ac7). The public snapshot includes the measured source and raw evidence; no GitHub sign-in is required.
 
 ## References
 

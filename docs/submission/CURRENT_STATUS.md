@@ -86,12 +86,16 @@ latter matching the local Git snapshot byte for byte. The
 [verification receipt](verification/public-access-20261116/anonymous-check.json)
 records the exact URLs and hashes. This closes the source-access gap.
 
-The public PDF on main is still an earlier export (SHA-256
-`a755007e453b633cae4f19d38fd1c1f557c365a04d07ddfffb52d5753bf10c5a`),
-not the final seven-page editorial PDF (SHA-256
-`86bf058fcaf0cf5ed886af7b198a7a6aff9978bac5e2994a5a217e9f8d4c692c`).
-The latest editorial commits remain local. Publishing those commits is separate
-from making the existing repository public.
+At the 08:36 UTC check, the public PDF on main was an earlier export (SHA-256
+`a755007e453b633cae4f19d38fd1c1f557c365a04d07ddfffb52d5753bf10c5a`).
+The earlier editorial successor had SHA-256
+`86bf058fcaf0cf5ed886af7b198a7a6aff9978bac5e2994a5a217e9f8d4c692c`.
+The current presentation successor in this revision has SHA-256
+`5350a885ee9be61300b2743ef35f78bed674e283578a5c4aa487edd4f0b9b476` and seven pages. It adds restrained teal
+accents and directs readers to the public measured source. Abstract, results and
+author declaration are unchanged. The repository overview now links the research
+narrative, a documentation index and the preserved detailed Store guide. See
+[presentation verification](verification/presentation-20261116/README.md).
 
 The owner authorized read-only link access to the final Drive report PDF and
 combined reviewer bundle. The last Drive checks at 08:29 UTC still showed
@@ -99,7 +103,7 @@ owner-only access and anonymous reads reached sign-in. The connector supports
 named-user and Workspace-domain sharing but does not expose "Anyone with the
 link." GitHub visibility does not change these Drive permissions. Earlier PDF
 and package statements about repository privacy are dated and superseded by this
-note; their verified bytes and historical receipts remain unchanged.
+note and the current paper; old verified bytes and historical receipts remain unchanged.
 
 The refreshed combined reviewer bundle contains the current report package,
 corrected pilot package, this status note, the exact integrated source and

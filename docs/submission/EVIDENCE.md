@@ -16,8 +16,11 @@ Appendix Table 2 distinguishes retained artifacts, offline recomputation and
 claims requiring fresh evidence. Neither addition supplies a new model result.
 The [combined reviewer package](https://drive.google.com/file/d/1Nc2X8NwHdDpKTSU2kknw0V_V5cqOEBOP/view)
 contains a current report package with the unchanged measured-source archive and
-raw evidence, plus the separate pilot and integrated-source supplements. Access
-must be checked independently of the package's byte manifest.
+raw evidence, plus the separate pilot and integrated-source supplements. Drive access
+must be checked independently of the package's byte manifest. The public
+[measured source](https://github.com/k2jac9/kairotensor/tree/20fab84a6baa525452191ecf80eeee339f0b5ac7)
+also contains the original artifacts. The current presentation changes headings,
+layout accents and source links; it adds no empirical result.
 
 | Report claim | Raw evidence and protocol | Result and limit |
 | --- | --- | --- |

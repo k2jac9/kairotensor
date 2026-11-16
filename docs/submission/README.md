@@ -1,5 +1,9 @@
 # KairoTensor submission guide
 
+[Read the PDF](kairotensor-report.pdf) · [Read the manuscript](report.md) · [Inspect the evidence](EVIDENCE.md) · [Project overview](../../README.md)
+
+> **Evidence-grounded revision for agent memory.** A study of which saved work remains eligible after its declared support changes, with measured costs, one bounded reuse example, and preserved negative results.
+
 **KairoTensor: Evidence-Grounded Revision for Agent Memory**
 
 Alejandro Castellanos, Independent Research
@@ -74,19 +78,28 @@ pixel, text passage and URI link is checked against that export. A direct future
 Docs export will need that numbering step again. Figure source and rendering
 assets are included in the reviewer package.
 
-The [repository](https://github.com/k2jac9/kairotensor) is now public. Anonymous
-reads of repository metadata, the main README, the measured snapshot README and
-the PDF on main succeeded on 16 November at 08:36 UTC. The measured README matched
-Git at `20fab84`. The PDF on main is an older export; it does not match the current
-seven-page editorial PDF in this local branch. See the
-[public-access receipt](verification/public-access-20261116/anonymous-check.json).
+## Public source and delivery
 
-The owner also authorized read-only reviewer link
-access for the [report PDF](https://drive.google.com/file/d/1dTGN3-QSCzFGtf2vwILFT7V1CRl_CmIQ/view)
-and [combined evidence package](https://drive.google.com/file/d/1Nc2X8NwHdDpKTSU2kknw0V_V5cqOEBOP/view).
-These Drive links are stable delivery targets, not proof of public access. The current
-connector cannot grant anonymous access; see Current status for the remaining
-sharing step. No event entry has been submitted by this preparation.
+The [repository](https://github.com/k2jac9/kairotensor) and
+[measured snapshot](https://github.com/k2jac9/kairotensor/tree/20fab84a6baa525452191ecf80eeee339f0b5ac7)
+are public. Anonymous source reads succeeded on 16 November at 08:36 UTC;
+[the receipt](verification/public-access-20261116/anonymous-check.json) records
+that observation. Use the [PDF in this revision](kairotensor-report.pdf) and the
+[evidence index](EVIDENCE.md) as the primary reviewer entry points.
+
+The presentation successor uses original navy/cyan/violet/amber repository
+artwork and restrained teal accents in the seven-page paper. It changes public
+source links and presentation, preserving the abstract, results, author declaration
+and measured source. [Presentation verification](verification/presentation-20261116/README.md)
+records the export and checks. Earlier PDFs and verification receipts remain
+historical; use the hashes in the current receipt when comparing copies.
+
+The optional [Drive PDF](https://drive.google.com/file/d/1dTGN3-QSCzFGtf2vwILFT7V1CRl_CmIQ/view)
+and [combined evidence package](https://drive.google.com/file/d/1Nc2X8NwHdDpKTSU2kknw0V_V5cqOEBOP/view)
+are stable delivery targets. Their permissions are separate from GitHub; public
+Drive access requires its own anonymous read check. GitHub source and the paper's
+pinned evidence links do not depend on Drive sharing. No event entry has been
+submitted by this preparation.
 
 ## Verification scope
 
