@@ -66,20 +66,26 @@ a migration of an owner's live database. Existing acceptance gates remain requir
 
 ## Offline typed fixture
 
-Run the separate fixture with no model or provider calls:
+Run the separate fixture with no model or provider calls. On the owner workstation,
+use:
 
 ```sh
-python3 scripts/recovery_policy_eval.py --activation-fixture > /tmp/policy-activation-fixture.json
-cargo run --locked --offline --example policy_activation -- \
-  --fixture /tmp/policy-activation-fixture.json --out /tmp/policy-activation-demo
-python3 scripts/recovery_policy_eval.py --archived-v1-refusal
+artifact_root=/home/neo/Projects/kairotensor-artifacts
+mkdir -p "$artifact_root"
+packet="$(mktemp -d "$artifact_root/policy-activation-XXXXXXXX")"
+python3 scripts/recovery_policy_eval.py --activation-fixture > "$packet/fixture.json"
+kairotensor-cargo --budget-gib 2 run --locked --offline --example policy_activation -- \
+  --fixture "$packet/fixture.json" --out "$packet/run"
+python3 scripts/recovery_policy_eval.py --archived-v1-refusal > "$packet/archived-v1-refusal.json"
 ```
 
-Choose a new output directory; the example refuses an existing directory instead
-of opening an owner database. Local builds still require the workstation storage
-admission wrapper. The example retains its exact synthetic input, SQLite fixture,
-prepared requests and result JSON. CI runs it explicitly alongside the existing
-offline steps. These are configured checks; remote CI execution is separate.
+The unique packet retains the input, SQLite database, prepared requests, result
+and archived-refusal evidence under the project artifact root. The CLI's run
+directory is new inside the packet. The example refuses an existing run directory
+instead of opening an owner database. Other hosts should choose their project's
+retained artifact directory and use its required admitted Cargo invocation. CI
+runs it explicitly alongside the existing offline steps. These are configured
+checks; remote CI execution is separate.
 
 The `policy-activation-fixture/1` envelope contains a complete deliberately
 synthetic `PolicyEvaluation`, generated with the existing D1 codec and evaluator
