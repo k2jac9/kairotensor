@@ -255,6 +255,46 @@ class AblationTests(unittest.TestCase):
         self.assertEqual(costs['model_tokens']['charged_units'],2);self.assertIsNone(costs['unknown']['charged_units'])
         self.assertEqual(costs['fixture_bytes']['reserved_bound'],100)
 
+    def test_unspecified_units_preserve_numeric_rows_without_shared_aggregate(self):
+        m=self.module();p=m.plan_ablations(self.actual);o=outcomes(p)
+        o['rows'][0].update(unit='unknown',charged_units=3,reserved_bound=17)
+        o['rows'][1].update(unit='unknown',charged_units=7,reserved_bound=23)
+        before=canonical_bytes(o)
+        report=m.score_ablations(p,o);c=next(c for c in report['costs'] if c['unit']=='unknown')
+        self.assertEqual(c,dict(unit='unknown',charged_units=None,known_charged_units=None,
+            unknown_charges=0,reserved_bound=None,held_units=None,observed_trials=2,observations=[
+                dict(trial_id=o['rows'][0]['trial_id'],state='recorded',charged_units=3,reserved_bound=17,held_units=0),
+                dict(trial_id=o['rows'][1]['trial_id'],state='recorded',charged_units=7,reserved_bound=23,held_units=0)]))
+        named=next(c for c in report['costs'] if c['unit']=='fixture_bytes')
+        self.assertEqual(named['charged_units'],20);self.assertEqual(named['reserved_bound'],100)
+        self.assertEqual(before,canonical_bytes(o))
+        self.assertEqual(report['coverage'],'Complete');self.assertEqual(report['baseline_status'],'Stable')
+
+    def test_unspecified_units_preserve_uncertain_charges_and_per_trial_holds(self):
+        m=self.module();p=m.plan_ablations(self.actual);o=outcomes(p)
+        o['rows'][3].update(unit='unknown',state='failed',response_digest=None,semantic_result=None,charged_units=2,reserved_bound=31)
+        o['rows'][4].update(unit='unknown',state='unknown',response_digest=None,semantic_result=None,charged_units=None,reserved_bound=47)
+        o['rows'][5].update(unit='unknown',charged_units=None,reserved_bound=59)
+        c=next(c for c in m.score_ablations(p,o)['costs'] if c['unit']=='unknown')
+        self.assertEqual(c.get('observed_trials'),3);self.assertEqual(c['unknown_charges'],2)
+        for field in ('charged_units','known_charged_units','reserved_bound','held_units'):self.assertIsNone(c[field])
+        self.assertEqual(c['observations'],[
+            dict(trial_id=o['rows'][3]['trial_id'],state='failed',charged_units=2,reserved_bound=31,held_units=31),
+            dict(trial_id=o['rows'][4]['trial_id'],state='unknown',charged_units=None,reserved_bound=47,held_units=47),
+            dict(trial_id=o['rows'][5]['trial_id'],state='recorded',charged_units=None,reserved_bound=59,held_units=59)])
+        variant=m.score_ablations(p,o)['variants'][0]
+        self.assertEqual((variant['failed'],variant['unknown'],variant['unchanged']),(1,1,1))
+        self.assertIsNone(variant['rank'])
+
+    def test_unspecified_unit_magnitudes_are_not_aggregated_for_overflow(self):
+        m=self.module();p=m.plan_ablations(self.actual);o=outcomes(p)
+        for row in o['rows']:row.update(unit='unknown',charged_units=(1<<63)-1,reserved_bound=(1<<63)-1)
+        try:report=m.score_ablations(p,o)
+        except ValueError as error:self.fail(f'unspecified-unit rows must not be summed: {error}')
+        c=report['costs'][0];self.assertIsNone(c['known_charged_units']);self.assertEqual(c['observed_trials'],12)
+        self.assertEqual(len(c['observations']),12)
+        self.assertTrue(all(r['charged_units']==(1<<63)-1 and r['reserved_bound']==(1<<63)-1 for r in c['observations']))
+
     def test_outcome_duplicates_unknown_ids_digest_and_nested_types_refuse(self):
         m=self.module();p=m.plan_ablations(self.actual)
         changes=[lambda o:o['rows'].append(copy.deepcopy(o['rows'][0])),lambda o:o['rows'][0].update(trial_id='unknown'),

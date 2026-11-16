@@ -452,13 +452,24 @@ def score_ablations(plan, outcomes):
             if canonical_bytes(o[key]) != canonical_bytes(plan[key]):
                 mismatches.append(dict(trial_id=o['trial_id'],identity=key))
         observed[o['trial_id']]=o
-        c=costs.setdefault(o['unit'],dict(unit=o['unit'],charged_units=0,known_charged_units=0,unknown_charges=0,reserved_bound=0,held_units=0))
-        if o['charged_units'] is None:
-            c['unknown_charges']+=1
-        else:c['known_charged_units']+=o['charged_units']
-        c['reserved_bound']+=o['reserved_bound']
-        if o['charged_units'] is None or o['state']!='recorded':c['held_units']+=o['reserved_bound']
+        held = o['reserved_bound'] if o['charged_units'] is None or o['state']!='recorded' else 0
+        if o['unit']=='unknown':
+            # Equal unspecified labels do not establish a shared measurement unit.
+            c=costs.setdefault('unknown',dict(unit='unknown',charged_units=None,known_charged_units=None,
+                unknown_charges=0,reserved_bound=None,held_units=None,observed_trials=0,observations=[]))
+            c['observed_trials']+=1
+            c['unknown_charges']+=o['charged_units'] is None
+            c['observations'].append(dict(trial_id=o['trial_id'],state=o['state'],
+                charged_units=o['charged_units'],reserved_bound=o['reserved_bound'],held_units=held))
+        else:
+            c=costs.setdefault(o['unit'],dict(unit=o['unit'],charged_units=0,known_charged_units=0,unknown_charges=0,reserved_bound=0,held_units=0))
+            if o['charged_units'] is None:
+                c['unknown_charges']+=1
+            else:c['known_charged_units']+=o['charged_units']
+            c['reserved_bound']+=o['reserved_bound']
+            c['held_units']+=held
     for c in costs.values():
+        if c['unit']=='unknown':continue
         for key in ('known_charged_units','reserved_bound','held_units'):integer(c[key])
         integer(c['known_charged_units']+c['held_units'])
         c['charged_units']=None if c['unknown_charges'] else c['known_charged_units']

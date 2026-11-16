@@ -138,11 +138,27 @@ its supplied result was validated; this tool compares that recorded attestation.
 `reserved_bound` is a nonnegative integer bounding any known charge. Unit is
 `model_tokens`, `fixture_bytes`, `logical_support` or `unknown`. Outcome units
 are reported separately, even though this initial source contract is narrower.
-All scalar and per-unit aggregate sums must fit i64. Unknown charges stay null,
-with known partial charges and unknown counts retained. `reserved_bound` sums all
-observed row bounds; `held_units` conservatively retains the entire bound for
-failed/unknown rows or any unknown charge. It is a reported uncertainty bound,
-not a reconstructed Store hold. Recorded known-charge rows contribute no hold.
+All scalar measurements and named-unit aggregate sums must fit i64. In each
+known named-unit bucket, unknown charges keep `charged_units` null, with
+`known_charged_units` retaining the known partial sum and `unknown_charges`
+counting unknown measurements. `reserved_bound` sums that named unit's observed
+row bounds; `held_units` conservatively retains the entire bound for failed/unknown
+rows or any unknown charge. It is a reported uncertainty bound, not a reconstructed
+Store hold. Recorded known-charge rows contribute no hold.
+
+The label `unknown` does not establish commensurable units, even when rows share a
+plan or runtime and each has a numeric charge. Its cost bucket therefore keeps
+`charged_units`, `known_charged_units`, `reserved_bound` and `held_units` all null.
+Only `observed_trials` and `unknown_charges` are counted. Its `observations` list
+preserves each unspecified-unit row in supplied order with exactly `trial_id`,
+`state`, original numeric-or-null `charged_units`, original `reserved_bound` and
+conservative per-trial `held_units` (the full bound for failed/unknown rows or an
+unknown charge, otherwise zero). No unknown-unit magnitudes, bounds or holds are
+summed, including for overflow checks; each individual measurement remains bounded.
+For example, charges 3 and 7 with unspecified units and bounds 17 and 23 remain
+two observations with null aggregate measurements, rather than charges totaling 10
+or bounds totaling 40.
+
 Missing outcome rows have unknown costs and bounds, explicitly counted by
 `unreported_cost_trials`; their costs are never silently assigned zero.
 
