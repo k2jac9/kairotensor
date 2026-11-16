@@ -1,0 +1,32 @@
+{
+  "verified_at_utc": "2026-11-16T05:42:15.484576+00:00",
+  "pdf_sha256": "a755007e453b633cae4f19d38fd1c1f557c365a04d07ddfffb52d5753bf10c5a",
+  "pdf_bytes": 139531,
+  "pdf_pages": 7,
+  "main_pages_including_title": 5,
+  "reference_pages": [
+    6
+  ],
+  "appendix_and_llm_statement_pages": [
+    7
+  ],
+  "abstract_words": 192,
+  "abstract_unchanged": true,
+  "results_unchanged_except_citation_numbers": true,
+  "manuscript_paragraphs_matching_native_doc_and_pdf": 43,
+  "all_seven_final_pages_visually_reviewed": true,
+  "visual_review_resolution_dpi": 120,
+  "no_clipping_overlap_or_missing_glyphs_observed": true,
+  "eight_reference_link_targets_checked_in_pdf_annotations": true,
+  "private_repository_links_require_reviewer_access": true,
+  "native_document_id": "1HR8MGOaxe7Yc5FRYpzYyGZMBqriIv6dqnvgQqmjYJwA",
+  "native_revision_id": "AHj4eMStYcmSsd6wgaa-5gvZO8UqoY25_uMrCifNUuHLbz8dywPIAsoOjXRFqLiFJeuKqgklysn97SD7p9uZDlmvigD5dheuqWCnhZIVKE4",
+  "measured_source_commit": "20fab84a6baa525452191ecf80eeee339f0b5ac7",
+  "documentation_base_commit": "99b6fe24177e56b450c543c95723961fed440d4d",
+  "historical_receipt_files_unchanged": 17,
+  "new_model_calls_during_finalization": 0,
+  "fresh_rust_execution": false,
+  "full_compatibility_matrix_executed": false,
+  "event_submitted": false,
+  "visibility_or_sharing_changed": false
+}
