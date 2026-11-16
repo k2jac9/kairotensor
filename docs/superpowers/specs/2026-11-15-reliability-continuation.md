@@ -3,7 +3,7 @@
 Date: 15 November 2026. Source inspected: main
 `20fab84a6baa525452191ecf80eeee339f0b5ac7`; preceding P0 plan commit `8d4cce8`.
 All new names below are proposed interfaces until their implementation commits.
-The owner authorized autonomous execution and excluded Rocket integration.
+The owner authorized autonomous execution.
 
 ## Evidence and known limits
 
@@ -205,4 +205,4 @@ claim and no pruning of opaque dependency manifests.
 Portable envelopes remain conditional on an actual second consumer. Their parser
 and digest checker cannot grant admission; a receiver must authenticate owner
 mapping and recheck full reference, scope/purpose, context and current authority.
-No cross-store atomicity, implicit TTL, Rocket connection or live ablation runner.
+No cross-store atomicity, implicit TTL or live ablation runner.

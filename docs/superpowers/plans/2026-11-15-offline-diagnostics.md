@@ -10,7 +10,7 @@ prepare portable evidence only when a real second consumer requires it.
 optional future Rust envelope codec that grants no admission.
 **Tech Stack:** Python standard library; optional Rust serde and B's SHA-256.
 **Spec:** [continuation specification](../specs/2026-11-15-reliability-continuation.md),
-section E. No Rocket integration or cross-repository build dependency.
+section E. No cross-repository build dependency.
 
 ## Global Constraints
 
@@ -120,9 +120,9 @@ unknown measurements remain unknown plus bounds, never zero.
 ### Task 2: Conditional portable envelope
 
 **Entry gate:** name an actual second consumer, its owner identity mapping and
-scope/purpose needs in a new intake receipt. The current roadmap names none and
-explicitly excludes Rocket. Until this condition is met, record Deferred and
-continue other work; do not invent a mock consumer as justification.
+scope/purpose needs in a new intake receipt. The current roadmap names none.
+Until this condition is met, record Deferred and continue other work; do not
+invent a mock consumer as justification.
 
 **Allowed files after the gate:** create `src/evidence_envelope.rs`,
 `tests/evidence_envelope.rs`, `examples/export_evidence.rs`,

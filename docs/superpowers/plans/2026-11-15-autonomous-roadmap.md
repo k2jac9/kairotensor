@@ -1,10 +1,9 @@
 # KairoTensor autonomous execution map
 
 Authority: on 15 November 2026 the owner authorized autonomous implementation,
-research, documented decisions and continued execution. The owner explicitly
-excluded any Rocket connection. Existing available credits may be used for
-bounded, useful experiments; this is not authority for top-ups, subscription
-changes or spending beyond verified existing balances.
+research, documented decisions and continued execution. Existing available
+credits may be used for bounded, useful experiments; this is not authority for
+top-ups, subscription changes or spending beyond verified existing balances.
 
 This map supersedes the earlier review-only execution restriction. Historical
 reviews and receipts remain unchanged. Checkboxes in the component plans describe
@@ -19,7 +18,7 @@ future work; completion is recorded with commits and evidence in the ledger.
 | C | [Decision replay](2026-11-15-decision-replay.md) | After B; authorized export, honest missing-data outcomes, pure replay. |
 | D | [Policy activation](2026-11-15-policy-activation.md) | After A-C; comparable offline evaluation and transactional activation. |
 | E1 | [Offline diagnostics](2026-11-15-offline-diagnostics.md) | After C; bounded plans and recorded-outcome scoring. |
-| E2 | Same diagnostics plan, conditional task | Portable interchange only when a real second consumer requires it. No Rocket integration. |
+| E2 | Same diagnostics plan, conditional task | Portable interchange only when a real second consumer requires it. |
 | F | Bounded experiments | After relevant offline gates; separate run manifests and exact credit bounds. |
 | G | [Runtime qualification](2026-11-15-runtime-qualification.md) | After integrated core; qualify isolated current/preview/previous lanes and exact project pins. |
 

@@ -13,7 +13,7 @@ ownership around them. No new dependency, service, schema or model call.
 
 - Preserve transaction commit/rollback behavior and original raised exceptions.
 - Never suppress ResourceWarning, weaken audit checks, modify retained bundles,
-  release uncertain holds, execute inference or connect to Rocket.
+  release uncertain holds or execute inference.
 - A connection returned successfully transfers ownership to the caller; a setup
   failure must close it. Source evidence and rejected fixture copies remain retained.
 - Use existing admitted fixture runner; no rebuild is needed for Python changes.

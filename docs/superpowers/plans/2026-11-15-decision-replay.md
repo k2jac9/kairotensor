@@ -20,7 +20,7 @@ section C. Prerequisites: A and B reviewed.
 - Preserve arbitrary bytes, repeated input positions, lineage and uncertain holds.
 - Do not export cross-scope/global budget totals or infer missing validators.
 - Pure replay cannot invoke tools, a model, network, Store initialization or
-  migrations. No Rocket integration; use normal storage admission.
+  migrations. Use normal storage admission.
 - Resource bounds apply before cloning public constructed values and before
   materializing oversized SQLite payload/metadata fields, not only JSON parsing.
 

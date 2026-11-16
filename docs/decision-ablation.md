@@ -3,8 +3,7 @@
 `scripts/decision_ablation.py` plans hypothetical omissions and scores explicit
 recorded outcome attestations. It performs file input/output only. It has no run
 mode, backend imports, executable command output, process calls, model loading,
-provider requests or network access. E2 portability remains Deferred; Rocket is
-outside this work.
+provider requests or network access. E2 portability remains Deferred.
 
 ```sh
 python3 scripts/decision_ablation.py plan complete-bundle.json > plan.json

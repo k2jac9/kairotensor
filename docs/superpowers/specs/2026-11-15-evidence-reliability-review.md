@@ -132,7 +132,7 @@ The following points must be frozen before its implementation WorkOrder:
 | B | Store-backed incident fixture | Strict case-scoped mappings, captured bytes, byte-identical rendering, label-independent validation and existing timed gates. Separate implementation plan. |
 | C | Authorized decision export and deterministic replay | Freeze bundle schema, explicit error type, authorizer contract, redaction boundary and versioned validator registry first; no execution during replay. |
 | D | Evaluated policy activation | Freeze counters/denominators, authority, supported artifacts, exact comparison manifest and next free schema version; bootstrap/promote/rollback have separate gates. |
-| E | Portable envelope and bounded diagnostics | Only after a named second consumer needs it; Rocket-owned adapter stays a separate task. No live ablation execution implied. |
+| E | Portable envelope and bounded diagnostics | Only after a named second consumer needs it. No live ablation execution implied. |
 
 Do not put C-E in the same execution batch as A. A policy registry must not
 manufacture send authority; a stored evaluation remains an attestation. Preserve

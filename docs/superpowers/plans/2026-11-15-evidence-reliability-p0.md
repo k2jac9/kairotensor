@@ -270,4 +270,4 @@ and independently useful with the explanation API. No migration is needed.
 
 Next: follow the [execution map](2026-11-15-autonomous-roadmap.md) into the separate
 incident bridge, decision replay, policy activation and offline diagnostics plans.
-No Rocket integration. Portable interchange retains its real-consumer prerequisite.
+Portable interchange retains its real-consumer prerequisite.

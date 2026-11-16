@@ -22,7 +22,7 @@ section B. Prerequisite: P0 A complete and reviewed.
 - All required IDs come from the pinned workload definition. Caller flags and
   caller-supplied payload replacements cannot authorize preparation.
 - Fixture byte accounting is labelled explicitly; no live model calls.
-- No Rocket connection. Do not change `scripts/incident_routing.py` or the
+- Do not change `scripts/incident_routing.py` or the
   frozen `workloads/incident-routing-v1/` files.
 - Use admitted Cargo output and retain failed checks; honor the autonomous map.
 

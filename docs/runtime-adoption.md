@@ -455,7 +455,7 @@ measurement workflows (handoff, recovery-calibration, recovery-policy, token-cap
 retain Python `3.11` and have no real-model qualification under this core matrix.
 Accepted checkout v4.2.2 is intentionally retained; adopting latest v7.0.1 is a
 separate owned gap. Previous Rust upstream support and the complete separately
-promised consumer inventory remain not established. No model, Rocket, deployment,
+promised consumer inventory remain not established. No model, deployment,
 shared publication or bulk dependency change is covered here.
 
 Root, acting under Alejandro's autonomous project authority, owns review and

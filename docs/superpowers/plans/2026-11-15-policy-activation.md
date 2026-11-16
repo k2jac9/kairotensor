@@ -21,7 +21,7 @@ section D. Prerequisites: A-C reviewed. Only this stage introduces a migration.
 - Activation atomically changes policy admissions; never changes old send claims,
   outstanding holds, historical dispositions or original deadlines.
 - Rollback advances history and needs compatibility, not superiority.
-- No Rocket integration, live model call, new service or live-database migration.
+- No live model call, new service or live-database migration.
 - Next schema version is determined from integrated source; do not assume v10.
 
 ## Review Focus
