@@ -1,0 +1,94 @@
+{
+  "status": "verified_complete",
+  "cases": 10,
+  "mode": "live_qwen",
+  "actual_backend_calls": 20,
+  "new_model_calls": 20,
+  "charged_tokens": 5241,
+  "outstanding_tokens": 0,
+  "summary": {
+    "calibration": {
+      "always_stop": {
+        "attempts": 4,
+        "charged_tokens": 840,
+        "reserved_tokens": 0,
+        "correct": 0,
+        "on_time": 4,
+        "success": 0,
+        "abstained": 4,
+        "cases": 4,
+        "success_rate": 0.0,
+        "correct_late": 0,
+        "successes_per_charged_token": 0.0
+      },
+      "affordable_retry": {
+        "attempts": 8,
+        "charged_tokens": 2045,
+        "reserved_tokens": 0,
+        "correct": 0,
+        "on_time": 0,
+        "success": 0,
+        "abstained": 4,
+        "cases": 4,
+        "success_rate": 0.0,
+        "correct_late": 0,
+        "successes_per_charged_token": 0.0
+      },
+      "evidence_gated_retry": {
+        "attempts": 7,
+        "charged_tokens": 1736,
+        "reserved_tokens": 0,
+        "correct": 0,
+        "on_time": 1,
+        "success": 0,
+        "abstained": 4,
+        "cases": 4,
+        "success_rate": 0.0,
+        "correct_late": 0,
+        "successes_per_charged_token": 0.0
+      }
+    },
+    "heldout": {
+      "always_stop": {
+        "attempts": 6,
+        "charged_tokens": 1316,
+        "reserved_tokens": 0,
+        "correct": 0,
+        "on_time": 6,
+        "success": 0,
+        "abstained": 6,
+        "cases": 6,
+        "success_rate": 0.0,
+        "correct_late": 0,
+        "successes_per_charged_token": 0.0
+      },
+      "affordable_retry": {
+        "attempts": 12,
+        "charged_tokens": 3196,
+        "reserved_tokens": 0,
+        "correct": 0,
+        "on_time": 0,
+        "success": 0,
+        "abstained": 6,
+        "cases": 6,
+        "success_rate": 0.0,
+        "correct_late": 0,
+        "successes_per_charged_token": 0.0
+      },
+      "evidence_gated_retry": {
+        "attempts": 10,
+        "charged_tokens": 2548,
+        "reserved_tokens": 0,
+        "correct": 0,
+        "on_time": 2,
+        "success": 0,
+        "abstained": 6,
+        "cases": 6,
+        "success_rate": 0.0,
+        "correct_late": 0,
+        "successes_per_charged_token": 0.0
+      }
+    }
+  },
+  "limitations": "Internal consistency audit only; model, tokenizer, timing and source provenance are producer attestations, not authenticated execution evidence."
+}
