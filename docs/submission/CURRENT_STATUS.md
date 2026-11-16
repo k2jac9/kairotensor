@@ -1,0 +1,90 @@
+# KairoTensor submission handoff: 16 November 2026
+
+This is a dated supplement to the frozen report, with live status observations
+recorded at approximately 07:39 UTC after PR integration and branch cleanup.
+The paper and PDF still report source
+`20fab84a6baa525452191ecf80eeee339f0b5ac7`; their historical wording describes that
+pre-integration snapshot. No result below is silently added to the paper.
+
+## Integrated implementation
+
+PRs [20](https://github.com/k2jac9/kairotensor/pull/20),
+[19](https://github.com/k2jac9/kairotensor/pull/19),
+[18](https://github.com/k2jac9/kairotensor/pull/18) and
+[21](https://github.com/k2jac9/kairotensor/pull/21) are merged. The integrated source
+is `109798d776b93d6730b2d6bac74d0fd328c19815`.
+[Main CI run 43821777107](https://github.com/k2jac9/kairotensor/actions/runs/43821777107)
+passed all six jobs on that exact source. The five contract lanes are:
+
+| Lane | Rust | Python |
+| --- | --- | --- |
+| Stable | 1.100.0 | 3.15.2 |
+| Upcoming Rust | nightly-2026-11-16 / 1.102.0-nightly | 3.15.2 |
+| Previous and retained Rust | 1.99.1 | 3.15.2 |
+| Upcoming Python | 1.100.0 | 3.16.0a2 |
+| Previous Python | 1.100.0 | 3.14.10 |
+
+Each contract lane passed 365 Rust tests, 462 Python script tests, 18 reference
+tests and eight oracle tests, plus the explicit integration/example stages. The
+retained logs contain no compiler/Python warnings or test skips. The sixth job
+checks previous-checkout compatibility. These are overlapping runtime checks,
+not five independent model experiments. The separate scheduled recovery workflow
+was not dispatched as part of this integration.
+
+The Store now includes shared current-eligibility explanations, atomic admission
+batches, the fixture-backed incident bridge, authorized decision export/replay,
+and evaluated-policy activation. See the
+[reliability review guide](../reliability-review-guide.md). The hosted adapter from
+PR #18 remains qualified through offline transport/process fixtures; provider
+compatibility and complete live billing reconciliation are not established.
+
+## Separate controlled-correction pilot
+
+The [observed results](../controlled-correction-results.md) and
+[protocol](../controlled-correction-pilot.md) describe a later local experiment at
+`f6694110e3df5b1a13f71dbf9fae2bde89e07c44`. Its cached Ornith/Ollama execution is
+separate from the report's pinned Qwen measurements and the incident fixtures.
+
+All four planned changes completed. Post-change repair used four calls and 751
+reported tokens; fresh recomputation used six calls and 1,167 tokens. Including
+the shared three-call bootstrap once, collection recorded 13 calls and 2,515
+tokens. Corresponding generated requests and checked plans matched; withdrawal
+refused before dispatch in both arms. The sample is one correlated synthetic
+example per condition. It establishes neither population accuracy nor latency
+savings, and its configured token envelopes are not proven hard billing bounds.
+
+The reviewer handoff includes the corrected pilot supplement with SHA-256
+`53061caf647e72a51cd5410b545a7f774346646e31feb28ecbdf91e177eb54e2`.
+This successor fixes three guide links; raw evidence remains unchanged. Its
+original cloud copy has SHA-256
+`d1e6160e0f7e19777cefb7cd3005e5666447bc87edf7b213c83629a0da66487b`
+and is not the corrected successor.
+
+## Training and delivery boundaries
+
+The existing AutoScientist run `fb16665b-f02c-4cdc-bbde-22cacfd81830` was still
+running when checked on 16 November: one of three iterations completed, reported
+best win rate 0.1689 against target 0.8, no error and no downloadable model.
+That platform metric has not been independently evaluated and is not a KairoTensor
+research result. No dataset expansion, restart or new training run is part of this
+handoff. A later observation must recheck the run rather than assume this status.
+
+The repository and existing Drive PDF/reviewer/pilot files remain private.
+Permission metadata showed owner-only access at this check. Existing cloud links
+therefore do not establish reviewer access. The local combined reviewer bundle
+contains the original report package, corrected pilot package, this status note,
+the exact integrated source and source-bound CI receipts. Its manifest verifies
+byte consistency; it does not authenticate model execution.
+
+The [official sprint page](https://apartresearch.com/sprints/ai-x-epistemics-research-sprint-2026-11-13-to-2026-11-15)
+lists the submission deadline as 16 November at 11:59 UTC, which is 06:59 in
+America/Toronto. The report PDF is the primary upload; the form also accepts an
+additional-material URL. A local ZIP or owner-only link is not an accessible URL
+for judges. Public sharing and event submission are separate delivery actions;
+this preparation does neither and establishes no event receipt.
+
+Ready form values remain: title **KairoTensor: Evidence-Grounded Revision for Agent
+Memory**; team **KairoTensor**; location **Online**; author **Alejandro Castellanos**;
+affiliation **Independent Research**; publishing interest **Yes**; primary track
+**Track 2: Trust Infrastructure**. The abstract is the unchanged 192-word text in
+the [report](report.md). Contact details are retained in the private handoff.

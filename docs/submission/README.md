@@ -8,6 +8,10 @@ Apart Research AI x Epistemics Research Sprint, 13-15 November 2026
 
 Recommended track: **Track 2: Trust Infrastructure**
 
+For the integrated repository, separate correction-pilot supplement and delivery
+status checked on 16 November, see [Current status](CURRENT_STATUS.md). The paper
+and historical verification receipts below retain their original source boundary.
+
 KairoTensor records the evidence supplied to an agent computation and checks
 whether a saved result remains eligible after a correction or withdrawal. The
 report evaluates atomic revision, scoped reuse and a failed recovery experiment.
@@ -24,8 +28,10 @@ are separately attributed in manifests and the report.
 The measured main-branch snapshot is
 `20fab84a6baa525452191ecf80eeee339f0b5ac7`. Historical experiments use the source
 identities in [EVIDENCE.md](EVIDENCE.md). These submission documents were prepared
-after that snapshot. Later reliability commits, unmerged PR #18 and active
-AutoScientist runs are excluded from the reported results.
+after that snapshot. Later reliability commits, the hosted adapter introduced by
+PR #18, the separate correction pilot and AutoScientist runs are excluded from
+the reported results. PR #18 has since merged; that integration does not change
+which experiments the paper reports.
 
 ## Review
 
@@ -78,7 +84,10 @@ tokens and zero unresolved reservations. Its bytes were unchanged after auditing
 No new inference was run in preparing this package. A successful audit is not
 independent authentication of model or hardware execution.
 
-The newer incident-routing calibration remains unexecuted. The current CI does
-not implement the complete stable/preview/previous-stable compatibility matrix;
-no such matrix is claimed here. Historical model/runtime pins are retained for
-reproduction, not presented as current release recommendations.
+The incident-routing model-quality evaluation remains unexecuted. The measured
+snapshot's CI predates the complete stable/upcoming/previous compatibility matrix.
+The integrated Rust/Python matrix subsequently passed at `109798d`; its exact
+source and coverage are recorded in [Current status](CURRENT_STATUS.md). Those
+checks do not qualify the separate ML runtime or establish model performance.
+Historical model/runtime pins are retained for reproduction, not presented as
+current release recommendations.

@@ -3,8 +3,10 @@
 Paths below are relative to the measured source root. The accompanying source
 archive is an exact snapshot of `20fab84a6baa525452191ecf80eeee339f0b5ac7`.
 CI collection success and model-task success are separate outcomes. Later
-reliability commits, unmerged PR #18 and active AutoScientist runs are outside
-this measured snapshot and are excluded from the report's outcomes.
+reliability commits, the hosted adapter from PR #18, the separate correction pilot
+and AutoScientist runs are outside this measured snapshot and are excluded from
+the report's outcomes. [Current status](CURRENT_STATUS.md) describes the later
+integration and points to the separately reported pilot.
 
 | Report claim | Raw evidence and protocol | Result and limit |
 | --- | --- | --- |
