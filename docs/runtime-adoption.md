@@ -290,3 +290,59 @@ preflight display bytes could not be recovered; its original exit/SHA and all
 inner command/admission receipts remain. The final matrix uses a fresh exclusively
 created packet with direct process exits and complete fresh admission evidence.
 The missing historical display is not a passing receipt or silently reconstructed.
+
+## G1 review fix 1 — unavailable lane isolation, 2026-11-16
+
+The preceding G1 records remain historical. Independent review found that a
+missing archive or checkout in an unselected lane could abort the CLI before the
+selected available lane received any result. Executable successor `d60159d6bda1e36ceecace4125f05059c07cbb50`
+separates shared/structural contracts from each selected lane's availability.
+Only requested roles run. Missing lane prerequisites emit Unexecuted receipts;
+independent available roles continue. Dependent Python rows emit Unexecuted when
+the same-manifest stable receipt is missing, failed or cannot be validated.
+Selected-lane digest mismatches are Failed; malformed shared or role contracts
+still refuse.
+
+Eight additional public-CLI regressions bring the verifier suite to 50 tests.
+They use actual subprocesses, tiny fixture tools and a real Python parent/child;
+the reachable workload intentionally exits 23, so these refusal/isolation tests
+cannot be confused with runtime qualification. RED and GREEN logs are retained.
+The approved 40-command workload and acceptance predicates are unchanged.
+
+The new packet is `fix-1/` within the G1 artifact directory above.
+`manifest.json`, `source-freeze.json`, `execution/process-receipts.json`,
+`final-matrix-rollup.json` and `all-command-results.json` bind these fresh runs:
+
+| Role | Rust | Python | Commands | Receipt CLI exit |
+| --- | --- | --- | --- | --- |
+| stable | `rustc 1.100.0 (0ef1bc386 2026-11-09)` | `Python 3.15.2` | 40/40 Pass | 0 |
+| rust-upcoming | `rustc 1.102.0-nightly (5f4effd57 2026-11-13)` | `Python 3.15.2` | 40/40 Pass | 0 |
+| rust-previous | `rustc 1.99.1 (58cf8f9c3 2026-10-13)` | `Python 3.15.2` | 40/40 Pass | 0 |
+| python-upcoming | `rustc 1.100.0 (0ef1bc386 2026-11-09)` | `Python 3.16.0a2` | 40/40 Pass | 0 |
+| python-previous | `rustc 1.100.0 (0ef1bc386 2026-11-09)` | `Python 3.14.10` | 40/40 Pass | 0 |
+
+Each row ran 357 Rust tests, 18 reference tests, 8 oracle tests and 343 full
+Python tests (293 existing plus 50 verifier tests), with zero skipped, ignored or
+filtered tests. Focused suites repeat subsets. All 200 workload commands, all
+five separate persisted-receipt CLI validations and the outer controller exited
+zero. Three new registered frozen worktrees bind the same source/lock; Python
+rows reuse only the unchanged stable compiler key and rerun every test process.
+The documentation-only successor does not relabel these source-bound receipts.
+
+`provenance-role-mapping.json` proves equality of the entire prior 78-file
+provenance/native identity union. Runtime-specific archives and libraries now
+belong to their consuming roles; 27 host/compiler native files remain shared.
+This prevents accidental cross-lane availability requirements without omitting
+an identity. Mapping follows the actual selected tool installation prefixes and
+is bounded to this frozen fixture workload, not discovery of arbitrary future
+native dependencies. No runtime, dependency, guard, CI or accepted-selection
+change occurred, and no download or repeat restore was needed. The retained S0
+restore evidence and eight GC roots/closures were rechecked unchanged.
+
+The lost historical standalone preflight display remains a preservation defect:
+its original SHA-256 is
+`8795475d9b4184453f7c0653f9a594ab4690a4113e986f000aa35b69d7f14f86`.
+Its bytes have not been recovered. Fix-1 uses exclusively created operation
+paths and fresh admission receipts; it makes no claim to reconstruct that loss.
+Independent scoped review remains required. Other adoption gaps and G2's
+activation/observation responsibilities above are unchanged.
