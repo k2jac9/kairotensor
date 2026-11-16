@@ -195,6 +195,21 @@ class RuntimeMatrixTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'manifest'):
             self.m.verify_receipt(m,m['lanes'][0],receipt)
 
+    def test_directory_artifact_retains_empty_log_with_nonempty_result(self):
+        d=self.root/'outputs';d.mkdir();(d/'result.json').write_text('{"status":"complete"}');(d/'stderr.log').touch()
+        records=self.m.output_files([str(d)])
+        self.assertEqual({r['path'] for r in records},{str(d/'result.json'),str(d/'stderr.log')})
+        self.assertEqual(next(r['sha256'] for r in records if r['path'].endswith('stderr.log')),
+                         'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')
+
+    def test_all_empty_directory_artifact_refused(self):
+        d=self.root/'outputs';d.mkdir();(d/'stderr.log').touch()
+        with self.assertRaisesRegex(ValueError,'empty'): self.m.output_files([str(d)])
+
+    def test_explicit_empty_result_file_refused(self):
+        p=self.root/'result.json';p.touch()
+        with self.assertRaisesRegex(ValueError,'empty'): self.m.output_files([str(p)])
+
     def test_inventory_contains_all_distinct_commands(self):
         commands=self.m.command_inventory()
         ids=[c['id'] for c in commands]

@@ -209,7 +209,7 @@ def output_files(paths):
         if not p.exists(): raise ValueError(f'missing artifact: {p}')
         children=sorted(p.rglob('*')) if p.is_dir() else [p]
         found=[c for c in children if c.is_file()]
-        if not found or any(c.stat().st_size==0 for c in found): raise ValueError(f'empty artifact: {p}')
+        if not found or not any(c.stat().st_size>0 for c in found): raise ValueError(f'empty artifact: {p}')
         files.extend(file_identity(c) for c in found)
     return files
 
