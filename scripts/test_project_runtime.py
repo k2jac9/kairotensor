@@ -8,6 +8,9 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
+
+import project_runtime
 
 LAUNCHER = Path(__file__).with_name('project_runtime.py').resolve()
 
@@ -191,6 +194,73 @@ class ProjectRuntimeTests(unittest.TestCase):
     def test_git_environment_source_override_refuses(self):
         r = self.run_launcher('identity', env=dict(self.env, GIT_DIR=str(self.repo / '.git')))
         self.assertEqual(r.returncode, 2, r.stderr)
+
+    def assert_native_overrides_refused(self, cases):
+        for index, (key, value) in enumerate(cases):
+            with self.subTest(key=key, value=value):
+                aliases = self.root / ('native-refusal-' + str(index))
+                with patch.dict(os.environ, dict(self.env, **{key: value}), clear=True):
+                    with self.assertRaisesRegex(ValueError, 'unexpected runtime overrides') as caught:
+                        project_runtime.runtime_environment(self.selection, self.manifest, aliases)
+                self.assertIn(key, str(caught.exception))
+                self.assertFalse(aliases.exists(), 'refuse before creating selected execution aliases')
+
+    def test_nix_native_flags_and_wrapper_controls_refuse_all_target_forms(self):
+        # Inputs audited from selected GCC/ld add-flags, utils and hardening scripts.
+        families = [
+            'NIX_CFLAGS_COMPILE', 'NIX_CFLAGS_COMPILE_BEFORE', 'NIX_CFLAGS_LINK',
+            'NIX_LDFLAGS', 'NIX_LDFLAGS_BEFORE', 'NIX_LDFLAGS_AFTER', 'NIX_LDFLAGS_HARDEN',
+            'NIX_CXXSTDLIB_COMPILE', 'NIX_CXXSTDLIB_LINK', 'NIX_GNATFLAGS_COMPILE',
+            'NIX_HARDENING_ENABLE', 'NIX_ENFORCE_NO_NATIVE', 'NIX_DYNAMIC_LINKER',
+            'NIX_IGNORE_LD_THROUGH_GCC', 'NIX_LINK_TYPE', 'NIX_DONT_SET_RPATH',
+            'NIX_SET_BUILD_ID', 'NIX_CC_WRAPPER_FLAGS_SET', 'NIX_BINTOOLS_WRAPPER_FLAGS_SET',
+            'NIX_CC_WRAPPER_TARGET_BUILD', 'NIX_CC_WRAPPER_TARGET_HOST', 'NIX_CC_WRAPPER_TARGET_TARGET',
+            'NIX_BINTOOLS_WRAPPER_TARGET_BUILD', 'NIX_BINTOOLS_WRAPPER_TARGET_HOST',
+            'NIX_BINTOOLS_WRAPPER_TARGET_TARGET',
+        ]
+        suffixes = ['', '_x86_64_unknown_linux_gnu', '_aarch64_unknown_linux_gnu', '_FOR_BUILD', '_FOR_TARGET']
+        cases = [(name + suffix, '1') for name in families for suffix in suffixes]
+        cases += [(name, '1') for name in ['NIX_CC_USE_RESPONSE_FILE', 'NIX_LD_USE_RESPONSE_FILE',
+                                          'NIX_BUILD_ID_STYLE', 'NIX_DEBUG', 'NIX_ENFORCE_PURITY',
+                                          'NIX_STORE', 'NIX_BUILD_TOP']]
+        self.assert_native_overrides_refused(cases)
+
+    def test_native_tool_and_flag_selectors_refuse_cc_crate_target_forms(self):
+        # cc 1.8.0 target_envs consumes raw and underscore target suffixes,
+        # then HOST_/TARGET_ prefixes, then the bare variable. Empty values can
+        # still be meaningful (for example CXXSTDLIB disables its default).
+        families = ['CC', 'CXX', 'AR', 'RANLIB', 'NVCC', 'CC_MASM_ASM',
+                    'CXXSTDLIB', 'CXXSTDLIB_STATIC', 'CFLAGS', 'CXXFLAGS',
+                    'ARFLAGS', 'RANLIBFLAGS', 'LDFLAGS', 'AS', 'ASFLAGS', 'CPPFLAGS']
+        cases = []
+        for name in families:
+            cases += [(key, 'unexpected') for key in [name, name + '_x86_64-unknown-linux-gnu',
+                       name + '_aarch64_unknown_linux_gnu', name + '_thumbv8m.main-none-eabi',
+                       'HOST_' + name, 'TARGET_' + name]]
+        cases += [('CXXSTDLIB', ''), ('CFLAGS_x86_64_unknown_linux_gnu', '')]
+        self.assert_native_overrides_refused(cases)
+
+    def test_native_search_controls_and_sqlite_inputs_refuse(self):
+        cases = [(name, 'unexpected') for name in [
+            'CRATE_CC_NO_DEFAULTS', 'CROSS_COMPILE', 'RUSTC_LINKER',
+            'CC_KNOWN_WRAPPER_CUSTOM', 'CC_FORCE_DISABLE', 'CC_SHELL_ESCAPED_FLAGS',
+            'GCC_EXEC_PREFIX', 'COMPILER_PATH', 'CPATH', 'C_INCLUDE_PATH',
+            'CPLUS_INCLUDE_PATH', 'OBJC_INCLUDE_PATH', 'LIBRARY_PATH',
+            'DEPENDENCIES_OUTPUT', 'SUNPRO_DEPENDENCIES', 'SOURCE_DATE_EPOCH',
+            'LIBSQLITE3_FLAGS', 'LIBSQLITE3_SYS_USE_PKG_CONFIG',
+            'SQLITE_MAX_VARIABLE_NUMBER', 'SQLITE_MAX_EXPR_DEPTH', 'SQLITE_MAX_COLUMN',
+            'SQLITE3_LIB_DIR', 'SQLITE3_INCLUDE_DIR', 'SQLITE3_STATIC',
+            'PKG_CONFIG', 'PKG_CONFIG_PATH', 'TARGET_PKG_CONFIG',
+        ]]
+        self.assert_native_overrides_refused(cases)
+
+    def test_observed_nix_override_refuses_before_workload_side_effect(self):
+        marker = self.root / 'should-not-run'
+        r = self.run_launcher('python', '-c', 'from pathlib import Path; Path(' + repr(str(marker)) + ').touch()',
+                              env=dict(self.env, NIX_CFLAGS_COMPILE_x86_64_unknown_linux_gnu='-DUNBOUND_NATIVE_FLAG=1'))
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn('NIX_CFLAGS_COMPILE_x86_64_unknown_linux_gnu', r.stderr)
+        self.assertFalse(marker.exists())
 
     def test_child_command_exit_is_preserved(self):
         r = self.run_launcher('python', '-c', 'raise SystemExit(7)')

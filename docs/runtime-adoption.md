@@ -523,3 +523,30 @@ dependency directories. The failed receipt remains under `activation-probe/`.
 An artifact-only correction used actual Cargo-emitted paths; both its retained
 S2 retry and the final successor probe passed. No application source, dependency,
 storage guard or acceptance test was changed to clear the failure.
+
+### G2 independent-review corrections (2026-11-16, fix round 1)
+
+Independent review I1 reproduced an inherited native flag outside the declared
+runtime boundary: the selected Nix gcc wrapper consumed
+`NIX_CFLAGS_COMPILE_x86_64_unknown_linux_gnu` while its executable hash stayed
+unchanged. Acceptance and activation remained held. The correction rejects
+native input families before creating execution aliases, including arbitrary
+Nix target/role suffixes for compile/before/link flags, C++/GNAT flags, hardening,
+wrapper role/initialization controls, linker selection, rpath/build-ID/purity and
+response-file controls. It also rejects the cc crate's bare, HOST_/TARGET_, raw
+and normalized target-specific compiler/archiver/tool/flag selectors, native
+search-path controls and the bundled SQLite configuration inputs. Empty native
+selectors are refused too because some explicitly disable defaults. No target
+triple is hardcoded into the refusal policy. Selection schema and accepted
+G1/storage code are unchanged; this remains an invocation boundary rather than
+a sandbox for arbitrary workload code. Exact audited native source identities,
+pre-fix preprocessing reproduction and RED/GREEN results are in `task-g2/fix-1/`.
+
+Review M1 also found retained compiler warnings that the prior summary omitted:
+17 warning lines, including repeated diagnostics and Cargo-generated summaries,
+cover three existing dead-code categories in the protected shared examples:
+unused `Prepared`, unused `PreparedReply`, and unused associated methods.
+Passing exits do not mean warning-free builds. These warnings remain visible in
+the raw Rust suite and handoff logs. Application cleanup is explicitly deferred
+to the integrated review owner; G2 neither changes protected application code
+nor suppresses warnings or weakens acceptance gates.

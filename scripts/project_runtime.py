@@ -22,6 +22,34 @@ HOST_TOOLS = {'cc', 'gcc', 'c++', 'ar', 'ld', 'git', 'sh', 'bash',
               'dirname', 'tr', 'sha256sum', 'cut', 'mkdir', 'mktemp'}
 
 
+# Selected Nix cc/ld wrappers accept both role and arbitrary target suffixes.
+# cc-rs likewise accepts bare inputs, HOST_/TARGET_ inputs and target suffixes.
+# Match families rather than a host triple. Presence matters: an empty selector
+# such as CXXSTDLIB can disable a native default, so it is not equivalent to unset.
+NATIVE_INPUT_FAMILIES = {
+    'CC', 'CXX', 'CPP', 'AR', 'RANLIB', 'NVCC', 'AS', 'LD',
+    'CXXSTDLIB', 'CFLAGS', 'CXXFLAGS', 'CPPFLAGS', 'ARFLAGS', 'RANLIBFLAGS',
+    'ASFLAGS', 'LDFLAGS', 'CRATE_CC_NO_DEFAULTS', 'CROSS_COMPILE', 'RUSTC_LINKER',
+    'GCC_EXEC_PREFIX', 'COMPILER_PATH', 'CPATH', 'C_INCLUDE_PATH',
+    'CPLUS_INCLUDE_PATH', 'OBJC_INCLUDE_PATH', 'LIBRARY_PATH',
+    'DEPENDENCIES_OUTPUT', 'SUNPRO_DEPENDENCIES', 'SOURCE_DATE_EPOCH',
+    'LIBSQLITE3', 'SQLITE_MAX', 'SQLITE3', 'SQLCIPHER', 'PKG_CONFIG',
+    'NIX_CFLAGS', 'NIX_LDFLAGS', 'NIX_CXXSTDLIB', 'NIX_GNATFLAGS',
+    'NIX_CC_WRAPPER', 'NIX_BINTOOLS_WRAPPER', 'NIX_HARDENING', 'NIX_ENFORCE',
+    'NIX_DYNAMIC_LINKER', 'NIX_IGNORE_LD_THROUGH_GCC', 'NIX_LINK_TYPE',
+    'NIX_DONT_SET_RPATH', 'NIX_SET_BUILD_ID', 'NIX_BUILD_ID_STYLE',
+    'NIX_CC_USE_RESPONSE_FILE', 'NIX_LD_USE_RESPONSE_FILE', 'NIX_DEBUG',
+    'NIX_STORE', 'NIX_BUILD_TOP',
+}
+
+
+def native_override(name):
+    if name.startswith(('HOST_', 'TARGET_')):
+        name = name.split('_', 1)[1]
+    return any(name == family or name.startswith(family + '_')
+               for family in NATIVE_INPUT_FAMILIES)
+
+
 def load_identity(identity):
     return json.loads(check_file(identity).read_text())
 
@@ -94,11 +122,10 @@ def runtime_environment(selection, manifest, aliases):
     forbidden = OVERRIDES | {'LD_PRELOAD', 'LD_LIBRARY_PATH', 'DYLD_INSERT_LIBRARIES',
                             'CARGO_BUILD_TARGET', 'CARGO_BUILD_RUSTDOC', 'CARGO_ALIAS_TEST',
                             'GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_CONFIG',
-                            'GIT_CONFIG_COUNT', 'GIT_CONFIG_PARAMETERS', 'BASH_ENV', 'ENV',
-                            'NIX_CFLAGS_COMPILE', 'NIX_LDFLAGS'}
+                            'GIT_CONFIG_COUNT', 'GIT_CONFIG_PARAMETERS', 'BASH_ENV', 'ENV'}
     unexpected = [key for key in forbidden if env.get(key)]
-    unexpected += [key for key in env if key.startswith(('CARGO_TARGET_', 'CARGO_PROFILE_', 'CARGO_ALIAS_', 'CARGO_BUILD_',
-                                                                       'CC_', 'CXX_', 'AR_', 'CFLAGS_', 'CXXFLAGS_', 'HOST_CC', 'HOST_CXX', 'HOST_AR'))
+    unexpected += [key for key in env if native_override(key)]
+    unexpected += [key for key in env if key.startswith(('CARGO_TARGET_', 'CARGO_PROFILE_', 'CARGO_ALIAS_', 'CARGO_BUILD_'))
                    and env[key] and env[key] != PROFILE.get(key)]
     if unexpected:
         raise ValueError('unexpected runtime overrides: ' + ', '.join(sorted(set(unexpected))))
