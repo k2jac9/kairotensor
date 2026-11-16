@@ -550,3 +550,43 @@ Passing exits do not mean warning-free builds. These warnings remain visible in
 the raw Rust suite and handoff logs. Application cleanup is explicitly deferred
 to the integrated review owner; G2 neither changes protected application code
 nor suppresses warnings or weakens acceptance gates.
+
+
+### G2 fix-round-1 source-bound verification
+
+Corrected executable source `e32c96814bbf0e841b9bacda7b5edc241e72fbf4` supersedes the earlier
+`64e0b1b` proposal; earlier sources and receipts remain historical. A subsequent
+docs-only commit changes only this file and is mapped in
+`task-g2/fix-1/docs-only-transition.json`. Independent re-review and root activation
+remain pending; no accepted pointer was written.
+
+`task-g2/fix-1/verification-rollup.json` binds a fresh unchanged stable
+40-command workload (all exits 0, zero skips), with Rust 357, reference 18,
+oracle 8, full Python discovery 365, and explicit suites 24/50/15/19/7.
+These overlapping suites total 863 test executions. Five actual selected-runtime
+identity probes and five focused 22-test runs also passed (110 executions).
+The source-bound final negative control refused the exact reviewed suffixed
+Nix flag with exit 2 before launching the selected compiler. The new regression
+coverage checks 258 native-input cases, including the end-to-end observed case;
+220 subcases failed in the retained pre-fix RED and all 22 tests passed GREEN.
+The audited selected shell wrappers have 50 native-variable read occurrences
+across the inspected files, all classified by the new refusal boundary; this is
+an audit of those selected wrappers, not a claim about arbitrary external code.
+
+Fresh candidate library and standalone probe builds used unchanged admitted
+wrappers. The final candidate binary is `/home/neo/Projects/kairotensor-artifacts/reliability-implementation-20261115/task-g2/fix-1/activation-probe/activation-probe`,
+SHA-256 `275b94eef822d82bbfcfa3be1b2e7b0d40a6fb49d737a2ad59cde918e6b8c666`. Its current-read/hold create/reopen checks
+passed on a new disposable database, with zero backend calls. This replaces the
+earlier probe proposal for root's post-activation check. The accepted-runtime
+candidate selection remains byte-identical at
+`/home/neo/.local/state/kairotensor/runtime/candidates/g2-20261116-r1/stable.json`;
+root must bind the corrected executable source and this binary in its own
+reviewed activation receipt.
+
+The fresh warning audit (`task-g2/fix-1/compiler-warnings.json`) confirms the
+same 17 lines, including repetitions and generated summaries, in the Rust suite
+and corrected/scoped handoff stderr. The three protected-code dead-code
+categories remain deferred to integrated review. All 199 files protected by the
+fix intake, four owner policies, review/context identities and candidate selection
+bytes were checked unchanged. Hosted CI, other full S2 roles, real-model/ML
+consumers and activation remain unexecuted, as before.
