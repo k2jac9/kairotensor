@@ -1,0 +1,13 @@
+test_conditioning_can_amplify_compression_error (__main__.BeliefOracleTests.test_conditioning_can_amplify_compression_error) ... ok
+test_copies_cannot_be_second_factor (__main__.BeliefOracleTests.test_copies_cannot_be_second_factor) ... ok
+test_impossible_evidence_is_explicit (__main__.BeliefOracleTests.test_impossible_evidence_is_explicit) ... ok
+test_independence_is_an_assumption (__main__.BeliefOracleTests.test_independence_is_an_assumption) ... ok
+test_independent_four_statuses (__main__.BeliefOracleTests.test_independent_four_statuses) ... ok
+test_one_step_regret_bound_is_tight (__main__.BeliefOracleTests.test_one_step_regret_bound_is_tight) ... ok
+test_unversioned_empty_certificate_is_rejected (__main__.BeliefOracleTests.test_unversioned_empty_certificate_is_rejected) ... ok
+test_zero_likelihood_retraction_restores_prior (__main__.BeliefOracleTests.test_zero_likelihood_retraction_restores_prior) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.000s
+
+OK

@@ -1,0 +1,21 @@
+{
+  "verified_at_utc": "2026-11-16T05:44:11.991159+00:00",
+  "reviewer_zip_sha256": "3103cfbd5ecbdc8fec0eaa36f0712e435e8d76112293b642300297465e4c9405",
+  "reviewer_zip_bytes": 666641,
+  "manifest_payload_files": 42,
+  "manifest_exact_file_set_and_hashes_verified": true,
+  "fresh_unpack_verified": true,
+  "packaged_guides_and_pdf_match_repository": true,
+  "measured_source_commit": "20fab84a6baa525452191ecf80eeee339f0b5ac7",
+  "source_archive_sha256": "e5928a4daf5b9d68cfbec0f58afdfd53d65f4202e3f1c5d54a4284baa1c0b821",
+  "source_files_verified_against_git": 145,
+  "source_bytes_identical_to_freshly_tested_candidate": true,
+  "pdf_sha256": "a755007e453b633cae4f19d38fd1c1f557c365a04d07ddfffb52d5753bf10c5a",
+  "candidate_reproduction_receipt_included": "verification/finalization-20261116/reproduction-check.json",
+  "outer_receipt_excluded_from_zip_to_avoid_self_hashing": true,
+  "heavy_build_or_download_performed": false,
+  "expected_growth_limit_mib": 64,
+  "output_lifecycle": "Retain final artifacts, before snapshots, intermediate exports, fresh extraction and logs in the new finalization packet. Historical artifact directory unchanged.",
+  "event_submitted": false,
+  "visibility_or_sharing_changed": false
+}

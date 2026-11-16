@@ -1,6 +1,22 @@
-# Kairotensor
+# KairoTensor
 
 Kairotensor is a Rust framework for versioned evidence memory. Its first component is a local SQLite store that records which observations an agent used and checks whether a saved result is still eligible to read or resume after evidence changes.
+
+## AI x Epistemics sprint submission
+
+Author: **Alejandro Castellanos**, **Independent Research**.
+
+The author confirms that no KairoTensor-specific ideas, code or experiments
+predate the 13-15 November 2026 sprint. The implementation and reported experiments
+were developed during the sprint. This is an author declaration, not a conclusion
+inferred solely from Git timestamps. Third-party dependencies and cited prior work
+remain identified in their manifests and the report.
+
+The [submission guide](docs/submission/README.md) maps the report's claims to raw
+evidence and offline reproduction commands. It includes a real Qwen reuse example
+and the failed frozen recovery evaluation; neither establishes general improvement
+in agent accuracy. Measured source is pinned to
+`20fab84a6baa525452191ecf80eeee339f0b5ac7`; submission documentation is additional.
 
 ## Run the withdrawal example
 
