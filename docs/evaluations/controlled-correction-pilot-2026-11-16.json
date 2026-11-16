@@ -1,0 +1,2439 @@
+{
+  "schema": "kairotensor-controlled-correction-observation/1",
+  "date": "2026-11-16",
+  "execution_source_commit": "f6694110e3df5b1a13f71dbf9fae2bde89e07c44",
+  "binary_built_at": "c7f1da715ec3de2929b0009600acc2ef4fb81c92",
+  "compiled_inputs_unchanged": true,
+  "binary_sha256": "a2c6f2d295f80df400c789ec537f59dcbe62ed2db558b8dc5f444563149fffb1",
+  "configuration_sha256": "e277b05b1ad03cd90549ac743974de535196b4aef89c8b3e537aa679b55594af",
+  "independent_preflight_review_sha256": "b9cb90dc3622964844745c76bddb2807563b9beb45cdbb26f54640adcdec67c1",
+  "runtime": {
+    "image": "docker.io/ollama/ollama@sha256:85b3c895222b1ddc9d63c40b20fc74f37a37593dcbbdfbf28910a925e43ead00",
+    "image_id": "aa25f838bb0303774bc7540716dadd62605fd0724febfccfc511e67ef12274a5",
+    "model": "ornith-1.5:9b",
+    "model_digest": "e5df7dcdd8a263994df62d610317e07be0d6af23f96fcbd8543273058fce575e",
+    "model_manifest_sha256": "4e3abcdcb78587e3709cc65607f590347deb217b5e45f48113734915548d0ef8",
+    "envelope": {
+      "keep_alive": "10m",
+      "model": "ornith-1.5:9b",
+      "options": {
+        "num_ctx": 2048,
+        "num_gpu": 0,
+        "num_predict": 96,
+        "num_thread": 2,
+        "seed": 0,
+        "temperature": 0,
+        "top_k": 1,
+        "top_p": 1
+      },
+      "runner": "ggml",
+      "shift": false,
+      "stream": false,
+      "think": false,
+      "truncate": false
+    },
+    "platform": "Linux-7.3.4-x86_64-with-glibc2.44"
+  },
+  "summary": {
+    "actual_calls": 13,
+    "actual_tokens": 2515,
+    "bootstrap_calls": 3,
+    "bootstrap_tokens": 597,
+    "post_change_repair_calls": 4,
+    "post_change_repair_tokens": 751,
+    "post_change_fresh_calls": 6,
+    "post_change_fresh_tokens": 1167,
+    "marginal_tokens_saved": 416,
+    "marginal_reduction_percent": 35.646958011996574,
+    "shared_prefix_lifecycle_repair_tokens": 1348,
+    "shared_prefix_lifecycle_fresh_tokens": 1764,
+    "shared_prefix_lifecycle_reduction_percent": 23.582766439909296,
+    "reuse_hits": 2
+  },
+  "supervisor": {
+    "accounting": {
+      "accounting_scope": "provider-reported local token units; no proven unknown-liability bound",
+      "claims": 13,
+      "hard_token_liability_bound": null,
+      "known_tokens": 2515,
+      "observed_excess": false,
+      "unresolved_claims": 0,
+      "unresolved_quote_units": 0
+    },
+    "complete": true,
+    "configured_token_envelope_is_hard_budget": false,
+    "deadline_overrun": false,
+    "elapsed_seconds": 70.14368417699734,
+    "error": null,
+    "finished_tick": 52130.479083738,
+    "local_compute_cost": "unpriced",
+    "model_provider_spend_usd": 0,
+    "schedule": {
+      "scenario_outcomes": {
+        "alternative_support": "complete",
+        "report_correction": "complete",
+        "unrelated_policy_change": "complete",
+        "withdrawal": "complete"
+      },
+      "unexecuted_slots": []
+    },
+    "shared_runtime_modified": false,
+    "started_tick": 52060.335399561
+  },
+  "store_result": {
+    "bootstrap": {
+      "a_origin": 2,
+      "b_origin": 3,
+      "dispatches": 3
+    },
+    "complete": true,
+    "dispatches": 13,
+    "mode": "trusted_local_bridge",
+    "reuse_hits": 2,
+    "rust_dispatch_intents": 13,
+    "scenarios": [
+      {
+        "fresh": {
+          "dispatches": 2,
+          "origin": 6,
+          "outcome": "accepted",
+          "plan": {
+            "action": "hold",
+            "approval": "S42-A",
+            "release": "R42",
+            "target": "staging",
+            "tests": "11/12"
+          },
+          "report_branch": "report-a",
+          "requests": [
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":1,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"11/12\\\",\\\"version\\\":\\\"run/18\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}",
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/18\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"S42-A\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"staging\\\",\\\"version\\\":\\\"policy/v1\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"fail\\\",\\\"tests\\\":\\\"11/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+          ],
+          "reused": false,
+          "route_us": 5977737
+        },
+        "repair": {
+          "dispatches": 2,
+          "origin": 9,
+          "outcome": "accepted",
+          "plan": {
+            "action": "hold",
+            "approval": "S42-A",
+            "release": "R42",
+            "target": "staging",
+            "tests": "11/12"
+          },
+          "report_branch": "report-a",
+          "requests": [
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":1,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"11/12\\\",\\\"version\\\":\\\"run/18\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}",
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/18\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"S42-A\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"staging\\\",\\\"version\\\":\\\"policy/v1\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"fail\\\",\\\"tests\\\":\\\"11/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+          ],
+          "reused": false,
+          "route_us": 9601611
+        },
+        "requests_equal": true,
+        "scenario": "report_correction",
+        "typed_support": false
+      },
+      {
+        "fresh": {
+          "dispatches": 2,
+          "origin": 5,
+          "outcome": "accepted",
+          "plan": {
+            "action": "deploy",
+            "approval": "C42-B",
+            "release": "R42",
+            "target": "canary",
+            "tests": "12/12"
+          },
+          "report_branch": "report-a",
+          "requests": [
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":0,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"12/12\\\",\\\"version\\\":\\\"run/17\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}",
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/17\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"C42-B\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"canary\\\",\\\"version\\\":\\\"policy/v2\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"pass\\\",\\\"tests\\\":\\\"12/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+          ],
+          "reused": false,
+          "route_us": 9668588
+        },
+        "repair": {
+          "dispatches": 1,
+          "origin": 2,
+          "outcome": "accepted",
+          "plan": {
+            "action": "deploy",
+            "approval": "C42-B",
+            "release": "R42",
+            "target": "canary",
+            "tests": "12/12"
+          },
+          "report_branch": "report-a",
+          "requests": [
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":0,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"12/12\\\",\\\"version\\\":\\\"run/17\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}",
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/17\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"C42-B\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"canary\\\",\\\"version\\\":\\\"policy/v2\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"pass\\\",\\\"tests\\\":\\\"12/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+          ],
+          "reused": true,
+          "route_us": 3697907
+        },
+        "requests_equal": true,
+        "scenario": "unrelated_policy_change",
+        "typed_support": true
+      },
+      {
+        "fresh": {
+          "dispatches": 0,
+          "outcome": "unavailable_evidence",
+          "plan": null,
+          "requests": []
+        },
+        "repair": {
+          "dispatches": 0,
+          "outcome": "unavailable_evidence",
+          "plan": null,
+          "requests": []
+        },
+        "requests_equal": true,
+        "scenario": "withdrawal",
+        "typed_support": false
+      },
+      {
+        "fresh": {
+          "dispatches": 2,
+          "origin": 5,
+          "outcome": "accepted",
+          "plan": {
+            "action": "deploy",
+            "approval": "S42-A",
+            "release": "R42",
+            "target": "staging",
+            "tests": "12/12"
+          },
+          "report_branch": "report-b",
+          "requests": [
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":0,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"12/12\\\",\\\"version\\\":\\\"run/17\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}",
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/17\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"S42-A\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"staging\\\",\\\"version\\\":\\\"policy/v1\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"pass\\\",\\\"tests\\\":\\\"12/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+          ],
+          "reused": false,
+          "route_us": 8159465
+        },
+        "repair": {
+          "dispatches": 1,
+          "origin": 3,
+          "outcome": "accepted",
+          "plan": {
+            "action": "deploy",
+            "approval": "S42-A",
+            "release": "R42",
+            "target": "staging",
+            "tests": "12/12"
+          },
+          "report_branch": "report-b",
+          "requests": [
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":0,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"12/12\\\",\\\"version\\\":\\\"run/17\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}",
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/17\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"S42-A\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"staging\\\",\\\"version\\\":\\\"policy/v1\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"pass\\\",\\\"tests\\\":\\\"12/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+          ],
+          "reused": true,
+          "route_us": 3628795
+        },
+        "requests_equal": true,
+        "scenario": "alternative_support",
+        "typed_support": true
+      }
+    ],
+    "unexecuted_scenarios": [],
+    "unexecuted_slots": []
+  },
+  "by_route": {
+    "bootstrap": {
+      "calls": 3,
+      "input_tokens": 525,
+      "output_tokens": 72,
+      "tokens": 597
+    },
+    "report_correction/repair": {
+      "calls": 2,
+      "input_tokens": 337,
+      "output_tokens": 52,
+      "tokens": 389
+    },
+    "report_correction/fresh": {
+      "calls": 2,
+      "input_tokens": 337,
+      "output_tokens": 52,
+      "tokens": 389
+    },
+    "unrelated_policy_change/fresh": {
+      "calls": 2,
+      "input_tokens": 337,
+      "output_tokens": 52,
+      "tokens": 389
+    },
+    "unrelated_policy_change/repair": {
+      "calls": 1,
+      "input_tokens": 149,
+      "output_tokens": 32,
+      "tokens": 181
+    },
+    "alternative_support/fresh": {
+      "calls": 2,
+      "input_tokens": 337,
+      "output_tokens": 52,
+      "tokens": 389
+    },
+    "alternative_support/repair": {
+      "calls": 1,
+      "input_tokens": 149,
+      "output_tokens": 32,
+      "tokens": 181
+    }
+  },
+  "calls": [
+    {
+      "ordinal": 1,
+      "context": {
+        "route": "bootstrap",
+        "task": "report-a"
+      },
+      "claim": {
+        "observed_tick": 52064.430498642,
+        "ordinal": 1,
+        "quote_is_proven_bound": false,
+        "quote_units": 2144,
+        "request_sha256": "9f8a53322cbab65c56dbf9bff48791aaa7ff6e2ded62d45cc4d51dc68c49365a",
+        "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":0,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"12/12\\\",\\\"version\\\":\\\"run/17\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+      },
+      "usage": {
+        "input_tokens": 188,
+        "late": false,
+        "ordinal": 1,
+        "output_tokens": 20,
+        "raw_sha256": "9242e57f7f025233bf5da6cca2c38b63a12f4e8b58a806c5324130716b94e33e",
+        "received_tick": 52077.62409132,
+        "reconciled": true,
+        "transport_complete": true,
+        "within_envelope": true
+      },
+      "raw_response_base64": "eyJtb2RlbCI6Im9ybml0aC0xLjU6OWIiLCJjcmVhdGVkX2F0IjoiMjAyNi0xMS0xNlQwNjoxNTozMy43NjY2MTM3OTRaIiwibWVzc2FnZSI6eyJyb2xlIjoiYXNzaXN0YW50IiwiY29udGVudCI6IntcInJlbGVhc2VcIjpcIlI0MlwiLFwidGVzdHNcIjpcIjEyLzEyXCIsXCJzdGF0dXNcIjpcInBhc3NcIn0ifSwiZG9uZSI6dHJ1ZSwiZG9uZV9yZWFzb24iOiJzdG9wIiwidG90YWxfZHVyYXRpb24iOjEzMDYzODQzNTgxLCJsb2FkX2R1cmF0aW9uIjo1MDUxODA1NTI1LCJwcm9tcHRfZXZhbF9jb3VudCI6MTg4LCJwcm9tcHRfZXZhbF9jYWNoZWRfY291bnQiOjAsInByb21wdF9ldmFsX2R1cmF0aW9uIjo2MTY0ODUzMDAwLCJldmFsX2NvdW50IjoyMCwiZXZhbF9kdXJhdGlvbiI6MTg0NTQ3NDAwMH0=",
+      "runtime_observation": {
+        "models": [
+          {
+            "context_length": 2048,
+            "details": {
+              "families": [
+                "qwen35"
+              ],
+              "family": "qwen35",
+              "format": "gguf",
+              "parameter_size": "9.0B",
+              "parent_model": "",
+              "quantization_level": "Q4_K_M"
+            },
+            "digest": "e5df7dcdd8a263994df62d610317e07be0d6af23f96fcbd8543273058fce575e",
+            "expires_at": "2026-11-16T06:25:33.766760658Z",
+            "model": "ornith-1.5:9b",
+            "name": "ornith-1.5:9b",
+            "runner": "llamacpp",
+            "size": 6118650673,
+            "size_vram": 0
+          }
+        ]
+      }
+    },
+    {
+      "ordinal": 2,
+      "context": {
+        "route": "bootstrap",
+        "task": "report-b"
+      },
+      "claim": {
+        "observed_tick": 52077.761457335,
+        "ordinal": 2,
+        "quote_is_proven_bound": false,
+        "quote_units": 2144,
+        "request_sha256": "9f8a53322cbab65c56dbf9bff48791aaa7ff6e2ded62d45cc4d51dc68c49365a",
+        "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":0,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"12/12\\\",\\\"version\\\":\\\"run/17\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+      },
+      "usage": {
+        "input_tokens": 188,
+        "late": false,
+        "ordinal": 2,
+        "output_tokens": 20,
+        "raw_sha256": "d77401a1c579c0e43179ad5009a979053d5baeee9384139609954a61f5ad4978",
+        "received_tick": 52080.014650312,
+        "reconciled": true,
+        "transport_complete": true,
+        "within_envelope": true
+      },
+      "raw_response_base64": "eyJtb2RlbCI6Im9ybml0aC0xLjU6OWIiLCJjcmVhdGVkX2F0IjoiMjAyNi0xMS0xNlQwNjoxNTozNi4xNTMwNDIzNjhaIiwibWVzc2FnZSI6eyJyb2xlIjoiYXNzaXN0YW50IiwiY29udGVudCI6IntcInJlbGVhc2VcIjpcIlI0MlwiLFwidGVzdHNcIjpcIjEyLzEyXCIsXCJzdGF0dXNcIjpcInBhc3NcIn0ifSwiZG9uZSI6dHJ1ZSwiZG9uZV9yZWFzb24iOiJzdG9wIiwidG90YWxfZHVyYXRpb24iOjIxMTU0NjQ5MjIsImxvYWRfZHVyYXRpb24iOjQ5OTY1OSwicHJvbXB0X2V2YWxfY291bnQiOjE4OCwicHJvbXB0X2V2YWxfY2FjaGVkX2NvdW50IjoxODQsInByb21wdF9ldmFsX2R1cmF0aW9uIjoyNzM3MDUwMDAsImV2YWxfY291bnQiOjIwLCJldmFsX2R1cmF0aW9uIjoxODM5NTQyMDAwfQ==",
+      "runtime_observation": {
+        "models": [
+          {
+            "context_length": 2048,
+            "details": {
+              "families": [
+                "qwen35"
+              ],
+              "family": "qwen35",
+              "format": "gguf",
+              "parameter_size": "9.0B",
+              "parent_model": "",
+              "quantization_level": "Q4_K_M"
+            },
+            "digest": "e5df7dcdd8a263994df62d610317e07be0d6af23f96fcbd8543273058fce575e",
+            "expires_at": "2026-11-16T06:25:36.153166783Z",
+            "model": "ornith-1.5:9b",
+            "name": "ornith-1.5:9b",
+            "runner": "llamacpp",
+            "size": 6118650673,
+            "size_vram": 0
+          }
+        ]
+      }
+    },
+    {
+      "ordinal": 3,
+      "context": {
+        "certificate_attempt": 2,
+        "route": "bootstrap",
+        "task": "release-plan"
+      },
+      "claim": {
+        "observed_tick": 52080.155618598,
+        "ordinal": 3,
+        "quote_is_proven_bound": false,
+        "quote_units": 2144,
+        "request_sha256": "4289c0401c6f95b37414bd6664f022a6b57102dcd2744e94e1b14a820d6ca1dd",
+        "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/17\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"S42-A\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"staging\\\",\\\"version\\\":\\\"policy/v1\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"pass\\\",\\\"tests\\\":\\\"12/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+      },
+      "usage": {
+        "input_tokens": 149,
+        "late": false,
+        "ordinal": 3,
+        "output_tokens": 32,
+        "raw_sha256": "93ee3a753b7285cfca5b7bd48e94786679844f8c8b4cb9e1aa36c53f8806aa85",
+        "received_tick": 52088.243852016,
+        "reconciled": true,
+        "transport_complete": true,
+        "within_envelope": true
+      },
+      "raw_response_base64": "eyJtb2RlbCI6Im9ybml0aC0xLjU6OWIiLCJjcmVhdGVkX2F0IjoiMjAyNi0xMS0xNlQwNjoxNTo0NC4zODg1ODg4NjFaIiwibWVzc2FnZSI6eyJyb2xlIjoiYXNzaXN0YW50IiwiY29udGVudCI6IntcInJlbGVhc2VcIjpcIlI0MlwiLFwidGFyZ2V0XCI6XCJzdGFnaW5nXCIsXCJhcHByb3ZhbFwiOlwiUzQyLUFcIixcInRlc3RzXCI6XCIxMi8xMlwiLFwiYWN0aW9uXCI6XCJkZXBsb3lcIn0ifSwiZG9uZSI6dHJ1ZSwiZG9uZV9yZWFzb24iOiJzdG9wIiwidG90YWxfZHVyYXRpb24iOjc5NTkzOTIxMDUsImxvYWRfZHVyYXRpb24iOjQ1NDMzMCwicHJvbXB0X2V2YWxfY291bnQiOjE0OSwicHJvbXB0X2V2YWxfY2FjaGVkX2NvdW50IjowLCJwcm9tcHRfZXZhbF9kdXJhdGlvbiI6NDkwMDkwNjAwMCwiZXZhbF9jb3VudCI6MzIsImV2YWxfZHVyYXRpb24iOjMwMzc1MDkwMDB9",
+      "runtime_observation": {
+        "models": [
+          {
+            "context_length": 2048,
+            "details": {
+              "families": [
+                "qwen35"
+              ],
+              "family": "qwen35",
+              "format": "gguf",
+              "parameter_size": "9.0B",
+              "parent_model": "",
+              "quantization_level": "Q4_K_M"
+            },
+            "digest": "e5df7dcdd8a263994df62d610317e07be0d6af23f96fcbd8543273058fce575e",
+            "expires_at": "2026-11-16T06:25:44.388668738Z",
+            "model": "ornith-1.5:9b",
+            "name": "ornith-1.5:9b",
+            "runner": "llamacpp",
+            "size": 6118650673,
+            "size_vram": 0
+          }
+        ]
+      }
+    },
+    {
+      "ordinal": 4,
+      "context": {
+        "route": "report_correction/repair",
+        "task": "report-a"
+      },
+      "claim": {
+        "observed_tick": 52088.617690718,
+        "ordinal": 4,
+        "quote_is_proven_bound": false,
+        "quote_units": 2144,
+        "request_sha256": "fbb114cef1c2c2d69313855e8f82900b3dbead1138a5b011a70bc299842ce278",
+        "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":1,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"11/12\\\",\\\"version\\\":\\\"run/18\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+      },
+      "usage": {
+        "input_tokens": 188,
+        "late": false,
+        "ordinal": 4,
+        "output_tokens": 20,
+        "raw_sha256": "a65329ecd86909bee32a7902983cbffd21d86b6dfe5402129cb03470eed91967",
+        "received_tick": 52092.349589054,
+        "reconciled": true,
+        "transport_complete": true,
+        "within_envelope": true
+      },
+      "raw_response_base64": "eyJtb2RlbCI6Im9ybml0aC0xLjU6OWIiLCJjcmVhdGVkX2F0IjoiMjAyNi0xMS0xNlQwNjoxNTo0OC40OTM4NDYxNjdaIiwibWVzc2FnZSI6eyJyb2xlIjoiYXNzaXN0YW50IiwiY29udGVudCI6IntcInJlbGVhc2VcIjpcIlI0MlwiLFwidGVzdHNcIjpcIjExLzEyXCIsXCJzdGF0dXNcIjpcImZhaWxcIn0ifSwiZG9uZSI6dHJ1ZSwiZG9uZV9yZWFzb24iOiJzdG9wIiwidG90YWxfZHVyYXRpb24iOjM2MDMyMjEwNTksImxvYWRfZHVyYXRpb24iOjQyMzAzMiwicHJvbXB0X2V2YWxfY291bnQiOjE4OCwicHJvbXB0X2V2YWxfY2FjaGVkX2NvdW50IjoxNDQsInByb21wdF9ldmFsX2R1cmF0aW9uIjoxNzQxNzQyMDAwLCJldmFsX2NvdW50IjoyMCwiZXZhbF9kdXJhdGlvbiI6MTgzNDMzMTAwMH0=",
+      "runtime_observation": {
+        "models": [
+          {
+            "context_length": 2048,
+            "details": {
+              "families": [
+                "qwen35"
+              ],
+              "family": "qwen35",
+              "format": "gguf",
+              "parameter_size": "9.0B",
+              "parent_model": "",
+              "quantization_level": "Q4_K_M"
+            },
+            "digest": "e5df7dcdd8a263994df62d610317e07be0d6af23f96fcbd8543273058fce575e",
+            "expires_at": "2026-11-16T06:25:48.493925833Z",
+            "model": "ornith-1.5:9b",
+            "name": "ornith-1.5:9b",
+            "runner": "llamacpp",
+            "size": 6118650673,
+            "size_vram": 0
+          }
+        ]
+      }
+    },
+    {
+      "ordinal": 5,
+      "context": {
+        "certificate_attempt": 9,
+        "route": "report_correction/repair",
+        "task": "release-plan"
+      },
+      "claim": {
+        "observed_tick": 52092.487485204,
+        "ordinal": 5,
+        "quote_is_proven_bound": false,
+        "quote_units": 2144,
+        "request_sha256": "055c700171bb57bb9845a99e9fab8aa2acc15f0d5acf06c6ff9fc4321946c859",
+        "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/18\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"S42-A\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"staging\\\",\\\"version\\\":\\\"policy/v1\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"fail\\\",\\\"tests\\\":\\\"11/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+      },
+      "usage": {
+        "input_tokens": 149,
+        "late": false,
+        "ordinal": 5,
+        "output_tokens": 32,
+        "raw_sha256": "1d3a0c1aeccb5eae41bf16538395948996c6eb1aee20ceb11f93d6d7b2271946",
+        "received_tick": 52098.039154395,
+        "reconciled": true,
+        "transport_complete": true,
+        "within_envelope": true
+      },
+      "raw_response_base64": "eyJtb2RlbCI6Im9ybml0aC0xLjU6OWIiLCJjcmVhdGVkX2F0IjoiMjAyNi0xMS0xNlQwNjoxNTo1NC4xODE5OTkxNTNaIiwibWVzc2FnZSI6eyJyb2xlIjoiYXNzaXN0YW50IiwiY29udGVudCI6IntcInJlbGVhc2VcIjpcIlI0MlwiLFwidGFyZ2V0XCI6XCJzdGFnaW5nXCIsXCJhcHByb3ZhbFwiOlwiUzQyLUFcIixcInRlc3RzXCI6XCIxMS8xMlwiLFwiYWN0aW9uXCI6XCJob2xkXCJ9In0sImRvbmUiOnRydWUsImRvbmVfcmVhc29uIjoic3RvcCIsInRvdGFsX2R1cmF0aW9uIjo1NDIyMDc3NjkyLCJsb2FkX2R1cmF0aW9uIjo1MTY1NjksInByb21wdF9ldmFsX2NvdW50IjoxNDksInByb21wdF9ldmFsX2NhY2hlZF9jb3VudCI6ODAsInByb21wdF9ldmFsX2R1cmF0aW9uIjoyNDA3OTU4MDAwLCJldmFsX2NvdW50IjozMiwiZXZhbF9kdXJhdGlvbiI6Mjk4NjczMDAwMH0=",
+      "runtime_observation": {
+        "models": [
+          {
+            "context_length": 2048,
+            "details": {
+              "families": [
+                "qwen35"
+              ],
+              "family": "qwen35",
+              "format": "gguf",
+              "parameter_size": "9.0B",
+              "parent_model": "",
+              "quantization_level": "Q4_K_M"
+            },
+            "digest": "e5df7dcdd8a263994df62d610317e07be0d6af23f96fcbd8543273058fce575e",
+            "expires_at": "2026-11-16T06:25:54.182116248Z",
+            "model": "ornith-1.5:9b",
+            "name": "ornith-1.5:9b",
+            "runner": "llamacpp",
+            "size": 6118650673,
+            "size_vram": 0
+          }
+        ]
+      }
+    },
+    {
+      "ordinal": 6,
+      "context": {
+        "route": "report_correction/fresh",
+        "task": "report-a"
+      },
+      "claim": {
+        "observed_tick": 52098.200580582,
+        "ordinal": 6,
+        "quote_is_proven_bound": false,
+        "quote_units": 2144,
+        "request_sha256": "fbb114cef1c2c2d69313855e8f82900b3dbead1138a5b011a70bc299842ce278",
+        "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":1,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"11/12\\\",\\\"version\\\":\\\"run/18\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+      },
+      "usage": {
+        "input_tokens": 188,
+        "late": false,
+        "ordinal": 6,
+        "output_tokens": 20,
+        "raw_sha256": "9b7eae5cc8a4028796b73def23ed93baf8cb3304ff7fe3f557b744fb64182cd1",
+        "received_tick": 52100.479729856,
+        "reconciled": true,
+        "transport_complete": true,
+        "within_envelope": true
+      },
+      "raw_response_base64": "eyJtb2RlbCI6Im9ybml0aC0xLjU6OWIiLCJjcmVhdGVkX2F0IjoiMjAyNi0xMS0xNlQwNjoxNTo1Ni42MjI3MzE2NzdaIiwibWVzc2FnZSI6eyJyb2xlIjoiYXNzaXN0YW50IiwiY29udGVudCI6IntcInJlbGVhc2VcIjpcIlI0MlwiLFwidGVzdHNcIjpcIjExLzEyXCIsXCJzdGF0dXNcIjpcImZhaWxcIn0ifSwiZG9uZSI6dHJ1ZSwiZG9uZV9yZWFzb24iOiJzdG9wIiwidG90YWxfZHVyYXRpb24iOjIxNDcwMTIyMTAsImxvYWRfZHVyYXRpb24iOjQ2MDUxMSwicHJvbXB0X2V2YWxfY291bnQiOjE4OCwicHJvbXB0X2V2YWxfY2FjaGVkX2NvdW50IjoxODQsInByb21wdF9ldmFsX2R1cmF0aW9uIjoyNzA4NjgwMDAsImV2YWxfY291bnQiOjIwLCJldmFsX2R1cmF0aW9uIjoxODQ4MzI5MDAwfQ==",
+      "runtime_observation": {
+        "models": [
+          {
+            "context_length": 2048,
+            "details": {
+              "families": [
+                "qwen35"
+              ],
+              "family": "qwen35",
+              "format": "gguf",
+              "parameter_size": "9.0B",
+              "parent_model": "",
+              "quantization_level": "Q4_K_M"
+            },
+            "digest": "e5df7dcdd8a263994df62d610317e07be0d6af23f96fcbd8543273058fce575e",
+            "expires_at": "2026-11-16T06:25:56.622803594Z",
+            "model": "ornith-1.5:9b",
+            "name": "ornith-1.5:9b",
+            "runner": "llamacpp",
+            "size": 6118650673,
+            "size_vram": 0
+          }
+        ]
+      }
+    },
+    {
+      "ordinal": 7,
+      "context": {
+        "certificate_attempt": 6,
+        "route": "report_correction/fresh",
+        "task": "release-plan"
+      },
+      "claim": {
+        "observed_tick": 52100.619417554,
+        "ordinal": 7,
+        "quote_is_proven_bound": false,
+        "quote_units": 2144,
+        "request_sha256": "055c700171bb57bb9845a99e9fab8aa2acc15f0d5acf06c6ff9fc4321946c859",
+        "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/18\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"S42-A\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"staging\\\",\\\"version\\\":\\\"policy/v1\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"fail\\\",\\\"tests\\\":\\\"11/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+      },
+      "usage": {
+        "input_tokens": 149,
+        "late": false,
+        "ordinal": 7,
+        "output_tokens": 32,
+        "raw_sha256": "e9093b103ed472a6205345f44daead390da9c96edab552c504037613819d5cf3",
+        "received_tick": 52104.013598868,
+        "reconciled": true,
+        "transport_complete": true,
+        "within_envelope": true
+      },
+      "raw_response_base64": "eyJtb2RlbCI6Im9ybml0aC0xLjU6OWIiLCJjcmVhdGVkX2F0IjoiMjAyNi0xMS0xNlQwNjoxNjowMC4xNTYxNTUzOTRaIiwibWVzc2FnZSI6eyJyb2xlIjoiYXNzaXN0YW50IiwiY29udGVudCI6IntcInJlbGVhc2VcIjpcIlI0MlwiLFwidGFyZ2V0XCI6XCJzdGFnaW5nXCIsXCJhcHByb3ZhbFwiOlwiUzQyLUFcIixcInRlc3RzXCI6XCIxMS8xMlwiLFwiYWN0aW9uXCI6XCJob2xkXCJ9In0sImRvbmUiOnRydWUsImRvbmVfcmVhc29uIjoic3RvcCIsInRvdGFsX2R1cmF0aW9uIjozMjYzNDI5OTg2LCJsb2FkX2R1cmF0aW9uIjo4MjIyMzcsInByb21wdF9ldmFsX2NvdW50IjoxNDksInByb21wdF9ldmFsX2NhY2hlZF9jb3VudCI6MTQ1LCJwcm9tcHRfZXZhbF9kdXJhdGlvbiI6MjcwMTU4MDAwLCJldmFsX2NvdW50IjozMiwiZXZhbF9kdXJhdGlvbiI6Mjk2NTIzMjAwMH0=",
+      "runtime_observation": {
+        "models": [
+          {
+            "context_length": 2048,
+            "details": {
+              "families": [
+                "qwen35"
+              ],
+              "family": "qwen35",
+              "format": "gguf",
+              "parameter_size": "9.0B",
+              "parent_model": "",
+              "quantization_level": "Q4_K_M"
+            },
+            "digest": "e5df7dcdd8a263994df62d610317e07be0d6af23f96fcbd8543273058fce575e",
+            "expires_at": "2026-11-16T06:26:00.1562592Z",
+            "model": "ornith-1.5:9b",
+            "name": "ornith-1.5:9b",
+            "runner": "llamacpp",
+            "size": 6118650673,
+            "size_vram": 0
+          }
+        ]
+      }
+    },
+    {
+      "ordinal": 8,
+      "context": {
+        "route": "unrelated_policy_change/fresh",
+        "task": "report-a"
+      },
+      "claim": {
+        "observed_tick": 52104.334795745,
+        "ordinal": 8,
+        "quote_is_proven_bound": false,
+        "quote_units": 2144,
+        "request_sha256": "9f8a53322cbab65c56dbf9bff48791aaa7ff6e2ded62d45cc4d51dc68c49365a",
+        "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":0,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"12/12\\\",\\\"version\\\":\\\"run/17\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+      },
+      "usage": {
+        "input_tokens": 188,
+        "late": false,
+        "ordinal": 8,
+        "output_tokens": 20,
+        "raw_sha256": "760f4362f00d77abc376d4c9d315257092db2068a0aaffffe380d2fd2283f853",
+        "received_tick": 52108.075199768,
+        "reconciled": true,
+        "transport_complete": true,
+        "within_envelope": true
+      },
+      "raw_response_base64": "eyJtb2RlbCI6Im9ybml0aC0xLjU6OWIiLCJjcmVhdGVkX2F0IjoiMjAyNi0xMS0xNlQwNjoxNjowNC4yMTc4NDg2MzlaIiwibWVzc2FnZSI6eyJyb2xlIjoiYXNzaXN0YW50IiwiY29udGVudCI6IntcInJlbGVhc2VcIjpcIlI0MlwiLFwidGVzdHNcIjpcIjEyLzEyXCIsXCJzdGF0dXNcIjpcInBhc3NcIn0ifSwiZG9uZSI6dHJ1ZSwiZG9uZV9yZWFzb24iOiJzdG9wIiwidG90YWxfZHVyYXRpb24iOjM2MTA4NTA5NjgsImxvYWRfZHVyYXRpb24iOjQwOTQzMywicHJvbXB0X2V2YWxfY291bnQiOjE4OCwicHJvbXB0X2V2YWxfY2FjaGVkX2NvdW50IjoxNDQsInByb21wdF9ldmFsX2R1cmF0aW9uIjoxNzYzMjk5MDAwLCJldmFsX2NvdW50IjoyMCwiZXZhbF9kdXJhdGlvbiI6MTgxOTM5ODAwMH0=",
+      "runtime_observation": {
+        "models": [
+          {
+            "context_length": 2048,
+            "details": {
+              "families": [
+                "qwen35"
+              ],
+              "family": "qwen35",
+              "format": "gguf",
+              "parameter_size": "9.0B",
+              "parent_model": "",
+              "quantization_level": "Q4_K_M"
+            },
+            "digest": "e5df7dcdd8a263994df62d610317e07be0d6af23f96fcbd8543273058fce575e",
+            "expires_at": "2026-11-16T06:26:04.217969414Z",
+            "model": "ornith-1.5:9b",
+            "name": "ornith-1.5:9b",
+            "runner": "llamacpp",
+            "size": 6118650673,
+            "size_vram": 0
+          }
+        ]
+      }
+    },
+    {
+      "ordinal": 9,
+      "context": {
+        "certificate_attempt": 5,
+        "route": "unrelated_policy_change/fresh",
+        "task": "release-plan"
+      },
+      "claim": {
+        "observed_tick": 52108.222164532,
+        "ordinal": 9,
+        "quote_is_proven_bound": false,
+        "quote_units": 2144,
+        "request_sha256": "dc1ce58c72ae48fc0bc0de9734c5842fc3c9b0d3eb238f41482aa3296ff8948e",
+        "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/17\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"C42-B\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"canary\\\",\\\"version\\\":\\\"policy/v2\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"pass\\\",\\\"tests\\\":\\\"12/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+      },
+      "usage": {
+        "input_tokens": 149,
+        "late": false,
+        "ordinal": 9,
+        "output_tokens": 32,
+        "raw_sha256": "59aa599bfeb6bbd17c0a2656eede2337e6aaa9c739e42e9172f5492a83478e4d",
+        "received_tick": 52113.838244671,
+        "reconciled": true,
+        "transport_complete": true,
+        "within_envelope": true
+      },
+      "raw_response_base64": "eyJtb2RlbCI6Im9ybml0aC0xLjU6OWIiLCJjcmVhdGVkX2F0IjoiMjAyNi0xMS0xNlQwNjoxNjowOS45ODEwNTYyOTJaIiwibWVzc2FnZSI6eyJyb2xlIjoiYXNzaXN0YW50IiwiY29udGVudCI6IntcInJlbGVhc2VcIjpcIlI0MlwiLFwidGFyZ2V0XCI6XCJjYW5hcnlcIixcImFwcHJvdmFsXCI6XCJDNDItQlwiLFwidGVzdHNcIjpcIjEyLzEyXCIsXCJhY3Rpb25cIjpcImRlcGxveVwifSJ9LCJkb25lIjp0cnVlLCJkb25lX3JlYXNvbiI6InN0b3AiLCJ0b3RhbF9kdXJhdGlvbiI6NTQ4NjQzNTE3OSwibG9hZF9kdXJhdGlvbiI6Mzc2NDY1LCJwcm9tcHRfZXZhbF9jb3VudCI6MTQ5LCJwcm9tcHRfZXZhbF9jYWNoZWRfY291bnQiOjgwLCJwcm9tcHRfZXZhbF9kdXJhdGlvbiI6MjQwNzIwMjAwMCwiZXZhbF9jb3VudCI6MzIsImV2YWxfZHVyYXRpb24iOjMwNTE4OTIwMDB9",
+      "runtime_observation": {
+        "models": [
+          {
+            "context_length": 2048,
+            "details": {
+              "families": [
+                "qwen35"
+              ],
+              "family": "qwen35",
+              "format": "gguf",
+              "parameter_size": "9.0B",
+              "parent_model": "",
+              "quantization_level": "Q4_K_M"
+            },
+            "digest": "e5df7dcdd8a263994df62d610317e07be0d6af23f96fcbd8543273058fce575e",
+            "expires_at": "2026-11-16T06:26:09.981140509Z",
+            "model": "ornith-1.5:9b",
+            "name": "ornith-1.5:9b",
+            "runner": "llamacpp",
+            "size": 6118650673,
+            "size_vram": 0
+          }
+        ]
+      }
+    },
+    {
+      "ordinal": 10,
+      "context": {
+        "certificate_attempt": 8,
+        "route": "unrelated_policy_change/repair",
+        "task": "release-plan"
+      },
+      "claim": {
+        "observed_tick": 52114.03530755,
+        "ordinal": 10,
+        "quote_is_proven_bound": false,
+        "quote_units": 2144,
+        "request_sha256": "dc1ce58c72ae48fc0bc0de9734c5842fc3c9b0d3eb238f41482aa3296ff8948e",
+        "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/17\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"C42-B\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"canary\\\",\\\"version\\\":\\\"policy/v2\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"pass\\\",\\\"tests\\\":\\\"12/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+      },
+      "usage": {
+        "input_tokens": 149,
+        "late": false,
+        "ordinal": 10,
+        "output_tokens": 32,
+        "raw_sha256": "e94f0271335e3755c68787e5b9b173da9113ff3c6eae0a780d8d4d085a190f6d",
+        "received_tick": 52117.534747366,
+        "reconciled": true,
+        "transport_complete": true,
+        "within_envelope": true
+      },
+      "raw_response_base64": "eyJtb2RlbCI6Im9ybml0aC0xLjU6OWIiLCJjcmVhdGVkX2F0IjoiMjAyNi0xMS0xNlQwNjoxNjoxMy42Nzc4OTQ4OTJaIiwibWVzc2FnZSI6eyJyb2xlIjoiYXNzaXN0YW50IiwiY29udGVudCI6IntcInJlbGVhc2VcIjpcIlI0MlwiLFwidGFyZ2V0XCI6XCJjYW5hcnlcIixcImFwcHJvdmFsXCI6XCJDNDItQlwiLFwidGVzdHNcIjpcIjEyLzEyXCIsXCJhY3Rpb25cIjpcImRlcGxveVwifSJ9LCJkb25lIjp0cnVlLCJkb25lX3JlYXNvbiI6InN0b3AiLCJ0b3RhbF9kdXJhdGlvbiI6MzM3MjEwMjAwMiwibG9hZF9kdXJhdGlvbiI6NDk1ODMwLCJwcm9tcHRfZXZhbF9jb3VudCI6MTQ5LCJwcm9tcHRfZXZhbF9jYWNoZWRfY291bnQiOjE0NSwicHJvbXB0X2V2YWxfZHVyYXRpb24iOjI3Mjk1MDAwMCwiZXZhbF9jb3VudCI6MzIsImV2YWxfZHVyYXRpb24iOjMwOTY1NTcwMDB9",
+      "runtime_observation": {
+        "models": [
+          {
+            "context_length": 2048,
+            "details": {
+              "families": [
+                "qwen35"
+              ],
+              "family": "qwen35",
+              "format": "gguf",
+              "parameter_size": "9.0B",
+              "parent_model": "",
+              "quantization_level": "Q4_K_M"
+            },
+            "digest": "e5df7dcdd8a263994df62d610317e07be0d6af23f96fcbd8543273058fce575e",
+            "expires_at": "2026-11-16T06:26:13.677981928Z",
+            "model": "ornith-1.5:9b",
+            "name": "ornith-1.5:9b",
+            "runner": "llamacpp",
+            "size": 6118650673,
+            "size_vram": 0
+          }
+        ]
+      }
+    },
+    {
+      "ordinal": 11,
+      "context": {
+        "route": "alternative_support/fresh",
+        "task": "report-b"
+      },
+      "claim": {
+        "observed_tick": 52118.087713159,
+        "ordinal": 11,
+        "quote_is_proven_bound": false,
+        "quote_units": 2144,
+        "request_sha256": "9f8a53322cbab65c56dbf9bff48791aaa7ff6e2ded62d45cc4d51dc68c49365a",
+        "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":0,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"12/12\\\",\\\"version\\\":\\\"run/17\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+      },
+      "usage": {
+        "input_tokens": 188,
+        "late": false,
+        "ordinal": 11,
+        "output_tokens": 20,
+        "raw_sha256": "32469c778b6b08cb165b6850327dc96dc0a86f2f102dc8cee98f8ad8dd415504",
+        "received_tick": 52120.36717979,
+        "reconciled": true,
+        "transport_complete": true,
+        "within_envelope": true
+      },
+      "raw_response_base64": "eyJtb2RlbCI6Im9ybml0aC0xLjU6OWIiLCJjcmVhdGVkX2F0IjoiMjAyNi0xMS0xNlQwNjoxNjoxNi41MTAwNzAzODRaIiwibWVzc2FnZSI6eyJyb2xlIjoiYXNzaXN0YW50IiwiY29udGVudCI6IntcInJlbGVhc2VcIjpcIlI0MlwiLFwidGVzdHNcIjpcIjEyLzEyXCIsXCJzdGF0dXNcIjpcInBhc3NcIn0ifSwiZG9uZSI6dHJ1ZSwiZG9uZV9yZWFzb24iOiJzdG9wIiwidG90YWxfZHVyYXRpb24iOjIxNDY3NDk0MzYsImxvYWRfZHVyYXRpb24iOjM4NzIwNSwicHJvbXB0X2V2YWxfY291bnQiOjE4OCwicHJvbXB0X2V2YWxfY2FjaGVkX2NvdW50IjoxODQsInByb21wdF9ldmFsX2R1cmF0aW9uIjoyNzM3ODAwMDAsImV2YWxfY291bnQiOjIwLCJldmFsX2R1cmF0aW9uIjoxODQzMjAxMDAwfQ==",
+      "runtime_observation": {
+        "models": [
+          {
+            "context_length": 2048,
+            "details": {
+              "families": [
+                "qwen35"
+              ],
+              "family": "qwen35",
+              "format": "gguf",
+              "parameter_size": "9.0B",
+              "parent_model": "",
+              "quantization_level": "Q4_K_M"
+            },
+            "digest": "e5df7dcdd8a263994df62d610317e07be0d6af23f96fcbd8543273058fce575e",
+            "expires_at": "2026-11-16T06:26:16.510230138Z",
+            "model": "ornith-1.5:9b",
+            "name": "ornith-1.5:9b",
+            "runner": "llamacpp",
+            "size": 6118650673,
+            "size_vram": 0
+          }
+        ]
+      }
+    },
+    {
+      "ordinal": 12,
+      "context": {
+        "certificate_attempt": 5,
+        "route": "alternative_support/fresh",
+        "task": "release-plan"
+      },
+      "claim": {
+        "observed_tick": 52120.502403968,
+        "ordinal": 12,
+        "quote_is_proven_bound": false,
+        "quote_units": 2144,
+        "request_sha256": "4289c0401c6f95b37414bd6664f022a6b57102dcd2744e94e1b14a820d6ca1dd",
+        "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/17\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"S42-A\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"staging\\\",\\\"version\\\":\\\"policy/v1\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"pass\\\",\\\"tests\\\":\\\"12/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+      },
+      "usage": {
+        "input_tokens": 149,
+        "late": false,
+        "ordinal": 12,
+        "output_tokens": 32,
+        "raw_sha256": "a27506cb84628292c574590ef8c3b4f2b2a172a009d90e7d19a0d98a103ae548",
+        "received_tick": 52126.08510628,
+        "reconciled": true,
+        "transport_complete": true,
+        "within_envelope": true
+      },
+      "raw_response_base64": "eyJtb2RlbCI6Im9ybml0aC0xLjU6OWIiLCJjcmVhdGVkX2F0IjoiMjAyNi0xMS0xNlQwNjoxNjoyMi4yMjk1MjEwOVoiLCJtZXNzYWdlIjp7InJvbGUiOiJhc3Npc3RhbnQiLCJjb250ZW50Ijoie1wicmVsZWFzZVwiOlwiUjQyXCIsXCJ0YXJnZXRcIjpcInN0YWdpbmdcIixcImFwcHJvdmFsXCI6XCJTNDItQVwiLFwidGVzdHNcIjpcIjEyLzEyXCIsXCJhY3Rpb25cIjpcImRlcGxveVwifSJ9LCJkb25lIjp0cnVlLCJkb25lX3JlYXNvbiI6InN0b3AiLCJ0b3RhbF9kdXJhdGlvbiI6NTQ1MTg4MTUwNSwibG9hZF9kdXJhdGlvbiI6NDY1MzMxLCJwcm9tcHRfZXZhbF9jb3VudCI6MTQ5LCJwcm9tcHRfZXZhbF9jYWNoZWRfY291bnQiOjgwLCJwcm9tcHRfZXZhbF9kdXJhdGlvbiI6MjQxNTA1OTAwMCwiZXZhbF9jb3VudCI6MzIsImV2YWxfZHVyYXRpb24iOjMwMDc1MjEwMDB9",
+      "runtime_observation": {
+        "models": [
+          {
+            "context_length": 2048,
+            "details": {
+              "families": [
+                "qwen35"
+              ],
+              "family": "qwen35",
+              "format": "gguf",
+              "parameter_size": "9.0B",
+              "parent_model": "",
+              "quantization_level": "Q4_K_M"
+            },
+            "digest": "e5df7dcdd8a263994df62d610317e07be0d6af23f96fcbd8543273058fce575e",
+            "expires_at": "2026-11-16T06:26:22.229605017Z",
+            "model": "ornith-1.5:9b",
+            "name": "ornith-1.5:9b",
+            "runner": "llamacpp",
+            "size": 6118650673,
+            "size_vram": 0
+          }
+        ]
+      }
+    },
+    {
+      "ordinal": 13,
+      "context": {
+        "certificate_attempt": 8,
+        "route": "alternative_support/repair",
+        "task": "release-plan"
+      },
+      "claim": {
+        "observed_tick": 52126.283342748,
+        "ordinal": 13,
+        "quote_is_proven_bound": false,
+        "quote_units": 2144,
+        "request_sha256": "4289c0401c6f95b37414bd6664f022a6b57102dcd2744e94e1b14a820d6ca1dd",
+        "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/17\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"S42-A\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"staging\\\",\\\"version\\\":\\\"policy/v1\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"pass\\\",\\\"tests\\\":\\\"12/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+      },
+      "usage": {
+        "input_tokens": 149,
+        "late": false,
+        "ordinal": 13,
+        "output_tokens": 32,
+        "raw_sha256": "b61ff5e96fd5303475b02c863395cbb4569ed16e98ca1d51b943af3052a1a66d",
+        "received_tick": 52129.711824261,
+        "reconciled": true,
+        "transport_complete": true,
+        "within_envelope": true
+      },
+      "raw_response_base64": "eyJtb2RlbCI6Im9ybml0aC0xLjU6OWIiLCJjcmVhdGVkX2F0IjoiMjAyNi0xMS0xNlQwNjoxNjoyNS44NTQ0MjU1NDJaIiwibWVzc2FnZSI6eyJyb2xlIjoiYXNzaXN0YW50IiwiY29udGVudCI6IntcInJlbGVhc2VcIjpcIlI0MlwiLFwidGFyZ2V0XCI6XCJzdGFnaW5nXCIsXCJhcHByb3ZhbFwiOlwiUzQyLUFcIixcInRlc3RzXCI6XCIxMi8xMlwiLFwiYWN0aW9uXCI6XCJkZXBsb3lcIn0ifSwiZG9uZSI6dHJ1ZSwiZG9uZV9yZWFzb24iOiJzdG9wIiwidG90YWxfZHVyYXRpb24iOjMyOTM2MjI0ODcsImxvYWRfZHVyYXRpb24iOjUzMDM1OSwicHJvbXB0X2V2YWxfY291bnQiOjE0OSwicHJvbXB0X2V2YWxfY2FjaGVkX2NvdW50IjoxNDUsInByb21wdF9ldmFsX2R1cmF0aW9uIjoyNzMwMjAwMDAsImV2YWxfY291bnQiOjMyLCJldmFsX2R1cmF0aW9uIjozMDE4MzUyMDAwfQ==",
+      "runtime_observation": {
+        "models": [
+          {
+            "context_length": 2048,
+            "details": {
+              "families": [
+                "qwen35"
+              ],
+              "family": "qwen35",
+              "format": "gguf",
+              "parameter_size": "9.0B",
+              "parent_model": "",
+              "quantization_level": "Q4_K_M"
+            },
+            "digest": "e5df7dcdd8a263994df62d610317e07be0d6af23f96fcbd8543273058fce575e",
+            "expires_at": "2026-11-16T06:26:25.854495099Z",
+            "model": "ornith-1.5:9b",
+            "name": "ornith-1.5:9b",
+            "runner": "llamacpp",
+            "size": 6118650673,
+            "size_vram": 0
+          }
+        ]
+      }
+    }
+  ],
+  "store_events": [
+    {
+      "attempt": 2,
+      "context": {
+        "route": "bootstrap",
+        "task": "report-a"
+      },
+      "kind": "prepared",
+      "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":0,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"12/12\\\",\\\"version\\\":\\\"run/17\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+    },
+    {
+      "attempt": 2,
+      "context": {
+        "route": "bootstrap",
+        "task": "report-a"
+      },
+      "kind": "dispatch",
+      "ordinal": 1
+    },
+    {
+      "attempt": 2,
+      "context": {
+        "route": "bootstrap",
+        "task": "report-a"
+      },
+      "input_units": 188,
+      "kind": "received",
+      "output": "{\"release\":\"R42\",\"tests\":\"12/12\",\"status\":\"pass\"}",
+      "output_units": 20,
+      "roundtrip_us": 13267972
+    },
+    {
+      "attempt": 2,
+      "context": {
+        "route": "bootstrap",
+        "task": "report-a"
+      },
+      "kind": "settled",
+      "store_disposition": "Accepted",
+      "usage": 208
+    },
+    {
+      "attempt": 3,
+      "context": {
+        "route": "bootstrap",
+        "task": "report-b"
+      },
+      "kind": "prepared",
+      "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":0,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"12/12\\\",\\\"version\\\":\\\"run/17\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+    },
+    {
+      "attempt": 3,
+      "context": {
+        "route": "bootstrap",
+        "task": "report-b"
+      },
+      "kind": "dispatch",
+      "ordinal": 2
+    },
+    {
+      "attempt": 3,
+      "context": {
+        "route": "bootstrap",
+        "task": "report-b"
+      },
+      "input_units": 188,
+      "kind": "received",
+      "output": "{\"release\":\"R42\",\"tests\":\"12/12\",\"status\":\"pass\"}",
+      "output_units": 20,
+      "roundtrip_us": 2330464
+    },
+    {
+      "attempt": 3,
+      "context": {
+        "route": "bootstrap",
+        "task": "report-b"
+      },
+      "kind": "settled",
+      "store_disposition": "Accepted",
+      "usage": 208
+    },
+    {
+      "attempt": 4,
+      "context": {
+        "certificate_attempt": 2,
+        "route": "bootstrap",
+        "task": "release-plan"
+      },
+      "kind": "prepared",
+      "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/17\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"S42-A\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"staging\\\",\\\"version\\\":\\\"policy/v1\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"pass\\\",\\\"tests\\\":\\\"12/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+    },
+    {
+      "attempt": 4,
+      "context": {
+        "certificate_attempt": 2,
+        "route": "bootstrap",
+        "task": "release-plan"
+      },
+      "kind": "dispatch",
+      "ordinal": 3
+    },
+    {
+      "attempt": 4,
+      "context": {
+        "certificate_attempt": 2,
+        "route": "bootstrap",
+        "task": "release-plan"
+      },
+      "input_units": 149,
+      "kind": "received",
+      "output": "{\"release\":\"R42\",\"target\":\"staging\",\"approval\":\"S42-A\",\"tests\":\"12/12\",\"action\":\"deploy\"}",
+      "output_units": 32,
+      "roundtrip_us": 8162710
+    },
+    {
+      "attempt": 4,
+      "context": {
+        "certificate_attempt": 2,
+        "route": "bootstrap",
+        "task": "release-plan"
+      },
+      "kind": "settled",
+      "store_disposition": "Accepted",
+      "usage": 181
+    },
+    {
+      "attempt": 9,
+      "context": {
+        "route": "report_correction/repair",
+        "task": "report-a"
+      },
+      "kind": "prepared",
+      "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":1,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"11/12\\\",\\\"version\\\":\\\"run/18\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+    },
+    {
+      "attempt": 9,
+      "context": {
+        "route": "report_correction/repair",
+        "task": "report-a"
+      },
+      "kind": "dispatch",
+      "ordinal": 4
+    },
+    {
+      "attempt": 9,
+      "context": {
+        "route": "report_correction/repair",
+        "task": "report-a"
+      },
+      "input_units": 188,
+      "kind": "received",
+      "output": "{\"release\":\"R42\",\"tests\":\"11/12\",\"status\":\"fail\"}",
+      "output_units": 20,
+      "roundtrip_us": 3809404
+    },
+    {
+      "attempt": 9,
+      "context": {
+        "route": "report_correction/repair",
+        "task": "report-a"
+      },
+      "kind": "settled",
+      "store_disposition": "Accepted",
+      "usage": 208
+    },
+    {
+      "attempt": 10,
+      "context": {
+        "certificate_attempt": 9,
+        "route": "report_correction/repair",
+        "task": "release-plan"
+      },
+      "kind": "prepared",
+      "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/18\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"S42-A\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"staging\\\",\\\"version\\\":\\\"policy/v1\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"fail\\\",\\\"tests\\\":\\\"11/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+    },
+    {
+      "attempt": 10,
+      "context": {
+        "certificate_attempt": 9,
+        "route": "report_correction/repair",
+        "task": "release-plan"
+      },
+      "kind": "dispatch",
+      "ordinal": 5
+    },
+    {
+      "attempt": 10,
+      "context": {
+        "certificate_attempt": 9,
+        "route": "report_correction/repair",
+        "task": "release-plan"
+      },
+      "input_units": 149,
+      "kind": "received",
+      "output": "{\"release\":\"R42\",\"target\":\"staging\",\"approval\":\"S42-A\",\"tests\":\"11/12\",\"action\":\"hold\"}",
+      "output_units": 32,
+      "roundtrip_us": 5626679
+    },
+    {
+      "attempt": 10,
+      "context": {
+        "certificate_attempt": 9,
+        "route": "report_correction/repair",
+        "task": "release-plan"
+      },
+      "kind": "settled",
+      "store_disposition": "Accepted",
+      "usage": 181
+    },
+    {
+      "attempt": 6,
+      "context": {
+        "route": "report_correction/fresh",
+        "task": "report-a"
+      },
+      "kind": "prepared",
+      "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":1,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"11/12\\\",\\\"version\\\":\\\"run/18\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+    },
+    {
+      "attempt": 6,
+      "context": {
+        "route": "report_correction/fresh",
+        "task": "report-a"
+      },
+      "kind": "dispatch",
+      "ordinal": 6
+    },
+    {
+      "attempt": 6,
+      "context": {
+        "route": "report_correction/fresh",
+        "task": "report-a"
+      },
+      "input_units": 188,
+      "kind": "received",
+      "output": "{\"release\":\"R42\",\"tests\":\"11/12\",\"status\":\"fail\"}",
+      "output_units": 20,
+      "roundtrip_us": 2357802
+    },
+    {
+      "attempt": 6,
+      "context": {
+        "route": "report_correction/fresh",
+        "task": "report-a"
+      },
+      "kind": "settled",
+      "store_disposition": "Accepted",
+      "usage": 208
+    },
+    {
+      "attempt": 7,
+      "context": {
+        "certificate_attempt": 6,
+        "route": "report_correction/fresh",
+        "task": "release-plan"
+      },
+      "kind": "prepared",
+      "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/18\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"S42-A\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"staging\\\",\\\"version\\\":\\\"policy/v1\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"fail\\\",\\\"tests\\\":\\\"11/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+    },
+    {
+      "attempt": 7,
+      "context": {
+        "certificate_attempt": 6,
+        "route": "report_correction/fresh",
+        "task": "release-plan"
+      },
+      "kind": "dispatch",
+      "ordinal": 7
+    },
+    {
+      "attempt": 7,
+      "context": {
+        "certificate_attempt": 6,
+        "route": "report_correction/fresh",
+        "task": "release-plan"
+      },
+      "input_units": 149,
+      "kind": "received",
+      "output": "{\"release\":\"R42\",\"target\":\"staging\",\"approval\":\"S42-A\",\"tests\":\"11/12\",\"action\":\"hold\"}",
+      "output_units": 32,
+      "roundtrip_us": 3472339
+    },
+    {
+      "attempt": 7,
+      "context": {
+        "certificate_attempt": 6,
+        "route": "report_correction/fresh",
+        "task": "release-plan"
+      },
+      "kind": "settled",
+      "store_disposition": "Accepted",
+      "usage": 181
+    },
+    {
+      "kind": "pair_complete",
+      "result": {
+        "fresh": {
+          "dispatches": 2,
+          "origin": 6,
+          "outcome": "accepted",
+          "plan": {
+            "action": "hold",
+            "approval": "S42-A",
+            "release": "R42",
+            "target": "staging",
+            "tests": "11/12"
+          },
+          "report_branch": "report-a",
+          "requests": [
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":1,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"11/12\\\",\\\"version\\\":\\\"run/18\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}",
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/18\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"S42-A\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"staging\\\",\\\"version\\\":\\\"policy/v1\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"fail\\\",\\\"tests\\\":\\\"11/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+          ],
+          "reused": false,
+          "route_us": 5977737
+        },
+        "repair": {
+          "dispatches": 2,
+          "origin": 9,
+          "outcome": "accepted",
+          "plan": {
+            "action": "hold",
+            "approval": "S42-A",
+            "release": "R42",
+            "target": "staging",
+            "tests": "11/12"
+          },
+          "report_branch": "report-a",
+          "requests": [
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":1,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"11/12\\\",\\\"version\\\":\\\"run/18\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}",
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/18\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"S42-A\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"staging\\\",\\\"version\\\":\\\"policy/v1\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"fail\\\",\\\"tests\\\":\\\"11/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+          ],
+          "reused": false,
+          "route_us": 9601611
+        },
+        "requests_equal": true,
+        "scenario": "report_correction",
+        "typed_support": false
+      }
+    },
+    {
+      "attempt": 5,
+      "context": {
+        "route": "unrelated_policy_change/fresh",
+        "task": "report-a"
+      },
+      "kind": "prepared",
+      "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":0,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"12/12\\\",\\\"version\\\":\\\"run/17\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+    },
+    {
+      "attempt": 5,
+      "context": {
+        "route": "unrelated_policy_change/fresh",
+        "task": "report-a"
+      },
+      "kind": "dispatch",
+      "ordinal": 8
+    },
+    {
+      "attempt": 5,
+      "context": {
+        "route": "unrelated_policy_change/fresh",
+        "task": "report-a"
+      },
+      "input_units": 188,
+      "kind": "received",
+      "output": "{\"release\":\"R42\",\"tests\":\"12/12\",\"status\":\"pass\"}",
+      "output_units": 20,
+      "roundtrip_us": 3817252
+    },
+    {
+      "attempt": 5,
+      "context": {
+        "route": "unrelated_policy_change/fresh",
+        "task": "report-a"
+      },
+      "kind": "settled",
+      "store_disposition": "Accepted",
+      "usage": 208
+    },
+    {
+      "attempt": 6,
+      "context": {
+        "certificate_attempt": 5,
+        "route": "unrelated_policy_change/fresh",
+        "task": "release-plan"
+      },
+      "kind": "prepared",
+      "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/17\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"C42-B\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"canary\\\",\\\"version\\\":\\\"policy/v2\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"pass\\\",\\\"tests\\\":\\\"12/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+    },
+    {
+      "attempt": 6,
+      "context": {
+        "certificate_attempt": 5,
+        "route": "unrelated_policy_change/fresh",
+        "task": "release-plan"
+      },
+      "kind": "dispatch",
+      "ordinal": 9
+    },
+    {
+      "attempt": 6,
+      "context": {
+        "certificate_attempt": 5,
+        "route": "unrelated_policy_change/fresh",
+        "task": "release-plan"
+      },
+      "input_units": 149,
+      "kind": "received",
+      "output": "{\"release\":\"R42\",\"target\":\"canary\",\"approval\":\"C42-B\",\"tests\":\"12/12\",\"action\":\"deploy\"}",
+      "output_units": 32,
+      "roundtrip_us": 5692689
+    },
+    {
+      "attempt": 6,
+      "context": {
+        "certificate_attempt": 5,
+        "route": "unrelated_policy_change/fresh",
+        "task": "release-plan"
+      },
+      "kind": "settled",
+      "store_disposition": "Accepted",
+      "usage": 181
+    },
+    {
+      "attempt": 8,
+      "context": {
+        "route": "unrelated_policy_change/repair",
+        "task": "report-a"
+      },
+      "kind": "prepared",
+      "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":0,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"12/12\\\",\\\"version\\\":\\\"run/17\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+    },
+    {
+      "attempt": 8,
+      "context": {
+        "route": "unrelated_policy_change/repair",
+        "task": "report-a"
+      },
+      "kind": "reused",
+      "new_usage": 0,
+      "origin": 2,
+      "output": "{\"release\":\"R42\",\"tests\":\"12/12\",\"status\":\"pass\"}"
+    },
+    {
+      "attempt": 9,
+      "context": {
+        "certificate_attempt": 8,
+        "route": "unrelated_policy_change/repair",
+        "task": "release-plan"
+      },
+      "kind": "prepared",
+      "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/17\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"C42-B\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"canary\\\",\\\"version\\\":\\\"policy/v2\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"pass\\\",\\\"tests\\\":\\\"12/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+    },
+    {
+      "attempt": 9,
+      "context": {
+        "certificate_attempt": 8,
+        "route": "unrelated_policy_change/repair",
+        "task": "release-plan"
+      },
+      "kind": "dispatch",
+      "ordinal": 10
+    },
+    {
+      "attempt": 9,
+      "context": {
+        "certificate_attempt": 8,
+        "route": "unrelated_policy_change/repair",
+        "task": "release-plan"
+      },
+      "input_units": 149,
+      "kind": "received",
+      "output": "{\"release\":\"R42\",\"target\":\"canary\",\"approval\":\"C42-B\",\"tests\":\"12/12\",\"action\":\"deploy\"}",
+      "output_units": 32,
+      "roundtrip_us": 3576692
+    },
+    {
+      "attempt": 9,
+      "context": {
+        "certificate_attempt": 8,
+        "route": "unrelated_policy_change/repair",
+        "task": "release-plan"
+      },
+      "kind": "settled",
+      "store_disposition": "Accepted",
+      "usage": 181
+    },
+    {
+      "kind": "pair_complete",
+      "result": {
+        "fresh": {
+          "dispatches": 2,
+          "origin": 5,
+          "outcome": "accepted",
+          "plan": {
+            "action": "deploy",
+            "approval": "C42-B",
+            "release": "R42",
+            "target": "canary",
+            "tests": "12/12"
+          },
+          "report_branch": "report-a",
+          "requests": [
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":0,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"12/12\\\",\\\"version\\\":\\\"run/17\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}",
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/17\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"C42-B\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"canary\\\",\\\"version\\\":\\\"policy/v2\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"pass\\\",\\\"tests\\\":\\\"12/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+          ],
+          "reused": false,
+          "route_us": 9668588
+        },
+        "repair": {
+          "dispatches": 1,
+          "origin": 2,
+          "outcome": "accepted",
+          "plan": {
+            "action": "deploy",
+            "approval": "C42-B",
+            "release": "R42",
+            "target": "canary",
+            "tests": "12/12"
+          },
+          "report_branch": "report-a",
+          "requests": [
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":0,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"12/12\\\",\\\"version\\\":\\\"run/17\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}",
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/17\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"C42-B\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"canary\\\",\\\"version\\\":\\\"policy/v2\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"pass\\\",\\\"tests\\\":\\\"12/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+          ],
+          "reused": true,
+          "route_us": 3697907
+        },
+        "requests_equal": true,
+        "scenario": "unrelated_policy_change",
+        "typed_support": true
+      }
+    },
+    {
+      "attempt": 9,
+      "context": "withdrawal/repair",
+      "kind": "unavailable_evidence"
+    },
+    {
+      "attempt": 6,
+      "context": "withdrawal/fresh",
+      "kind": "unavailable_evidence"
+    },
+    {
+      "kind": "pair_complete",
+      "result": {
+        "fresh": {
+          "dispatches": 0,
+          "outcome": "unavailable_evidence",
+          "plan": null,
+          "requests": []
+        },
+        "repair": {
+          "dispatches": 0,
+          "outcome": "unavailable_evidence",
+          "plan": null,
+          "requests": []
+        },
+        "requests_equal": true,
+        "scenario": "withdrawal",
+        "typed_support": false
+      }
+    },
+    {
+      "attempt": 5,
+      "context": {
+        "route": "alternative_support/fresh",
+        "task": "report-b"
+      },
+      "kind": "prepared",
+      "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":0,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"12/12\\\",\\\"version\\\":\\\"run/17\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+    },
+    {
+      "attempt": 5,
+      "context": {
+        "route": "alternative_support/fresh",
+        "task": "report-b"
+      },
+      "kind": "dispatch",
+      "ordinal": 11
+    },
+    {
+      "attempt": 5,
+      "context": {
+        "route": "alternative_support/fresh",
+        "task": "report-b"
+      },
+      "input_units": 188,
+      "kind": "received",
+      "output": "{\"release\":\"R42\",\"tests\":\"12/12\",\"status\":\"pass\"}",
+      "output_units": 20,
+      "roundtrip_us": 2354055
+    },
+    {
+      "attempt": 5,
+      "context": {
+        "route": "alternative_support/fresh",
+        "task": "report-b"
+      },
+      "kind": "settled",
+      "store_disposition": "Accepted",
+      "usage": 208
+    },
+    {
+      "attempt": 6,
+      "context": {
+        "certificate_attempt": 5,
+        "route": "alternative_support/fresh",
+        "task": "release-plan"
+      },
+      "kind": "prepared",
+      "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/17\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"S42-A\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"staging\\\",\\\"version\\\":\\\"policy/v1\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"pass\\\",\\\"tests\\\":\\\"12/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+    },
+    {
+      "attempt": 6,
+      "context": {
+        "certificate_attempt": 5,
+        "route": "alternative_support/fresh",
+        "task": "release-plan"
+      },
+      "kind": "dispatch",
+      "ordinal": 12
+    },
+    {
+      "attempt": 6,
+      "context": {
+        "certificate_attempt": 5,
+        "route": "alternative_support/fresh",
+        "task": "release-plan"
+      },
+      "input_units": 149,
+      "kind": "received",
+      "output": "{\"release\":\"R42\",\"target\":\"staging\",\"approval\":\"S42-A\",\"tests\":\"12/12\",\"action\":\"deploy\"}",
+      "output_units": 32,
+      "roundtrip_us": 5658512
+    },
+    {
+      "attempt": 6,
+      "context": {
+        "certificate_attempt": 5,
+        "route": "alternative_support/fresh",
+        "task": "release-plan"
+      },
+      "kind": "settled",
+      "store_disposition": "Accepted",
+      "usage": 181
+    },
+    {
+      "attempt": 8,
+      "context": {
+        "route": "alternative_support/repair",
+        "task": "report-b"
+      },
+      "kind": "prepared",
+      "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":0,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"12/12\\\",\\\"version\\\":\\\"run/17\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+    },
+    {
+      "attempt": 8,
+      "context": {
+        "route": "alternative_support/repair",
+        "task": "report-b"
+      },
+      "kind": "reused",
+      "new_usage": 0,
+      "origin": 3,
+      "output": "{\"release\":\"R42\",\"tests\":\"12/12\",\"status\":\"pass\"}"
+    },
+    {
+      "attempt": 9,
+      "context": {
+        "certificate_attempt": 8,
+        "route": "alternative_support/repair",
+        "task": "release-plan"
+      },
+      "kind": "prepared",
+      "request_utf8": "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/17\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"S42-A\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"staging\\\",\\\"version\\\":\\\"policy/v1\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"pass\\\",\\\"tests\\\":\\\"12/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+    },
+    {
+      "attempt": 9,
+      "context": {
+        "certificate_attempt": 8,
+        "route": "alternative_support/repair",
+        "task": "release-plan"
+      },
+      "kind": "dispatch",
+      "ordinal": 13
+    },
+    {
+      "attempt": 9,
+      "context": {
+        "certificate_attempt": 8,
+        "route": "alternative_support/repair",
+        "task": "release-plan"
+      },
+      "input_units": 149,
+      "kind": "received",
+      "output": "{\"release\":\"R42\",\"target\":\"staging\",\"approval\":\"S42-A\",\"tests\":\"12/12\",\"action\":\"deploy\"}",
+      "output_units": 32,
+      "roundtrip_us": 3507287
+    },
+    {
+      "attempt": 9,
+      "context": {
+        "certificate_attempt": 8,
+        "route": "alternative_support/repair",
+        "task": "release-plan"
+      },
+      "kind": "settled",
+      "store_disposition": "Accepted",
+      "usage": 181
+    },
+    {
+      "kind": "pair_complete",
+      "result": {
+        "fresh": {
+          "dispatches": 2,
+          "origin": 5,
+          "outcome": "accepted",
+          "plan": {
+            "action": "deploy",
+            "approval": "S42-A",
+            "release": "R42",
+            "target": "staging",
+            "tests": "12/12"
+          },
+          "report_branch": "report-b",
+          "requests": [
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":0,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"12/12\\\",\\\"version\\\":\\\"run/17\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}",
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/17\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"S42-A\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"staging\\\",\\\"version\\\":\\\"policy/v1\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"pass\\\",\\\"tests\\\":\\\"12/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+          ],
+          "reused": false,
+          "route_us": 8159465
+        },
+        "repair": {
+          "dispatches": 1,
+          "origin": 3,
+          "outcome": "accepted",
+          "plan": {
+            "action": "deploy",
+            "approval": "S42-A",
+            "release": "R42",
+            "target": "staging",
+            "tests": "12/12"
+          },
+          "report_branch": "report-b",
+          "requests": [
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Extract the release test verdict. Even ONE failing case makes the entire verdict \\\"fail\\\".\\nCI example A: {\\\"release\\\":\\\"EX1\\\",\\\"test_summary\\\":\\\"7/8\\\",\\\"failing_cases\\\":1} -> {\\\"release\\\":\\\"EX1\\\",\\\"tests\\\":\\\"7/8\\\",\\\"status\\\":\\\"fail\\\"}\\nCI example B: {\\\"release\\\":\\\"EX2\\\",\\\"test_summary\\\":\\\"8/8\\\",\\\"failing_cases\\\":0} -> {\\\"release\\\":\\\"EX2\\\",\\\"tests\\\":\\\"8/8\\\",\\\"status\\\":\\\"pass\\\"}\\nRead the user's ci_report. Copy release and test_summary. If failing_cases is positive use \\\"fail\\\"; only zero uses \\\"pass\\\". Return only JSON with keys release, tests, status.\",\"role\":\"system\"},{\"content\":\"{\\\"ci_report\\\":{\\\"failing_cases\\\":0,\\\"release\\\":\\\"R42\\\",\\\"test_summary\\\":\\\"12/12\\\",\\\"version\\\":\\\"run/17\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}",
+            "{\"keep_alive\":\"10m\",\"messages\":[{\"content\":\"Create a JSON release plan. Copy release, target and approval from requirement. Copy tests from test_certificate. The certificate decides the action: {\\\"status\\\":\\\"pass\\\"} means {\\\"action\\\":\\\"deploy\\\"}; {\\\"status\\\":\\\"fail\\\"} means {\\\"action\\\":\\\"hold\\\"} even with an approval code. Return exactly five string fields: release, target, approval, tests, action. No explanation.\",\"role\":\"system\"},{\"content\":\"{\\\"report_version\\\":\\\"run/17\\\",\\\"requirement\\\":{\\\"approval\\\":\\\"S42-A\\\",\\\"release\\\":\\\"R42\\\",\\\"target\\\":\\\"staging\\\",\\\"version\\\":\\\"policy/v1\\\"},\\\"test_certificate\\\":{\\\"release\\\":\\\"R42\\\",\\\"status\\\":\\\"pass\\\",\\\"tests\\\":\\\"12/12\\\"}}\",\"role\":\"user\"}],\"model\":\"ornith-1.5:9b\",\"options\":{\"num_ctx\":2048,\"num_gpu\":0,\"num_predict\":96,\"num_thread\":2,\"seed\":0,\"temperature\":0,\"top_k\":1,\"top_p\":1},\"runner\":\"ggml\",\"shift\":false,\"stream\":false,\"think\":false,\"truncate\":false}"
+          ],
+          "reused": true,
+          "route_us": 3628795
+        },
+        "requests_equal": true,
+        "scenario": "alternative_support",
+        "typed_support": true
+      }
+    }
+  ],
+  "runtime_final_state": {
+    "CheckpointedAt": "0001-01-01T00:00:00Z",
+    "Dead": false,
+    "Error": "",
+    "ExitCode": 137,
+    "FinishedAt": "2026-11-16T01:16:26.4046793-05:00",
+    "OOMKilled": false,
+    "OciVersion": "1.3.0",
+    "Paused": false,
+    "Pid": 0,
+    "Restarting": false,
+    "RestoredAt": "0001-01-01T00:00:00Z",
+    "Running": false,
+    "StartedAt": "2026-11-16T01:15:20.067782892-05:00",
+    "Status": "exited",
+    "StoppedByUser": true
+  },
+  "watchdog": {
+    "actions": [],
+    "cleanup_verified": true,
+    "deadline": 53860.335399561,
+    "error": null,
+    "observed_tick": 52130.466236245,
+    "reason": "completed"
+  },
+  "retained_file_manifest": [
+    {
+      "path": "claim-01.json",
+      "bytes": 1362,
+      "sha256": "1e8f02691aa2ff6bdcdc42a9c487953f58a2c16bf5a24223a5e3d50be78a8683"
+    },
+    {
+      "path": "claim-02.json",
+      "bytes": 1362,
+      "sha256": "bfb1e57df146f214572e498c3a62c660683dc1cceb36c2f5a8b1aff77503de5f"
+    },
+    {
+      "path": "claim-03.json",
+      "bytes": 1263,
+      "sha256": "6c723620fb6489ad72ddac788fec49e2b1d80c5ab1f42cf17a5cdb0023a29717"
+    },
+    {
+      "path": "claim-04.json",
+      "bytes": 1362,
+      "sha256": "419689fc19270dd799de2b4b2d9d2a11473921fe804d43e3c404bd115a622ab6"
+    },
+    {
+      "path": "claim-05.json",
+      "bytes": 1263,
+      "sha256": "25213167e9b26d1869b4f611244bceb9e03ce9b6d386b3d6494f4c8bf23f2b51"
+    },
+    {
+      "path": "claim-06.json",
+      "bytes": 1362,
+      "sha256": "524c4c263c4bdb95ff5cdbd71c6dc0e70f103f2805a2701670949f8622a47219"
+    },
+    {
+      "path": "claim-07.json",
+      "bytes": 1263,
+      "sha256": "76f3643c69f29cb8c10973f8c151b0f5a3936b94b69066fcd170564f175502b0"
+    },
+    {
+      "path": "claim-08.json",
+      "bytes": 1362,
+      "sha256": "5aa48f2a1597d81303763607735819bebf6f792d10e21212ab248e022b06932d"
+    },
+    {
+      "path": "claim-09.json",
+      "bytes": 1262,
+      "sha256": "48575e3f65f5c2e72f3aa635dc8062b121f5f4c66be7cfdc4d182d2311da0ff8"
+    },
+    {
+      "path": "claim-10.json",
+      "bytes": 1262,
+      "sha256": "df0fed73f3a384d68dd15643a5102f452b88c87a7e0511ca42465a2101cbe87a"
+    },
+    {
+      "path": "claim-11.json",
+      "bytes": 1363,
+      "sha256": "54b7013877cb827a0b8ef4a777c72d59bdf1f5d880d276c9f956c1682ed63eb0"
+    },
+    {
+      "path": "claim-12.json",
+      "bytes": 1264,
+      "sha256": "56dc62a4d884d66ac849081b0a1447e6029ffbdc4cac60031ffde055e8755468"
+    },
+    {
+      "path": "claim-13.json",
+      "bytes": 1264,
+      "sha256": "8758a3392085d29b2ab2d6d6fe0381b336d1326a33141c908d2b2fe12524d381"
+    },
+    {
+      "path": "execution.json",
+      "bytes": 4252,
+      "sha256": "3e3b5cd1bf24bdbe052b8ec3dbaaef9a4383c78f343227d2a432c719c528acd2"
+    },
+    {
+      "path": "raw-01.bin",
+      "bytes": 395,
+      "sha256": "9242e57f7f025233bf5da6cca2c38b63a12f4e8b58a806c5324130716b94e33e"
+    },
+    {
+      "path": "raw-02.bin",
+      "bytes": 391,
+      "sha256": "d77401a1c579c0e43179ad5009a979053d5baeee9384139609954a61f5ad4978"
+    },
+    {
+      "path": "raw-03.bin",
+      "bytes": 438,
+      "sha256": "93ee3a753b7285cfca5b7bd48e94786679844f8c8b4cb9e1aa36c53f8806aa85"
+    },
+    {
+      "path": "raw-04.bin",
+      "bytes": 392,
+      "sha256": "a65329ecd86909bee32a7902983cbffd21d86b6dfe5402129cb03470eed91967"
+    },
+    {
+      "path": "raw-05.bin",
+      "bytes": 437,
+      "sha256": "1d3a0c1aeccb5eae41bf16538395948996c6eb1aee20ceb11f93d6d7b2271946"
+    },
+    {
+      "path": "raw-06.bin",
+      "bytes": 391,
+      "sha256": "9b7eae5cc8a4028796b73def23ed93baf8cb3304ff7fe3f557b744fb64182cd1"
+    },
+    {
+      "path": "raw-07.bin",
+      "bytes": 437,
+      "sha256": "e9093b103ed472a6205345f44daead390da9c96edab552c504037613819d5cf3"
+    },
+    {
+      "path": "raw-08.bin",
+      "bytes": 392,
+      "sha256": "760f4362f00d77abc376d4c9d315257092db2068a0aaffffe380d2fd2283f853"
+    },
+    {
+      "path": "raw-09.bin",
+      "bytes": 438,
+      "sha256": "59aa599bfeb6bbd17c0a2656eede2337e6aaa9c739e42e9172f5492a83478e4d"
+    },
+    {
+      "path": "raw-10.bin",
+      "bytes": 438,
+      "sha256": "e94f0271335e3755c68787e5b9b173da9113ff3c6eae0a780d8d4d085a190f6d"
+    },
+    {
+      "path": "raw-11.bin",
+      "bytes": 391,
+      "sha256": "32469c778b6b08cb165b6850327dc96dc0a86f2f102dc8cee98f8ad8dd415504"
+    },
+    {
+      "path": "raw-12.bin",
+      "bytes": 438,
+      "sha256": "a27506cb84628292c574590ef8c3b4f2b2a172a009d90e7d19a0d98a103ae548"
+    },
+    {
+      "path": "raw-13.bin",
+      "bytes": 439,
+      "sha256": "b61ff5e96fd5303475b02c863395cbb4569ed16e98ca1d51b943af3052a1a66d"
+    },
+    {
+      "path": "runtime-created.json",
+      "bytes": 130,
+      "sha256": "44afda302ee2e732db8fcb81a3b3a0943295ad2e4747233f40c76af52578a300"
+    },
+    {
+      "path": "runtime-final.json",
+      "bytes": 8239,
+      "sha256": "bb6540a24af1374ab3942a845d7e8f4107a977602df12594bfdb69fef8a8aa80"
+    },
+    {
+      "path": "runtime-launch.json",
+      "bytes": 921,
+      "sha256": "e87f8582a08eff98b49ba09671ad7ac8893a71925e1cb27fc79ac32e253e0816"
+    },
+    {
+      "path": "runtime-log.txt",
+      "bytes": 66097,
+      "sha256": "3224bfe4be94e3cbe5b0915aa0dd647302faf679d723a1448a53a89efce8201b"
+    },
+    {
+      "path": "runtime-ps-01.json",
+      "bytes": 398,
+      "sha256": "02d5324bce1d46d50bf223802d6abfc1437efd3c784274f1b4d005e4e7bf184b"
+    },
+    {
+      "path": "runtime-ps-02.json",
+      "bytes": 398,
+      "sha256": "50a4104a0732dbcd73f0ac11386e3fe4a6264285b265cb696df94bcb5cdbc2f8"
+    },
+    {
+      "path": "runtime-ps-03.json",
+      "bytes": 398,
+      "sha256": "0a40b73cad9732ccb5ad9858d06bca4c538e6902920d945a6d4a930d92d405cd"
+    },
+    {
+      "path": "runtime-ps-04.json",
+      "bytes": 398,
+      "sha256": "5338bc675abd4dc9e0235cb3bef76df19401a8699ff28a15f721000b38523ee7"
+    },
+    {
+      "path": "runtime-ps-05.json",
+      "bytes": 398,
+      "sha256": "31c92164e471dbd00567715d00b7d2eef4bca7194a3eb1ffa345b44b10932180"
+    },
+    {
+      "path": "runtime-ps-06.json",
+      "bytes": 398,
+      "sha256": "af6f163f925b7e35aae2f48efc1e680f49329f56a6b8b7630c4eccdb0101eb4c"
+    },
+    {
+      "path": "runtime-ps-07.json",
+      "bytes": 396,
+      "sha256": "94d97eac8a1072eb00fecf6da40207e0de54b842ebf2a7e606adcc5ab00fca1e"
+    },
+    {
+      "path": "runtime-ps-08.json",
+      "bytes": 398,
+      "sha256": "7429d54db4d638bb505b31b9fbbf7b9229612625ec3ddeb734c9b5fdb3f37632"
+    },
+    {
+      "path": "runtime-ps-09.json",
+      "bytes": 398,
+      "sha256": "6e28036312e746a5fcf78a701ad0ed92461be2231a085e4b5b25b7f4413a9cbb"
+    },
+    {
+      "path": "runtime-ps-10.json",
+      "bytes": 398,
+      "sha256": "e5a19460c7fd967b9e69e7d85162ee66e63e178db617021c9b6bc79a82758314"
+    },
+    {
+      "path": "runtime-ps-11.json",
+      "bytes": 398,
+      "sha256": "537725c2d9cb7b2175d50cd39e07a693a3db982e2d2875ad3749167820663c81"
+    },
+    {
+      "path": "runtime-ps-12.json",
+      "bytes": 398,
+      "sha256": "824437d8ae0c5f97aa1c4912cd0029c3e81e27dcacf14fa7d060689841e4b1ca"
+    },
+    {
+      "path": "runtime-ps-13.json",
+      "bytes": 398,
+      "sha256": "04db9b5565d5ae5ea68d7c2319a9e4546e79e2927482e3c7a634ce26ebd56044"
+    },
+    {
+      "path": "runtime-ready.json",
+      "bytes": 19960,
+      "sha256": "656e08e712d788fbcb30801bbbdc2f7c00f1370dc46deb7a7e6a0a8ae32290e8"
+    },
+    {
+      "path": "rust-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "startup-finished.json",
+      "bytes": 136,
+      "sha256": "ed8ffdc3c0dbfb8dd5ac3bbe2002eea2f55d98f731cf99f01bea7d6957bcfeb2"
+    },
+    {
+      "path": "startup-process.json",
+      "bytes": 33,
+      "sha256": "2dd8bdee515a5065201f187f0471273577100cce46a48c39f3e4cb7e3979510f"
+    },
+    {
+      "path": "store/alternative_support-fresh.sqlite",
+      "bytes": 200704,
+      "sha256": "c0fd8fc3fccbc77e6a7f561394bb2cbf6b3bc72b0a45da0049e17606b8343734"
+    },
+    {
+      "path": "store/alternative_support-repair.sqlite",
+      "bytes": 200704,
+      "sha256": "d146e30a63ca2598cb9287279299a9f041035701fb0f9d593c1753f9a40e8307"
+    },
+    {
+      "path": "store/bootstrap.sqlite",
+      "bytes": 200704,
+      "sha256": "ec98cc2d4a276fdffd2a6d0c7c5fc5b7418f1fa1675086f6754778bd03a86eee"
+    },
+    {
+      "path": "store/event-001.json",
+      "bytes": 1265,
+      "sha256": "bedb820f799c8674f15a21c47f35ff0eab63e3c2328bc9e4020c6a65f04d54b5"
+    },
+    {
+      "path": "store/event-002.json",
+      "bytes": 94,
+      "sha256": "c439aeaafabcac60799222cf3589f689f1cbeab9051b60cf04f157c38bb7b198"
+    },
+    {
+      "path": "store/event-003.json",
+      "bytes": 215,
+      "sha256": "5da3da9487f40b98cb734ceff77b11ca5fa636da036e9d5ebcc223569380c2de"
+    },
+    {
+      "path": "store/event-004.json",
+      "bytes": 124,
+      "sha256": "22f59f6e14118c2c5e60226e5ab2639752a1b9ff327d1d341177495f004cc5c2"
+    },
+    {
+      "path": "store/event-005.json",
+      "bytes": 1265,
+      "sha256": "0e0f7b135685b17e99376111023317773fc187cda3863ec2b9a6e22cb24611ec"
+    },
+    {
+      "path": "store/event-006.json",
+      "bytes": 94,
+      "sha256": "f0737f39b0749aab8a3c818bb92ab689de4177071585efa92a1bf04f762862d4"
+    },
+    {
+      "path": "store/event-007.json",
+      "bytes": 214,
+      "sha256": "579908eef301b2c3d75218ff011ebc324a06ce497b20838dee6120ffeb9a6b06"
+    },
+    {
+      "path": "store/event-008.json",
+      "bytes": 124,
+      "sha256": "f3eeb845fad19c5a632047ee76661f0df742cd444584012fc7a171db156e786b"
+    },
+    {
+      "path": "store/event-009.json",
+      "bytes": 1194,
+      "sha256": "da539a1445db7cd79080387812dee464975bf735c6cddae20b2abf63fa522459"
+    },
+    {
+      "path": "store/event-010.json",
+      "bytes": 122,
+      "sha256": "6f011aa5d7d011aa822ce5b519e1f15d29c0ece71e7081f301875aa58436d64f"
+    },
+    {
+      "path": "store/event-011.json",
+      "bytes": 290,
+      "sha256": "077071cae2e65dde0749903059a837fcd7f70bda19dce0885bbc91b1ba48787a"
+    },
+    {
+      "path": "store/event-012.json",
+      "bytes": 152,
+      "sha256": "ac73f1db97c16c92c8cd0ce81eb86c3a63796537f79c8ccd10ab79a2d166ba2d"
+    },
+    {
+      "path": "store/event-013.json",
+      "bytes": 1280,
+      "sha256": "ec77ac4446f712966672861ff8ea2ef96ba291b7a20fba42e386eeb19c969b78"
+    },
+    {
+      "path": "store/event-014.json",
+      "bytes": 109,
+      "sha256": "ef61f20cfd33f77eb026cecfe3a1560fa5af6cc07ba0b4681df8f2972f8643fa"
+    },
+    {
+      "path": "store/event-015.json",
+      "bytes": 229,
+      "sha256": "223b01f9961bf82e253302ac5a2e9a0e7873a0f2e1293b56ab0129e91600572c"
+    },
+    {
+      "path": "store/event-016.json",
+      "bytes": 139,
+      "sha256": "1a5fcdd50f4b68352230e060f3250527aada26130313c9ac738b5fd9ae814085"
+    },
+    {
+      "path": "store/event-017.json",
+      "bytes": 1210,
+      "sha256": "cd2c340bee01f4410717f63b1873f1da687ba21b26a5b74a97b19e3de56bac94"
+    },
+    {
+      "path": "store/event-018.json",
+      "bytes": 138,
+      "sha256": "87e55ae58a48ddee6ef282ba9b18b7960a51a273f00cdc1e7d1c5bc1075b2101"
+    },
+    {
+      "path": "store/event-019.json",
+      "bytes": 304,
+      "sha256": "d767a836dd34ae94d6baf0b89d3c0792f3067a5ad5b444bfe7b2b2be49919dfd"
+    },
+    {
+      "path": "store/event-020.json",
+      "bytes": 168,
+      "sha256": "bcd7490746618881cfd535338cba7c0327a4e6adfaa618f9dd702039cbb92655"
+    },
+    {
+      "path": "store/event-021.json",
+      "bytes": 1279,
+      "sha256": "06cc8983438e68608837c98479f6fe7d3c941287db8b475c96a55ce50fffef73"
+    },
+    {
+      "path": "store/event-022.json",
+      "bytes": 108,
+      "sha256": "42dfb116c5a110845dbb54c143c18a6c78e1aad1d91834d13cbd31317fb7971a"
+    },
+    {
+      "path": "store/event-023.json",
+      "bytes": 228,
+      "sha256": "8587d49348b6bf7f2d2fed51c998cfaf2af96435891378249ffe0bd1214087b8"
+    },
+    {
+      "path": "store/event-024.json",
+      "bytes": 138,
+      "sha256": "a9918378ac7ab07455e9ee1acb5fbaebe76ea848ef590c8c4137e1379a8e6dd4"
+    },
+    {
+      "path": "store/event-025.json",
+      "bytes": 1208,
+      "sha256": "2f0da545ea9a554aa860b09ffc28e5507b87e28b2a0770afaa23e6de8ad0496e"
+    },
+    {
+      "path": "store/event-026.json",
+      "bytes": 136,
+      "sha256": "b540cb652160062f8c5892e524c2aaef7e5fef23f54bc851bf32cb39619a2e42"
+    },
+    {
+      "path": "store/event-027.json",
+      "bytes": 302,
+      "sha256": "bede9329fc80151db84d126815bfeb7ef996d93a0e796ebe7c9eb2a76c39f726"
+    },
+    {
+      "path": "store/event-028.json",
+      "bytes": 166,
+      "sha256": "334329b45ff778d27891779444dc815cadf2584b8767001a9f0e797c97d01868"
+    },
+    {
+      "path": "store/event-029.json",
+      "bytes": 5038,
+      "sha256": "cf6ee64b790cb4d3fbbe43ebf617315b65e5f4a9729d859e5d5d9cc0392c8b36"
+    },
+    {
+      "path": "store/event-030.json",
+      "bytes": 1285,
+      "sha256": "338ad3dcc28d86edafacf12573cf9836000802f03045a718e3b00ec65069223d"
+    },
+    {
+      "path": "store/event-031.json",
+      "bytes": 114,
+      "sha256": "93e2e8f84fe34c2b111320f953e60f8ca0fb203ed7a08a330861df34d494281e"
+    },
+    {
+      "path": "store/event-032.json",
+      "bytes": 234,
+      "sha256": "b0ac1b2a42519e9b5f60072fcbb22184cc1b2fe77203ec9818aabbcf8c1e9c70"
+    },
+    {
+      "path": "store/event-033.json",
+      "bytes": 144,
+      "sha256": "d2df9f5a955ff57a425ce0d3f0966c32c74d503fa7833d4c6d0b995050c7c3fa"
+    },
+    {
+      "path": "store/event-034.json",
+      "bytes": 1213,
+      "sha256": "0c2cf30f5b2e8d74e92bb54f9e4c0c285181a047311a39bd9699ffc8532a6e48"
+    },
+    {
+      "path": "store/event-035.json",
+      "bytes": 142,
+      "sha256": "7cbcd21f76c92bdd7bd0fe59f6c66dca08aabc7ca19df71eb304e2d049af4dba"
+    },
+    {
+      "path": "store/event-036.json",
+      "bytes": 309,
+      "sha256": "70b20bf11c7aa2a684f434635e4e665413635ab457c6f9d810b80710d2f64e82"
+    },
+    {
+      "path": "store/event-037.json",
+      "bytes": 172,
+      "sha256": "b74a7db1f7b9286015900bb93b1499c87d2f800bc71ed72564db596fb29747c7"
+    },
+    {
+      "path": "store/event-038.json",
+      "bytes": 1286,
+      "sha256": "8ce48984cc56e5240d102168e04fd28be0803ad698bddad7b200e0c8f396258c"
+    },
+    {
+      "path": "store/event-039.json",
+      "bytes": 199,
+      "sha256": "6e04221c57ca04f6c0fd3b86ee1083a55e52a65ce8fbfe98324ee9e6ff67e304"
+    },
+    {
+      "path": "store/event-040.json",
+      "bytes": 1214,
+      "sha256": "abd403ea879f1f60406e4ec9ed2f95d91b377951b5a03d087ab24474c765fecb"
+    },
+    {
+      "path": "store/event-041.json",
+      "bytes": 144,
+      "sha256": "fdec64cde68792ecc2e85c61fb6d0350fca042ad9cd311c966d1e85ad48ecdd1"
+    },
+    {
+      "path": "store/event-042.json",
+      "bytes": 310,
+      "sha256": "1e8892cf29a0d1c778e424b6da4578f6403709d1cb1cfb77a540eddea09650d6"
+    },
+    {
+      "path": "store/event-043.json",
+      "bytes": 173,
+      "sha256": "caa11dd72ea60f71eeca6507c0b8902ea6af3fe3bd0984f04f1a9471092e7834"
+    },
+    {
+      "path": "store/event-044.json",
+      "bytes": 5042,
+      "sha256": "2ac7fd11896b61e594d8d1a6c5029fc6db40ebe0d81a3cf76c8dba23d9a617a6"
+    },
+    {
+      "path": "store/event-045.json",
+      "bytes": 74,
+      "sha256": "41bcec11703f3c09231ebe2ffc884ca9c8dd0b01c0ef11552d7bab1888d99959"
+    },
+    {
+      "path": "store/event-046.json",
+      "bytes": 73,
+      "sha256": "9d9ab7d9ef31b844dd23ec58d8a9dc132cbb7c6d163d60a6120b738460318339"
+    },
+    {
+      "path": "store/event-047.json",
+      "bytes": 273,
+      "sha256": "5d1f6ebe22c505b096aa056063021dd8838a431da5e4f75c7a15da36771b3c4e"
+    },
+    {
+      "path": "store/event-048.json",
+      "bytes": 1281,
+      "sha256": "ddda8628cd8321a3911a26db62e7f32fd37ffcf6973159919f020f7b4aae5576"
+    },
+    {
+      "path": "store/event-049.json",
+      "bytes": 111,
+      "sha256": "c5fdb27dab2d130b2868b411f66768f3bdc0ee97d7675485c7d06991b6901fa9"
+    },
+    {
+      "path": "store/event-050.json",
+      "bytes": 230,
+      "sha256": "1b1c3fa34327e7d49eaf5dc0d93d749ba9524d7be4c692b0842a7fe4e2f3cc42"
+    },
+    {
+      "path": "store/event-051.json",
+      "bytes": 140,
+      "sha256": "6023bd1d3b7ebdaf4a14e57de7705d9c8589f83c4d472253246743817346a8ec"
+    },
+    {
+      "path": "store/event-052.json",
+      "bytes": 1210,
+      "sha256": "1b291a34cdddc51e6f890535be34cbe126a404597266bd755c6340a8f70e09b1"
+    },
+    {
+      "path": "store/event-053.json",
+      "bytes": 139,
+      "sha256": "7490d6cfaa92af1bf704a92022d35494d24c3c87b4f756119359564a8fb5e2fe"
+    },
+    {
+      "path": "store/event-054.json",
+      "bytes": 306,
+      "sha256": "0d60007814e13be439cbbaab61a1fbb1097f620d6dcc02db6c62b54c2d3089fe"
+    },
+    {
+      "path": "store/event-055.json",
+      "bytes": 168,
+      "sha256": "196e52ffdc269e385af135aad80d9e91743ac5c6028c0af002a432c1444116bd"
+    },
+    {
+      "path": "store/event-056.json",
+      "bytes": 1282,
+      "sha256": "64ea506fad9787ff5176a748fb07463f0fb4e448d003e1d25675eb5b282d10f4"
+    },
+    {
+      "path": "store/event-057.json",
+      "bytes": 195,
+      "sha256": "f1312aeaf6fe663cc4f47bb6bf349fb33282b1e2d9d5fe118d14379bdd5a372a"
+    },
+    {
+      "path": "store/event-058.json",
+      "bytes": 1211,
+      "sha256": "3e9b9c27abf8a9ff11a8c9b3dfac1c9275676cf6b5de5661e7473f6b75ce007e"
+    },
+    {
+      "path": "store/event-059.json",
+      "bytes": 140,
+      "sha256": "9e0d48c694a07c6baf4c08158da3c2bf4c83949e5a892870af328bfaba050565"
+    },
+    {
+      "path": "store/event-060.json",
+      "bytes": 307,
+      "sha256": "572becf3fd28eedb1fd39cad481ad8ec36eff57091533fa43eef721b474d86f1"
+    },
+    {
+      "path": "store/event-061.json",
+      "bytes": 169,
+      "sha256": "831c22d574f93d07206f7d7c371c68dd843033bd8a2ba6f2dfde9441dae6c12f"
+    },
+    {
+      "path": "store/event-062.json",
+      "bytes": 5042,
+      "sha256": "eb86ee1694c7d5349591406939bd91febb7d12f2f65a188a5ab5aef4fc46f9c0"
+    },
+    {
+      "path": "store/manifest.json",
+      "bytes": 712,
+      "sha256": "935533f03448359a866d158e538d15bfcf5539a14fb2a69cead03366ec51e644"
+    },
+    {
+      "path": "store/report_correction-fresh.sqlite",
+      "bytes": 200704,
+      "sha256": "41bd22553607f7e174af109f61ef40d0f9645102a8d127df40aa77a2548426c2"
+    },
+    {
+      "path": "store/report_correction-repair.sqlite",
+      "bytes": 208896,
+      "sha256": "f5550a6eee76aef988c013330e1f93c1c9f96dee08941c395a4e752e5ee37028"
+    },
+    {
+      "path": "store/result.json",
+      "bytes": 15482,
+      "sha256": "705613da17db26dc4514b1d3a73ed9be0ab90d907d718228e724dc56eb28c236"
+    },
+    {
+      "path": "store/unrelated_policy_change-fresh.sqlite",
+      "bytes": 200704,
+      "sha256": "741196190e35b69f9ddc005642d433587895c264b628cedf3790b521cbcab4b7"
+    },
+    {
+      "path": "store/unrelated_policy_change-repair.sqlite",
+      "bytes": 200704,
+      "sha256": "09179dbf89c84041e79ed7bc3fd076cbb64c3bb477ce96b8a1086995b1026b0f"
+    },
+    {
+      "path": "store/withdrawal-fresh.sqlite",
+      "bytes": 200704,
+      "sha256": "77fd28192b977ebbee707105cb9ee4002a9e899c6719a137e26165884ef92267"
+    },
+    {
+      "path": "store/withdrawal-repair.sqlite",
+      "bytes": 200704,
+      "sha256": "e9c58de5e0d2a04eb0823182e5f04097eeda62873b26e20a84acabbce4739c72"
+    },
+    {
+      "path": "supervisor.json",
+      "bytes": 725,
+      "sha256": "9dd18981495aa61b2ddd2641b680065dafa083d265f214a8c373e9be2eaf3c75"
+    },
+    {
+      "path": "usage-01.json",
+      "bytes": 243,
+      "sha256": "7dfa8d7a326cd3c13f9f84cd6b5e011859dbc59a5c3f668235f991dc60aabaab"
+    },
+    {
+      "path": "usage-02.json",
+      "bytes": 244,
+      "sha256": "70ccee7709bf7aec5e73f6e3a53adbfd365330d351c265de41f05688afecd850"
+    },
+    {
+      "path": "usage-03.json",
+      "bytes": 244,
+      "sha256": "6f1a10669766db6079ddc1d7716ad3edc07e0a055918952359d8c094ff520f35"
+    },
+    {
+      "path": "usage-04.json",
+      "bytes": 244,
+      "sha256": "ba880337070d3b07b63978031e78625e66ebdd0f2b60866fcb707a354edf186b"
+    },
+    {
+      "path": "usage-05.json",
+      "bytes": 244,
+      "sha256": "0637fd8d05be4b538683fb4d4602424adc1460fcc08e1d58f73fa4500249787d"
+    },
+    {
+      "path": "usage-06.json",
+      "bytes": 244,
+      "sha256": "b6a6ecfffa7fb556fdb930e8cbb6d1a264c26c7589c6adc99f5e42ba6896b8d3"
+    },
+    {
+      "path": "usage-07.json",
+      "bytes": 244,
+      "sha256": "c3a04bfabdd1ecb24567aaad7886449482ca0d250e7fc0d900065c1e993f2fb7"
+    },
+    {
+      "path": "usage-08.json",
+      "bytes": 244,
+      "sha256": "b36692aa73796654ca471ef3b6f4b5995773ff3384e120f06740d0015b59793a"
+    },
+    {
+      "path": "usage-09.json",
+      "bytes": 244,
+      "sha256": "a7518506677c4bd2d77d718ac451e90ca816df64338b33d5445c966bba615b36"
+    },
+    {
+      "path": "usage-10.json",
+      "bytes": 245,
+      "sha256": "8d1d1257575b6605920d7b3c0666c4d997351bb8bb263f7618832702ff7c2f22"
+    },
+    {
+      "path": "usage-11.json",
+      "bytes": 244,
+      "sha256": "46f0a6909fe5f5116affcef284a6044cb88d12650b7ee19e2cf58d3696de6a11"
+    },
+    {
+      "path": "usage-12.json",
+      "bytes": 244,
+      "sha256": "37ca7a7dcb4cd373e5eac5e57c5f2a40db226d8e43e2b0e9aa6a0ae1c034f793"
+    },
+    {
+      "path": "usage-13.json",
+      "bytes": 245,
+      "sha256": "60ea3b74159c74975b11c055c8b58468b9ca88759f6febc1c684506e130c25a3"
+    },
+    {
+      "path": "watchdog.json",
+      "bytes": 132,
+      "sha256": "39a2fe510503a4ce2b62126d35352f0a026d2b43364d0584048995284736e73d"
+    }
+  ],
+  "interpretation": [
+    "One correlated synthetic case per condition; no population accuracy or latency guarantee.",
+    "Same fixed existing fixtures; no dataset expansion, training or remote provider requests.",
+    "Reported token usage is a local-runtime observation, not authenticated execution or billing proof.",
+    "Configured token envelopes are not proven hard bounds; no unresolved holds occurred.",
+    "Model provider spend was zero; workstation compute cost is unpriced.",
+    "The submission report remains pinned to 20fab84; this is a separate supplement."
+  ],
+  "independent_post_run_audit": {
+    "sha256": "361cb1bfc24d4ee8c13812cde9343dfaad3efdb6689d31e5267bd088cb66fd95",
+    "result": "passed",
+    "scope": "Raw requests and responses, claims, usage, Store events and SQLite admission/origin history, CPU observations and cleanup; no new inference."
+  }
+}
