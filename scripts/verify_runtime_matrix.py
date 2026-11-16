@@ -199,7 +199,7 @@ def assess(command, record, raw):
     if command['kind']=='python' and not re.search(r'^OK\s*$',raw,re.M): reasons.append('missing unittest success')
     if any(s not in raw for s in command['contains']): reasons.append('missing output predicate')
     return dict(status='Failed' if reasons else 'Pass', reasons=reasons, tests=tests,
-                skips=skips, rust_results=counts, python_counts=py)
+                skips=skips, rust_results=[list(row) for row in counts], python_counts=py)
 
 
 def output_files(paths):

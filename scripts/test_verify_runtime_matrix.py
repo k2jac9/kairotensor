@@ -210,6 +210,22 @@ class RuntimeMatrixTests(unittest.TestCase):
         p=self.root/'result.json';p.touch()
         with self.assertRaisesRegex(ValueError,'empty'): self.m.output_files([str(p)])
 
+    def test_rust_receipt_survives_json_roundtrip(self):
+        c=self.command('print("test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out")','rust')
+        r=json.loads(json.dumps(self.run_command(c)))
+        self.m.check_command_receipt(c,r)
+        self.assertEqual(r['tests'],2)
+
+    def test_json_rust_receipt_tampered_count_rejected(self):
+        c=self.command('print("test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out")','rust')
+        r=json.loads(json.dumps(self.run_command(c)));r['tests']=200
+        with self.assertRaises(ValueError):self.m.check_command_receipt(c,r)
+
+    def test_json_rust_receipt_forged_pass_on_ignore_rejected(self):
+        c=self.command('print("test result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out")','rust')
+        r=json.loads(json.dumps(self.run_command(c)));r['status']='Pass';r['skips']=0
+        with self.assertRaises(ValueError):self.m.check_command_receipt(c,r)
+
     def test_inventory_contains_all_distinct_commands(self):
         commands=self.m.command_inventory()
         ids=[c['id'] for c in commands]
