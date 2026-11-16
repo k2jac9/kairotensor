@@ -4,7 +4,7 @@ use kairotensor::{CapturedInputs, Current, Disposition, RecoveryStart, Store};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::{error::Error, path::Path};
+use std::{error::Error, io::Read, path::Path};
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 const PURPOSE: &str = "fixture/recovery-policy";
 const CONTRACT: &str = "policy-report-fixture/1";
@@ -315,15 +315,23 @@ fn save_request(out: &Path, label: &str, prepared: &Prepared) -> Result<()> {
     std::fs::write(out.join(format!("{label}.request.json")), &prepared.request)?;
     Ok(())
 }
+fn read_fixture(reader: impl Read) -> Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    // A sentinel detects overflow without draining an oversized or continuing stream.
+    reader
+        .take(MAX_EVALUATION_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() > MAX_EVALUATION_BYTES {
+        return Err("fixture size limit".into());
+    }
+    Ok(bytes)
+}
 fn main() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.len() != 4 || args[0] != "--fixture" || args[2] != "--out" {
         return Err("usage: policy_activation --fixture SYNTHETIC.json --out NEW_DIRECTORY".into());
     }
-    let bytes = std::fs::read(&args[1])?;
-    if bytes.len() > MAX_EVALUATION_BYTES {
-        return Err("fixture size limit".into());
-    }
+    let bytes = read_fixture(std::fs::File::open(&args[1])?)?;
     let input: FixtureInput = serde_json::from_slice(&bytes)?;
     if input.format != "policy-activation-fixture/1" || input.new_model_calls != 0 {
         return Err("not an offline synthetic fixture".into());
@@ -438,6 +446,54 @@ mod tests {
             Path::new(":memory:"),
             serde_json::from_value(value["evaluation"].clone())?,
         )
+    }
+    struct CountingReader {
+        remaining: usize,
+        consumed: usize,
+    }
+    impl Read for CountingReader {
+        fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+            let count = buffer.len().min(self.remaining);
+            buffer[..count].fill(b' ');
+            self.remaining -= count;
+            self.consumed += count;
+            Ok(count)
+        }
+    }
+    #[test]
+    fn fixture_reader_accepts_empty_and_below_limit_inputs() -> Result<()> {
+        for length in [0, MAX_EVALUATION_BYTES - 1] {
+            let mut reader = CountingReader {
+                remaining: length,
+                consumed: 0,
+            };
+            assert_eq!(read_fixture(&mut reader)?.len(), length);
+            assert_eq!(reader.consumed, length);
+        }
+        Ok(())
+    }
+    #[test]
+    fn fixture_reader_accepts_exact_limit() -> Result<()> {
+        let mut reader = CountingReader {
+            remaining: MAX_EVALUATION_BYTES,
+            consumed: 0,
+        };
+        assert_eq!(read_fixture(&mut reader)?.len(), MAX_EVALUATION_BYTES);
+        assert_eq!(reader.consumed, MAX_EVALUATION_BYTES);
+        Ok(())
+    }
+    #[test]
+    fn fixture_reader_refuses_overflow_after_only_one_sentinel_byte() {
+        for overflow in [1, 4096] {
+            let mut reader = CountingReader {
+                remaining: MAX_EVALUATION_BYTES + overflow,
+                consumed: 0,
+            };
+            let error = read_fixture(&mut reader).unwrap_err().to_string();
+            assert_eq!(error, "fixture size limit");
+            assert_eq!(reader.consumed, MAX_EVALUATION_BYTES + 1);
+            assert_eq!(reader.remaining, overflow - 1);
+        }
     }
     #[test]
     fn captures_policy_and_reports_but_renders_only_reports() -> Result<()> {
