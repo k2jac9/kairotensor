@@ -98,4 +98,3 @@ All new semantic integration, replay, policy activation and ablation evidence he
 - `7c7ca36` docs: remove unrelated integration references
 - `6278767` Separate prepared adapter operations and preserve existing verification logs
 - `c7501c4` Document warning cleanup and log preservation verification
-

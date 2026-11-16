@@ -159,6 +159,16 @@ jobs:
       - name: Exercise prepared backend with fake dependencies only
         run: python3 scripts/incident_transformers_controller.py fixture --out "$RUNNER_TEMP/incident-transformers-fixture"
 
+      - name: Exercise hosted contract and accounting without HTTP or credentials
+        run: |
+          python3 scripts/incident_hosted_controller.py fixture --out "$RUNNER_TEMP/incident-hosted-fixture"
+          python3 scripts/incident_hosted_controller.py audit "$RUNNER_TEMP/incident-hosted-fixture"
+
+      - name: Exercise bounded hosted process runner without network access
+        run: |
+          python3 scripts/incident_hosted_runner.py fixture --out "$RUNNER_TEMP/incident-hosted-runner"
+          python3 scripts/incident_hosted_runner.py audit "$RUNNER_TEMP/incident-hosted-runner"
+
   checkout-previous:
     name: checkout previous stable (v6.1.0)
     runs-on: ubuntu-latest
