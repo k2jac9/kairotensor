@@ -42,3 +42,23 @@ under `reliability-implementation-20261115/task-g1/`, named
 `controller-log-collision.json` and `old-preflight-recovery-search.json`.
 Subsequent complete qualification packets are separate evidence. No historical
 receipt, runtime selection or accepted rollback asset is changed by this cleanup.
+
+## Verification
+
+Executable source `62787673a61d3f126464a5087036194726d67ec6` was checked locally
+on 16 November 2026 UTC using the existing selected runtimes:
+
+- Rust 1.100.0, 1.99.1 and the pinned 1.102.0 nightly each passed all 362
+  `cargo test --locked --offline --all-targets` tests with zero compiler warnings.
+- Python 3.15.2, 3.14.10 and 3.16.0a2 each passed all 376 script tests, including
+  the actual Rust fixture-runner integrations. No tests were skipped.
+- The 18 reference and eight oracle tests passed. Seven affected offline example
+  runs passed, including invalid-output replay. A fresh recovery trace retained
+  the exact bytes of both adapter source files.
+- The compile guards failed on the original warnings before the refactor. New
+  overwrite tests failed before exclusive creation was implemented and passed
+  afterward. Independent review found no actionable issues.
+
+Receipts, stream hashes, failures and review are retained in the project artifact
+directory under `maintenance-warnings-9ug0kq4c/`. These results are local offline
+regression evidence; hosted CI and live-model execution were not performed.
