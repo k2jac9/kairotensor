@@ -473,3 +473,53 @@ S0 source `794f64e5f9702987cd2502b86776b28f8a8d97c5`, exact Rust `1.99.1` /
 Python `3.15.2` closure and G1's exercised rollback procedure; switching a pointer
 does not undo data mutations. The G2 probe uses a fresh disposable database and
 never mutates the original rollback fixture.
+
+
+### Final G2 local verification and source mapping (2026-11-16)
+
+Executable/configuration source is `64e0b1b4a45857f419ac9539760018e3890d9aa3`. It supersedes
+initial S2 `ae4aa0865912ac5f991a08ddfe379e5a180f7bfa`: root identified that ambient
+PATH could shadow native/Git helpers. Regression tests reproduced that problem;
+the successor binds verified helper aliases from qualification's frozen host PATH
+and also rejects Cargo shorthand/forwarded selector bypasses. Both sources and
+all their evidence are retained. The final docs-only successor changes only this
+file and is mapped in the packet's `docs-only-transition.json`; no old receipt is
+relabelled as evidence for new executable code.
+
+Final evidence is retained under
+`/home/neo/Projects/kairotensor-artifacts/reliability-implementation-20261115/task-g2/successor-r1/`.
+`verification-rollup.json` binds the complete source, actual command records,
+logs, candidate selections and probe identities. The stable manifest and CLI
+receipt revalidation passed with the unchanged 40-command G1 workload, all exits
+zero: 357 Rust tests, 18 reference tests, 8 oracle tests, 361 full-discovery Python
+tests, and explicit suites of 24/50/15/19/7 tests, with zero skips. Counts across
+those overlapping commands total 859 executions; they are not 859 unique tests.
+Five selected runtime pairs each passed an actual identity/child-Python check and
+18 focused launcher tests (90 additional test executions). Other full role suites
+remain attributed to accepted G1 source; no final-source five-role full matrix or
+hosted execution is claimed.
+
+CI YAML was parsed, its shell and Python probe syntax checked, five independent
+roles verified, and all 16 original command steps plus checkout pin compared
+unchanged. Actionlint was unavailable locally and was not downloaded. Actual
+hosted action execution remains open. All 196 protected repository files, four
+owner rule files and bound intake inputs still matched; the retained rollback
+DBs, eight Nix roots/closures and host defaults were verified unchanged.
+
+The accepted-pointer candidate is `/home/neo/.local/state/kairotensor/runtime/candidates/g2-20261116-r1/stable.json`,
+SHA-256 `aaa7438718dbed6e6f9b7ac50dd7fbb02317278c18a8f093a431d488ba998321`. It is prepared for independent review and root
+activation; `accepted-selection.json` remained absent at worker closeout.
+The final candidate-built activation binary is `/home/neo/Projects/kairotensor-artifacts/reliability-implementation-20261115/task-g2/successor-r1/activation-probe/activation-probe`,
+SHA-256 `275b94eef822d82bbfcfa3be1b2e7b0d40a6fb49d737a2ad59cde918e6b8c666`. Its source is the intake-authorized exact
+copy of G1's probe. Library build used the candidate launcher and approved Cargo
+wrapper; standalone compile used separate fresh storage admission. Disposable
+create/reopen checks passed exact current bytes, spent=7, reserved=12, unresolved
+attempt=2, claim=None, cancel=false, and zero backend calls. This is preactivation
+candidate health; root must run the post-activation check on a new database.
+
+The initial probe compile failed (exit 1, E0463): its old harness assumed
+`debug/deps`, while Cargo 1.100 emitted per-package `debug/build/*/*/out`
+dependency directories. The failed receipt remains under `activation-probe/`.
+An artifact-only correction used actual Cargo-emitted paths; both its retained
+S2 retry and the final successor probe passed. No application source, dependency,
+storage guard or acceptance test was changed to clear the failure.
