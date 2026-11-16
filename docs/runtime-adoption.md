@@ -346,3 +346,121 @@ Its bytes have not been recovered. Fix-1 uses exclusively created operation
 paths and fresh admission receipts; it makes no claim to reconstruct that loss.
 Independent scoped review remains required. Other adoption gaps and G2's
 activation/observation responsibilities above are unchanged.
+
+## G2 project runtime selection (2026-11-16)
+
+The portable defaults are Rust `1.100.0` (`minimal` profile: Rust/Cargo/std;
+no optional rustfmt/clippy component) and Python `3.15.2`. They follow accepted
+G1 qualification at executable source
+`d60159d6bda1e36ceecace4125f05059c07cbb50`, documented by successor
+`7684b4fd4148145f882a1e2e3fc3e2f2833d559e`. G2's final source and results are
+recorded below after execution. G1's other-role full suites remain S1 evidence.
+No local activation or hosted execution is implied by these files.
+
+Use the durable project launcher from a project checkout:
+
+```sh
+python3 scripts/project_runtime.py identity
+python3 scripts/project_runtime.py python -m unittest discover -s reference -p test_memory.py
+python3 scripts/project_runtime.py --budget-gib 2 cargo test --locked --all-targets
+```
+
+The bootstrap Python only reads and validates selection metadata. Actual workload
+Python, child `python3`, Rust and Cargo use the verified selected binaries. The
+host Python command and `.python-version` alone do not establish child selection.
+The host Rust commands are rustup proxies: actual checks with auto-install disabled
+returned exit 1, because `1.100.0` is absent in the host rustup home. The qualified
+copy exists separately under project development storage. Use the launcher; do not
+change host defaults or allow a proxy to download a substitute. Bootstrap requires
+Python 3.11 or newer (stdlib `hashlib.file_digest`).
+
+The default pointer is
+`~/.local/state/kairotensor/runtime/accepted-selection.json` (or the equivalent
+`XDG_STATE_HOME` path). It is root-owned operational acceptance state, not a file
+committed with workstation paths into portable CI. Before independent review use
+`--selection /home/neo/.local/state/kairotensor/runtime/candidates/g2-20261116/stable.json`.
+Missing selection/tool, changed hash/version, unexpected inherited runtime override,
+unbound Cargo config or incompatible qualification binding fails closed with exit
+2. A refused storage admission propagates its actual exit. No automatic install,
+download, fallback, host update or runtime retirement is performed.
+
+The local JSON schema is `kairotensor-project-runtime/1`. Required fields:
+
+- `role`: the exact role in the qualified five-role manifest.
+- `tools`: `rustc`, `cargo`, `python`, each with absolute `path`, SHA-256
+  `sha256`, exact stdout `version`, and `version_args` array. These must match
+  that role's immutable qualification identities.
+- `qualification_manifest`, `qualification_receipt`, `independent_review`,
+  `acceptance`: each an absolute `path` and `sha256`. The receipt must be Pass
+  for the manifest's source and role; the acceptance binds that source and review.
+  The manifest additionally binds selected native/closure provenance, approved
+  Cargo wrapper, storage guard and recipe; those files are rechecked before launch.
+
+The G1 acceptance is `task-g1/fix-1/root-fix1-acceptance.json` in the retained
+implementation packet. A selection can identify accepted G1 runtimes during G2
+candidate testing; it does not declare G2 independently accepted. Root controls
+activation after G2 review. These are local trusted-owner artifacts: content hashes
+bind bytes, not issuer authentication. The launcher is an invocation boundary, not
+a security sandbox for arbitrary Python, Cargo build scripts or executable code.
+
+Each launch creates a private alias directory and receipt under
+`~/.local/state/kairotensor/runtime/invocations/`. It records actual resolved paths,
+versions/digests, parent/child Python, selected profile, wrapper, current commit,
+tracked-file hashes, dirty/untracked status, current Cargo.lock, command and exit.
+The inherited environment is not logged. Keep credentials out of command arguments.
+Editable source is allowed and always marked `qualification: not assessed`;
+it never inherits the frozen source's successful workload. Requested Cargo commands
+route through the approved `kairotensor-cargo --budget-gib N` wrapper; debug symbols
+and incremental compilation are disabled. Runtime/output/profile overrides and
+Cargo configs require a separate reviewed binding. The wrapper handles fresh
+storage admission; refusal blocks heavy work. Its existing exception expires
+2026-11-17 18:04:38 UTC and must not be extended by this launcher.
+
+`check.yml` has five independently varied roles: stable `1.100.0 / 3.15.2`, Rust
+upcoming `nightly-2026-11-16 / 3.15.2`, Rust previous and retained baseline
+`1.99.1 / 3.15.2`, Python upcoming `1.100.0 / 3.16.0a2`, and Python previous
+`1.100.0 / 3.14.10`. The setup-python preview selector is exactly
+`3.16.0-alpha.2`, as advertised by its build manifest; observed Python must report
+`3.16.0a2`. Each row explicitly sets `RUSTUP_TOOLCHAIN` to override the root pin,
+checks Rust release/commit and Cargo version, and checks parent/child Python.
+The previous-Rust pair also covers the distinct accepted development baseline;
+no redundant sixth row is needed. Failures remain visible (`fail-fast: false`,
+no `continue-on-error`). Original checkout identity and all command gates remain.
+
+Setup actions are pinned to verified upstream source: setup-python v7.1.0 at
+`6d4fd22b20465ccc0f7354476588e8df7c9ca0e0` and rust-toolchain at
+`df2a88e9fe4098bad09cb42c3dec7187f15861fc`. Primary metadata was retained on
+2026-11-16 in `runtime-actions-preflight-20261116/` and
+`runtime-python-ci-preflight-20261116/`; runtime freshness was reconfirmed by root
+before G2 intake. `ubuntu-latest` is mutable; these pins do not prove hosted
+binaries equal the locally qualified Nix/standalone artifacts. Hosted CI is
+unexecuted; this task neither pushes nor triggers it.
+
+Six separate workflows remain owned adoption gaps: benchmark, handoff,
+recovery-calibration, recovery-policy, registration-cache and token-caps. Their
+files and old receipts are unchanged. Future Cargo commands inside a candidate
+checkout can now resolve the root Rust pin; the registration-cache workflow runs
+from its parent with `--manifest-path`, so candidate/control Rust selection needs
+explicit follow-up rather than assuming the nested pin selects it. The four ML
+measurement workflows (handoff, recovery-calibration, recovery-policy, token-caps)
+retain Python `3.11` and have no real-model qualification under this core matrix.
+Accepted checkout v4.2.2 is intentionally retained; adopting latest v7.0.1 is a
+separate owned gap. Previous Rust upstream support and the complete separately
+promised consumer inventory remain not established. No model, Rocket, deployment,
+shared publication or bulk dependency change is covered here.
+
+Root, acting under Alejandro's autonomous project authority, owns review and
+activation. Retain any prior pointer, independently review G2, then atomically
+replace `accepted-selection.json` with the reviewed candidate bytes. Run launcher
+identity/child-Python verification and the candidate-built disposable Store
+current-read/hold probe. Record activation time and an exact review date seven
+days later; freshness and the six workflow/ML/consumer gaps are reviewed then and
+weekly. Until activation, next review is due 2026-11-23. No retirement date is
+authorized. Preserve old binaries/sysroots, Nix roots, source, locks and failed
+receipts. If checks fail, retain failure evidence and restore the exact previous
+selection pointer; when no prior pointer existed, remove only the new activation
+pointer as a root-controlled reversal. For source/data recovery use the retained
+S0 source `794f64e5f9702987cd2502b86776b28f8a8d97c5`, exact Rust `1.99.1` /
+Python `3.15.2` closure and G1's exercised rollback procedure; switching a pointer
+does not undo data mutations. The G2 probe uses a fresh disposable database and
+never mutates the original rollback fixture.
