@@ -98,4 +98,4 @@ Next research steps are controlled comparisons after evidence changes, equally d
 
 ## Authorship and disclosure
 
-Alejandro Castellanos confirms that no KairoTensor-specific ideas, code or experiments predate the 13–15 November 2026 sprint. This is the author's declaration; timestamps alone cannot establish when work began. Third-party dependencies and prior work remain identified in their manifests and citations. AI assistance supported development and writing; the author is responsible for the claims and submission. See the paper's [provenance, ethics and LLM usage statements](docs/submission/report.md#appendix-limitations-and-dual-use--ethical-considerations).
+Alejandro Castellanos confirms that no KairoTensor-specific ideas, code or experiments predate the 13–15 November 2026 sprint. Third-party dependencies and prior work remain identified in their manifests and citations. AI assistance supported development and writing; the author is responsible for the claims and submission. See the paper's [provenance, ethics and LLM usage statements](docs/submission/report.md#appendix-limitations-and-dual-use--ethical-considerations).
