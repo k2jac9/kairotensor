@@ -34,6 +34,8 @@ jobs:
           python3 reference/belief_oracle.py
           cargo build --locked --offline --example recovery_policy_eval --example decision_replay
           KAIROTENSOR_RECOVERY_RUNNER="$PWD/target/debug/examples/recovery_policy_eval" KAIROTENSOR_DECISION_REPLAY="$PWD/target/debug/examples/decision_replay" python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Verify bounded offline ablation planning and recorded scoring
+        run: KAIROTENSOR_DECISION_REPLAY="$PWD/target/debug/examples/decision_replay" python3 -m unittest discover -s scripts -p test_decision_ablation.py
       - name: Export and replay a decision in separate offline processes
         run: |
           set -euo pipefail
