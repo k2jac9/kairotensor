@@ -89,11 +89,70 @@ class ControllerTests(unittest.TestCase):
         for fault in ['after_receipt','hang_after_receipt','sqlite_receipt_failure','sqlite_settle_failure']:
             with self.subTest(fault=fault):
                 self.out=Path(self.tmp.name)/fault
-                report=self.execute(fault,1500 if fault=='hang_after_receipt' else 30000)
+                report=self.execute_receipt_hang() if fault=='hang_after_receipt' else self.execute(fault)
                 with self.subTest(**self.diagnostics(report)):
                     self.assertFalse(report['complete']);self.assertEqual(report['unresolved_hold_units'],269)
                     self.assertEqual(report['known_receipt_units'],180)
                     self.assertEqual(report['reconciliation'][0]['action'],'review_known_receipt_no_resend')
+    def execute_receipt_hang(self):
+        import base64
+        import signal
+        from contextlib import closing
+        from unittest.mock import patch
+        import incident_calibration_controller as controller
+        clock=controller.now_ns
+        observed_at=None;expired_at=None
+        def expire_after_committed_receipt(mode):
+            nonlocal observed_at,expired_at
+            if expired_at is not None:return expired_at
+            artifact=self.out/'receipt-0.json';ledger=self.out/'ledger.sqlite'
+            if artifact.exists() and ledger.exists():
+                receipt=json.loads(artifact.read_text())
+                try:
+                    with closing(sqlite3.connect(ledger.as_uri()+'?mode=ro',uri=True,timeout=0)) as db:
+                        row=db.execute('SELECT state,raw_reply,receipt_ns FROM slots WHERE slot=0').fetchone()
+                except sqlite3.OperationalError:
+                    row=None
+                if row==('received',base64.b64decode(receipt['raw_reply_base64']),receipt['observed_ns']):
+                    observed_at=time.monotonic()
+                    expired_at=json.loads((self.out/'manifest.json').read_text())['deadline_ns']
+                    return expired_at
+            return clock(mode)
+        # The child and worker are real subprocesses with unchanged clocks.
+        # Only the parent's supervisor clock advances, after both durable
+        # receipt copies agree. Startup does not race a 1.5-second receipt test.
+        with patch.object(controller,'now_ns',expire_after_committed_receipt):
+            report=self.execute('hang_after_receipt')
+        diagnostic=self.diagnostics(report)
+        self.assertIsNotNone(observed_at,diagnostic)
+        self.assertLess(time.monotonic()-observed_at,5,diagnostic)
+        self.assertTrue(report['audit_complete'],diagnostic)
+        self.assertFalse(report['complete'],diagnostic)
+        self.assertEqual(report['claimed_slots'],1,diagnostic)
+        self.assertEqual(report['settled_slots'],0,diagnostic)
+        self.assertEqual(report['ledger_charged_units'],0,diagnostic)
+        self.assertEqual(report['unresolved_hold_units'],269,diagnostic)
+        self.assertEqual(report['known_receipt_units'],180,diagnostic)
+        self.assertEqual(report['new_model_calls'],0,diagnostic)
+        seal=report['supervisor']
+        self.assertTrue(seal['timed_out'],diagnostic)
+        self.assertTrue(seal['deadline_overrun'],diagnostic)
+        self.assertTrue(seal['child_reaped'],diagnostic)
+        self.assertTrue(seal['group_terminated'],diagnostic)
+        self.assertEqual(seal['exit_code'],-signal.SIGKILL,diagnostic)
+        self.assertEqual(report['reconciliation'][0]['action'],'review_known_receipt_no_resend',diagnostic)
+        with self.assertRaises(FileExistsError):self.execute()
+        return report
+    def test_receipt_hang_accounting_survives_slow_process_start(self):
+        from unittest.mock import patch
+        import incident_calibration_controller as controller
+        launch=controller.subprocess.Popen
+        def delayed_launch(*args,**kwargs):
+            # Exceeds the former receipt test's entire 1.5-second window.
+            time.sleep(2)
+            return launch(*args,**kwargs)
+        with patch.object(controller.subprocess,'Popen',delayed_launch):
+            self.execute_receipt_hang()
     def test_wrong_quote_runtime_and_malformed_usage_fail_closed(self):
         for fault in ['wrong_quote','runtime_mismatch','oversized_reply']:
             with self.subTest(fault=fault):
