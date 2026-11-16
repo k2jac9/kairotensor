@@ -1,5 +1,6 @@
 """Offline auditor regressions; optional real Rust fixture generation, no live calls."""
 import hashlib
+from contextlib import closing
 import json
 import os
 from pathlib import Path
@@ -124,7 +125,7 @@ class AuditBundleIntegrationTests(unittest.TestCase):
             audit_bundle(self.folder)
 
     def test_sqlite_delivery_tamper_rejected(self):
-        with sqlite3.connect(self.folder / 'trace.json.sqlite') as db:
+        with closing(sqlite3.connect(self.folder / 'trace.json.sqlite')) as db, db:
             db.execute("UPDATE deliveries SET output=X'7B7D' WHERE attempt_id=1")
         with self.assertRaises(ValueError):
             audit_bundle(self.folder)
@@ -150,23 +151,22 @@ class AuditBundleIntegrationTests(unittest.TestCase):
             audit_bundle(self.folder)
 
     def test_checkpointed_wal_bundle_is_refused_without_creating_sidecars(self):
-        with sqlite3.connect(self.folder / 'trace.json.sqlite') as db:
+        with closing(sqlite3.connect(self.folder / 'trace.json.sqlite')) as db, db:
             self.assertEqual(db.execute('PRAGMA journal_mode=WAL').fetchone()[0], 'wal')
             db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
-        db.close()
         before = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in self.folder.iterdir()}
         with self.assertRaisesRegex(ValueError, 'WAL'):
             audit_bundle(self.folder)
         self.assertEqual(before, {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in self.folder.iterdir()})
 
     def test_mutated_database_budget_is_rejected(self):
-        with sqlite3.connect(self.folder / 'trace.json.sqlite') as db:
+        with closing(sqlite3.connect(self.folder / 'trace.json.sqlite')) as db, db:
             db.execute('UPDATE token_budgets SET token_limit=1 WHERE id=1')
         with self.assertRaisesRegex(ValueError, 'database budget limit'):
             audit_bundle(self.folder)
 
     def test_unresolved_sent_hold_is_not_misreported_as_zero_cost(self):
-        with sqlite3.connect(self.folder / 'trace.json.sqlite') as db:
+        with closing(sqlite3.connect(self.folder / 'trace.json.sqlite')) as db, db:
             db.execute('DELETE FROM deliveries WHERE attempt_id=1')
         result = audit_bundle(self.folder)
         self.assertEqual(result['status'], 'incomplete_not_scored')

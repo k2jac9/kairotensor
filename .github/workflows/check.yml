@@ -6,41 +6,132 @@ permissions:
 
 jobs:
   contracts:
+    name: contracts (${{ matrix.role }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: stable
+            rust: '1.100.0'
+            rust-release: '1.100.0'
+            rust-commit: '0ef1bc386059596dada8fb65b50425aab2ea637a'
+            cargo-version: 'cargo 1.100.0 (3acc79c0c 2026-11-05)'
+            python: '3.15.2'
+            python-version: '3.15.2'
+          - role: rust-upcoming
+            rust: 'nightly-2026-11-16'
+            rust-release: '1.102.0-nightly'
+            rust-commit: '5f4effd579500175af844241eb179e756190f1e7'
+            cargo-version: 'cargo 1.102.0-nightly (ede6cefea 2026-11-11)'
+            python: '3.15.2'
+            python-version: '3.15.2'
+          # This pair also retains the accepted local development baseline.
+          - role: rust-previous-and-retained-baseline
+            rust: '1.99.1'
+            rust-release: '1.99.1'
+            rust-commit: '58cf8f9c35b355199727627d07ae34a4e2846d67'
+            cargo-version: 'cargo 1.99.1 (5f94df478 2026-08-27)'
+            python: '3.15.2'
+            python-version: '3.15.2'
+          - role: python-upcoming
+            rust: '1.100.0'
+            rust-release: '1.100.0'
+            rust-commit: '0ef1bc386059596dada8fb65b50425aab2ea637a'
+            cargo-version: 'cargo 1.100.0 (3acc79c0c 2026-11-05)'
+            python: '3.16.0-alpha.2'
+            python-version: '3.16.0a2'
+          - role: python-previous
+            rust: '1.100.0'
+            rust-release: '1.100.0'
+            rust-commit: '0ef1bc386059596dada8fb65b50425aab2ea637a'
+            cargo-version: 'cargo 1.100.0 (3acc79c0c 2026-11-05)'
+            python: '3.14.10'
+            python-version: '3.14.10'
     timeout-minutes: 10
     env:
       KAIROTENSOR_REQUIRE_LINUX_CLOCK: '1'
+      # Explicitly overrides rust-toolchain.toml in every compatibility row.
+      RUSTUP_TOOLCHAIN: ${{ matrix.rust }}
+      RUSTUP_AUTO_INSTALL: '0'
+      EXPECTED_RUST_RELEASE: ${{ matrix.rust-release }}
+      EXPECTED_RUST_COMMIT: ${{ matrix.rust-commit }}
+      EXPECTED_CARGO_VERSION: ${{ matrix.cargo-version }}
+      EXPECTED_PYTHON_VERSION: ${{ matrix.python-version }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Select exact Rust lane
+        uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc
+        with:
+          toolchain: ${{ matrix.rust }}
+      - name: Select exact Python lane
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python }}
+          check-latest: false
+      - name: Verify actual Rust, Cargo and parent/child Python identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc -vV
+          cargo --version
+          rustup which rustc
+          rustup which cargo
+          python3 - <<'PYTHON'
+          import json, os, pathlib, subprocess, sys
+          rust = dict(line.split(': ', 1) for line in subprocess.check_output(['rustc', '-vV'], text=True).splitlines()[1:])
+          assert rust['release'] == os.environ['EXPECTED_RUST_RELEASE'], rust
+          assert rust['commit-hash'] == os.environ['EXPECTED_RUST_COMMIT'], rust
+          assert subprocess.check_output(['cargo', '--version'], text=True).strip() == os.environ['EXPECTED_CARGO_VERSION']
+          assert sys.version.split()[0] == os.environ['EXPECTED_PYTHON_VERSION'], sys.version
+          child = json.loads(subprocess.check_output(['python3', '-c', 'import json,sys,os;print(json.dumps([os.path.realpath(sys.executable),sys.version.split()[0]]))'], text=True))
+          assert child == [str(pathlib.Path(sys.executable).resolve()), os.environ['EXPECTED_PYTHON_VERSION']], child
+          print(json.dumps({'parent': str(pathlib.Path(sys.executable).resolve()), 'child': child}))
+          PYTHON
       - name: Test the Rust store, including the withdrawal example
-        run: cargo test --all-targets
+        run: cargo test --locked --all-targets
       - name: Run the revision and model handoff examples
         run: |
-          cargo run --example withdrawal
-          cargo run --example deterministic_verdict
-          cargo run --example deadline_aware_recovery
-          cargo run --example runtime_recovery
-          cargo run --example selective_revision
-          cargo run --example corrected_handoff
-          cargo run --example scoped_model_reuse
-          cargo run --example scoped_model_reuse -- --replay-invalid
-          cargo run --example token_cap_eval
-          cargo run --example budgeted_recovery
+          cargo run --locked --example withdrawal
+          cargo run --locked --example deterministic_verdict
+          cargo run --locked --example deadline_aware_recovery
+          cargo run --locked --example runtime_recovery
+          cargo run --locked --example selective_revision
+          cargo run --locked --example corrected_handoff
+          cargo run --locked --example scoped_model_reuse
+          cargo run --locked --example scoped_model_reuse -- --replay-invalid
+          cargo run --locked --example token_cap_eval
+          cargo run --locked --example budgeted_recovery
       - name: Check the original reference contracts
         run: |
           python3 -m unittest discover -s reference -p test_memory.py
           python3 reference/belief_oracle.py
-          python3 -m unittest discover -s scripts -p 'test_*.py'
+          cargo build --locked --offline --example recovery_policy_eval --example decision_replay
+          KAIROTENSOR_RECOVERY_RUNNER="$PWD/target/debug/examples/recovery_policy_eval" KAIROTENSOR_DECISION_REPLAY="$PWD/target/debug/examples/decision_replay" python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Verify bounded offline ablation planning and recorded scoring
+        run: KAIROTENSOR_DECISION_REPLAY="$PWD/target/debug/examples/decision_replay" python3 -m unittest discover -s scripts -p test_decision_ablation.py
+      - name: Export and replay a decision in separate offline processes
+        run: |
+          set -euo pipefail
+          cargo run --locked --offline --example decision_replay -- export-fixture "$RUNNER_TEMP/decision-v1.json"
+          cargo run --locked --offline --example decision_replay -- replay "$RUNNER_TEMP/decision-v1.json"
+          python3 scripts/audit_recovery_bundle.py --decision-v1 "$RUNNER_TEMP/decision-v1.json"
+
       - name: Verify archived output-cap measurements
         run: python3 scripts/summarize_token_caps.py docs/evaluations/token-caps-*-2026-11-13.json
 
       - name: Verify synthetic recovery policy comparison
         run: python3 scripts/recovery_policy_eval.py --fixture
+      - name: Exercise typed policy activation and rollback without model calls
+        run: |
+          python3 scripts/recovery_policy_eval.py --activation-fixture > "$RUNNER_TEMP/policy-activation-fixture.json"
+          cargo run --locked --offline --example policy_activation -- --fixture "$RUNNER_TEMP/policy-activation-fixture.json" --out "$RUNNER_TEMP/policy-activation"
+          python3 scripts/recovery_policy_eval.py --archived-v1-refusal > "$RUNNER_TEMP/archived-v1-promotion-refusal.json"
       - name: Collect and score Store-backed synthetic recovery trajectories
         run: |
-          cargo run --example recovery_policy_eval -- --trace "$RUNNER_TEMP/recovery-policy-trace.json"
+          cargo run --locked --example recovery_policy_eval -- --trace "$RUNNER_TEMP/recovery-policy-trace.json"
           python3 scripts/recovery_policy_eval.py "$RUNNER_TEMP/recovery-policy-trace.json"
           KAIROTENSOR_RECOVERY_RUNNER="$PWD/target/debug/examples/recovery_policy_eval" python3 -m unittest discover -s scripts -p test_recovery_policy_runner.py
           KAIROTENSOR_RECOVERY_RUNNER="$PWD/target/debug/examples/recovery_policy_eval" python3 -m unittest discover -s scripts -p test_audit_recovery_bundle.py
@@ -48,10 +139,16 @@ jobs:
         run: python3 scripts/recovery_calibration.py --output "$RUNNER_TEMP/recovery-calibration.json"
 
       - name: Exercise offline timed runtime through the fixture Adapter
-        run: cargo run --example timed_recovery_runner -- --out "$RUNNER_TEMP/timed-recovery-runner"
+        run: cargo run --locked --example timed_recovery_runner -- --out "$RUNNER_TEMP/timed-recovery-runner"
 
       - name: Prepare frozen semantic calibration requests without inference
         run: python3 scripts/incident_routing.py prepare --out "$RUNNER_TEMP/incident-routing-calibration"
+
+      - name: Verify all frozen incident request bytes through Store capture without inference
+        run: |
+          cargo run --locked --example incident_store_bridge -- --requests "$RUNNER_TEMP/incident-store-requests.json"
+          python3 scripts/check_incident_store_bridge.py --requests "$RUNNER_TEMP/incident-store-requests.json"
+          python3 -m unittest discover -s scripts -p test_incident_store_bridge.py
 
       - name: Emit bounded prepared-request calibration proposal without inference
         run: python3 scripts/incident_preflight.py --out "$RUNNER_TEMP/incident-preflight-plan.json"
@@ -71,3 +168,18 @@ jobs:
         run: |
           python3 scripts/incident_hosted_runner.py fixture --out "$RUNNER_TEMP/incident-hosted-runner"
           python3 scripts/incident_hosted_runner.py audit "$RUNNER_TEMP/incident-hosted-runner"
+
+  checkout-previous:
+    name: checkout previous stable (v6.1.0)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Verify event checkout and required source files
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -f Cargo.lock
+          test -f src/lib.rs

@@ -2,7 +2,7 @@
 //! observation IDs are all admitted is a witness. Only the resulting flag can
 //! be reused under this rule. Observation payloads are never read by the rule.
 use rusqlite::{params, Connection, OptionalExtension, Result, Transaction, TransactionBehavior};
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use crate::attempts::{accept, ensure_branch, find_branch, record_attempt, Branch};
 use crate::{change_admission, invalid, is_admitted, validate_view, view_epoch, Store};
@@ -26,6 +26,20 @@ pub struct SupportRevision {
     pub attempt_id: i64,
     /// Whether any declared witness group is complete at this edit.
     pub supported: bool,
+}
+
+/// One occurrence's requested admission in an atomic correction.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AdmissionEdit {
+    pub evidence: i64,
+    pub admitted: bool,
+}
+
+/// An atomic correction either commits completely or observes a newer view.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BatchRevision {
+    Applied { epoch: i64, changes: Vec<SupportRevision> },
+    EpochConflict { current_epoch: i64 },
 }
 
 fn output(supported: bool) -> &'static [u8] {
@@ -59,8 +73,18 @@ fn rule_state(db: &Connection, head: i64) -> Result<Option<RuleState>> {
     .optional()
 }
 
-pub(crate) fn is_current(db: &Connection, head: i64) -> Result<bool> {
-    Ok(rule_state(db, head)?.is_some_and(|state| state.current == state.published))
+pub(crate) enum SupportStatus {
+    NotSupport,
+    SameVerdict,
+    ChangedVerdict,
+}
+
+pub(crate) fn inspect_current(db: &Connection, head: i64) -> Result<SupportStatus> {
+    Ok(match rule_state(db, head)? {
+        None => SupportStatus::NotSupport,
+        Some(state) if state.current == state.published => SupportStatus::SameVerdict,
+        Some(_) => SupportStatus::ChangedVerdict,
+    })
 }
 
 // Called exactly once per effective transition, in the admission writer's
@@ -122,13 +146,19 @@ fn changed_heads(
     tx: &Transaction<'_>,
     actor: &str,
     scope: &str,
-    evidence: i64,
+    evidence: &[i64],
 ) -> Result<Vec<ChangedHead>> {
-    let mut select = tx.prepare_cached(
+    if evidence.is_empty() {
+        return Ok(Vec::new());
+    }
+    // The batch's 1,024-edit limit bounds both bindings and statement size.
+    let placeholders = (3..3 + evidence.len()).map(|i| format!("?{i}"))
+        .collect::<Vec<_>>().join(",");
+    let sql = format!(
         "WITH affected(rule_id) AS (
              SELECT DISTINCT c.rule_id FROM support_premises p
              JOIN support_clauses c ON c.id = p.clause_id
-             WHERE p.actor = ?1 AND p.scope = ?2 AND p.requested_id = ?3 AND p.watching = 1
+             WHERE p.actor = ?1 AND p.scope = ?2 AND p.requested_id IN ({placeholders}) AND p.watching = 1
          )
          SELECT b.name, b.id, b.head, b.revision, s.rule_id, s.verdict, EXISTS (
              SELECT 1 FROM support_clauses c WHERE c.rule_id = s.rule_id AND c.missing = 0
@@ -139,8 +169,11 @@ fn changed_heads(
          JOIN support_bindings s ON s.attempt_id = b.head AND s.rule_id = affected.rule_id
          WHERE b.actor = ?1 AND b.scope = ?2
          ORDER BY b.name",
-    )?;
-    let mut rows = select.query(params![actor, scope, evidence])?;
+    );
+    let mut select = tx.prepare(&sql)?;
+    let mut bindings = vec![rusqlite::types::Value::from(actor.to_owned()), rusqlite::types::Value::from(scope.to_owned())];
+    bindings.extend(evidence.iter().copied().map(rusqlite::types::Value::from));
+    let mut rows = select.query(rusqlite::params_from_iter(bindings))?;
     let mut changed = Vec::new();
     while let Some(row) = rows.next()? {
         let published: bool = row.get(5)?;
@@ -159,6 +192,36 @@ fn changed_heads(
         }
     }
     Ok(changed)
+}
+
+// Publish from one final view after all effective admission/index changes.
+// The single-edit API uses this same transaction-scoped path.
+fn publish_changed_heads(
+    tx: &Transaction<'_>, actor: &str, scope: &str, epoch: i64, evidence: &[i64],
+) -> Result<Vec<SupportRevision>> {
+    let mut revisions = Vec::new();
+    for head in changed_heads(tx, actor, scope, evidence)? {
+        let attempt_id = publish_revision(tx, &head.branch, epoch, head.rule, head.supported)?;
+        revisions.push(SupportRevision { branch: head.name, attempt_id, supported: head.supported });
+    }
+    Ok(revisions)
+}
+
+// Internal callers validate shape, occurrences and their own CAS before using
+// this final-state path. This helper never opens or commits a transaction.
+pub(crate) fn apply_admission_edits(
+    tx: &Transaction<'_>, actor: &str, scope: &str, edits: &[AdmissionEdit],
+) -> Result<(i64, Vec<SupportRevision>)> {
+    let mut epoch = view_epoch(tx, actor, scope)?;
+    let mut effective = Vec::new();
+    for edit in edits {
+        if let Some(next) = change_admission(tx, actor, scope, edit.evidence, edit.admitted)? {
+            epoch = next;
+            effective.push(edit.evidence);
+        }
+    }
+    let changes = publish_changed_heads(tx, actor, scope, epoch, &effective)?;
+    Ok((epoch, changes))
 }
 
 // A bulk registration never changes admissions. Bind this cache to its single
@@ -311,20 +374,52 @@ impl Store {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let mut revisions = Vec::new();
-        if let Some(epoch) = change_admission(&tx, actor, scope, evidence, admitted)? {
-            for head in changed_heads(&tx, actor, scope, evidence)? {
-                let attempt_id =
-                    publish_revision(&tx, &head.branch, epoch, head.rule, head.supported)?;
-                revisions.push(SupportRevision {
-                    branch: head.name,
-                    attempt_id,
-                    supported: head.supported,
-                });
-            }
-        }
+        let revisions = if let Some(epoch) = change_admission(&tx, actor, scope, evidence, admitted)? {
+            publish_changed_heads(&tx, actor, scope, epoch, &[evidence])?
+        } else {
+            Vec::new()
+        };
         tx.commit()?;
         Ok(revisions)
+    }
+
+    /// Correct up to 1,024 unique positive occurrence IDs at an expected epoch.
+    /// Shape errors precede the writer transaction. A valid stale request always
+    /// returns a conflict, even if empty, all-no-op, or containing unknown IDs.
+    /// At a matching epoch every occurrence must exist before any mutation.
+    ///
+    /// Effective edits follow input order. Only their consumers are reconciled,
+    /// once, against the final view, in branch-name order. Unchanged verdicts
+    /// retain their attempts and charges; no-op edits do not repair stale heads.
+    /// After a lost response reread the view before choosing a new expected epoch.
+    pub fn revise_admissions_if_current(
+        &mut self,
+        actor: &str,
+        scope: &str,
+        expected_epoch: i64,
+        edits: &[AdmissionEdit],
+    ) -> Result<BatchRevision> {
+        validate_view(actor, scope)?;
+        if expected_epoch < 0 || edits.len() > 1024 {
+            return Err(invalid("expected epoch must be nonnegative and at most 1,024 edits are allowed"));
+        }
+        let mut seen = HashSet::with_capacity(edits.len());
+        for edit in edits {
+            if edit.evidence <= 0 || !seen.insert(edit.evidence) {
+                return Err(invalid("edits require unique positive occurrence IDs"));
+            }
+        }
+        let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let epoch = view_epoch(&tx, actor, scope)?;
+        if epoch != expected_epoch {
+            return Ok(BatchRevision::EpochConflict { current_epoch: epoch });
+        }
+        for edit in edits {
+            tx.query_row("SELECT 1 FROM evidence WHERE id = ?1", [edit.evidence], |_| Ok(()))?;
+        }
+        let (epoch, changes) = apply_admission_edits(&tx, actor, scope, edits)?;
+        tx.commit()?;
+        Ok(BatchRevision::Applied { epoch, changes })
     }
 
     /// List the active support-rule branch names watching this occurrence in

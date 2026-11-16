@@ -26,7 +26,7 @@ struct Verdict {
     status: &'static str,
 }
 
-fn derive(payload: &[u8]) -> Result<Vec<u8>> {
+pub(crate) fn derive(payload: &[u8]) -> Result<Vec<u8>> {
     // Deserialize directly into a strict struct: a Value would lose duplicate keys.
     let report: Report =
         serde_json::from_slice(payload).map_err(|_| invalid("invalid report evidence"))?;

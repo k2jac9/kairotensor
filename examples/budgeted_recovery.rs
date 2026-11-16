@@ -1,6 +1,6 @@
 //! Bounded recovery: deterministic byte-token fixture by default, --live for Qwen.
 #[allow(dead_code)]
-#[path = "corrected_handoff/adapter.rs"]
+#[path = "corrected_handoff/prepared_adapter.rs"]
 mod adapter;
 use kairotensor::{Disposition, RecoveryStart, Store};
 use serde::{Deserialize, Serialize};

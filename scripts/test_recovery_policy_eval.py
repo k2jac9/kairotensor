@@ -278,5 +278,91 @@ class RecoveryPolicyTests(unittest.TestCase):
         self.assertEqual(original['summary'], newer['summary'])
 
 
+class V2ConversionModeTests(unittest.TestCase):
+    def test_explicit_conversion_does_not_change_default_output(self):
+        path = Path(__file__).with_name('recovery_policy_eval.py')
+        default = subprocess.run([sys.executable, str(path), '--fixture'],
+                                 capture_output=True, text=True, check=True)
+        self.assertEqual(json.loads(default.stdout), evaluate(synthetic_fixture()))
+        converted = subprocess.run([sys.executable, str(path), '--fixture', '--convert-v2'],
+                                   capture_output=True, text=True)
+        self.assertEqual(converted.returncode, 0, converted.stderr)
+        result = json.loads(converted.stdout)
+        self.assertEqual(result['format'], 'policy-evaluation-conversion/2')
+        self.assertEqual(result['status'], 'Incomplete')
+        self.assertEqual(json.loads(default.stdout)['policy_version'], 'frozen-v1')
+
+
+class ObservedConversionTimingTests(unittest.TestCase):
+    def test_explicit_conversion_rejects_changed_preparation_with_same_completion(self):
+        from test_policy_evaluation_v2 import legacy_observed_comparison
+        old, comparison = legacy_observed_comparison()
+        script = Path(__file__).with_name('recovery_policy_eval.py')
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'legacy.json'
+            supplied = Path(directory) / 'complete.json'
+            source.write_text(json.dumps(old))
+            supplied.write_text(json.dumps(comparison))
+            command = [sys.executable, str(script), str(source), '--convert-v2', '--comparison-v2', str(supplied)]
+            good = subprocess.run(command, capture_output=True, text=True, check=True)
+            self.assertEqual(json.loads(good.stdout)['status'], 'Complete')
+            for side in ('baseline_rows', 'candidate_rows'):
+                for row in comparison[side]:
+                    row['attempts'][0]['start_ms'] = 3
+            supplied.write_text(json.dumps(comparison))
+            bad = subprocess.run(command, capture_output=True, text=True, check=True)
+            self.assertEqual(json.loads(bad.stdout)['status'], 'Incomplete')
+            self.assertEqual(evaluate(old)['policy_version'], 'frozen-v1')
+
+
+class ActivationFixtureTests(unittest.TestCase):
+    def command(self, mode):
+        return subprocess.run([sys.executable, str(Path(__file__).with_name('recovery_policy_eval.py')), mode],
+                              capture_output=True, text=True)
+
+    def test_separate_fixture_supplies_complete_synthetic_baseline_and_comparison(self):
+        from policy_evaluation_v2 import evaluate_policy_comparison
+        completed = self.command('--activation-fixture')
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        fixture = json.loads(completed.stdout)
+        self.assertEqual(fixture['format'], 'policy-activation-fixture/1')
+        self.assertEqual(fixture['new_model_calls'], 0)
+        self.assertIn('not feasible named-policy replay', fixture['limitations'])
+        paired = fixture['evaluation']
+        self.assertEqual(paired['purpose'], 'fixture/recovery-policy')
+        self.assertEqual(evaluate_policy_comparison(paired)['decision'], 'Eligible')
+        baseline = copy.deepcopy(paired)
+        baseline.update(candidate_id=paired['baseline_id'], candidate_sha256=paired['baseline_sha256'],
+                        candidate_rows=copy.deepcopy(paired['baseline_rows']))
+        self.assertEqual(evaluate_policy_comparison(baseline), {'decision': 'Refused', 'reason': 'NoImprovement'})
+        self.assertTrue(all(r['simulated'] and not r['attempts'] for r in paired['baseline_rows'] + paired['candidate_rows']))
+
+    def test_actual_archived_v1_refuses_at_conversion_without_invented_attestation(self):
+        import hashlib
+        import zipfile
+        from policy_evaluation_v2 import convert_legacy
+        archive = Path(__file__).resolve().parents[1] / 'docs/evaluations/recovery-policy-v1-2026-11-14.zip'
+        completed = self.command('--archived-v1-refusal')
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        result = json.loads(completed.stdout)
+        with zipfile.ZipFile(archive) as source:
+            raw = source.read('trace.json')
+            archived_summary = json.loads(source.read('summary.json'))
+        self.assertEqual(evaluate(json.loads(raw)), archived_summary)
+        self.assertEqual(result['archive_sha256'], hashlib.sha256(archive.read_bytes()).hexdigest())
+        self.assertEqual(result['trace_sha256'], hashlib.sha256(raw).hexdigest())
+        self.assertEqual(result['conversion'], convert_legacy(json.loads(raw)))
+        self.assertEqual(result['conversion']['status'], 'Incomplete')
+        self.assertFalse(result['promotion_requested'])
+        self.assertEqual(result['new_model_calls'], 0)
+        self.assertNotIn('evaluation', result)
+
+    def test_fixture_modes_refuse_mixed_legacy_conversion_flags(self):
+        script = str(Path(__file__).with_name('recovery_policy_eval.py'))
+        for mode in ('--activation-fixture', '--archived-v1-refusal'):
+            completed = subprocess.run([sys.executable, script, mode, '--convert-v2'], capture_output=True, text=True)
+            self.assertEqual(completed.returncode, 2)
+
+
 if __name__ == '__main__':
     unittest.main()
