@@ -3,7 +3,7 @@
 //! Default output is synthetic byte-token mechanics, never model efficacy.
 //! --live opts into the existing pinned Qwen adapter; collection never fits a policy.
 #[allow(dead_code)]
-#[path = "corrected_handoff/adapter.rs"]
+#[path = "corrected_handoff/prepared_adapter.rs"]
 mod adapter;
 #[path = "recovery_policy_eval/tests.rs"]
 #[cfg(test)]
@@ -825,7 +825,8 @@ fn make_journal(
             "fixture_vocabulary":if live {None} else {Some("UTF-8 bytes; not model tokens")},
             "started_unix_ms":SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis(),
             "working_directory_commit_best_effort":commit,"runner_source_utf8":include_str!("recovery_policy_eval.rs"),
-            "adapter_source_utf8":include_str!("corrected_handoff/adapter.rs"),"worker_source_utf8":include_str!("../scripts/handoff_model.py"),
+            "adapter_source_utf8":include_str!("corrected_handoff/adapter.rs"),
+            "prepared_adapter_source_utf8":include_str!("corrected_handoff/prepared_adapter.rs"),"worker_source_utf8":include_str!("../scripts/handoff_model.py"),
             "platform":{"os":std::env::consts::OS,"arch":std::env::consts::ARCH,"logical_parallelism":std::thread::available_parallelism().ok().map(|n|n.get()),
                 "cpuinfo":fs::read_to_string("/proc/cpuinfo").ok(),"kernel":fs::read_to_string("/proc/version").ok()},
             "database":database.to_string_lossy(),

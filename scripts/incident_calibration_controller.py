@@ -6,6 +6,7 @@ _START_NS = time.clock_gettime_ns(time.CLOCK_BOOTTIME) if _START_MODE == 'linux_
 import argparse
 import base64
 import copy
+from contextlib import closing
 from dataclasses import dataclass
 import hashlib
 import json
@@ -79,7 +80,11 @@ def _durable_new(path, payload, *, fail_fsync=False):
 
 def _connect(path):
     db = sqlite3.connect(path, timeout=0.1)
-    db.execute('PRAGMA journal_mode=DELETE'); db.execute('PRAGMA synchronous=FULL')
+    try:
+        db.execute('PRAGMA journal_mode=DELETE'); db.execute('PRAGMA synchronous=FULL')
+    except BaseException:
+        db.close()
+        raise
     return db
 
 
@@ -92,24 +97,28 @@ def _initialize(out, plan, mode):
     fd = os.open(out / 'ledger.sqlite', os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600)
     os.close(fd)
     db = _connect(out / 'ledger.sqlite')
-    db.executescript('''
-      CREATE TABLE slots(slot INTEGER PRIMARY KEY, request_utf8 TEXT NOT NULL, request_sha256 TEXT NOT NULL,
-        state TEXT NOT NULL CHECK(state IN ('planned','reserved','claimed','received','settled','uncertain')),
-        input_units INTEGER,output_cap INTEGER,handle TEXT,charged_units INTEGER,
-        raw_reply BLOB,receipt_ns INTEGER,late INTEGER NOT NULL DEFAULT 0);
-      CREATE TABLE events(id INTEGER PRIMARY KEY,event TEXT NOT NULL,slot INTEGER,payload TEXT NOT NULL,observed_ns INTEGER NOT NULL);
-      CREATE TRIGGER immutable_request BEFORE UPDATE OF request_utf8,request_sha256 ON slots
-        BEGIN SELECT RAISE(ABORT,'request binding immutable'); END;
-      CREATE TRIGGER immutable_events_update BEFORE UPDATE ON events
-        BEGIN SELECT RAISE(ABORT,'events immutable'); END;
-      CREATE TRIGGER immutable_events_delete BEFORE DELETE ON events
-        BEGIN SELECT RAISE(ABORT,'events immutable'); END;
-    ''')
-    with db:
-        for slot in plan['schedule']:
-            db.execute('INSERT INTO slots(slot,request_utf8,request_sha256,state) VALUES(?,?,?,?)',
-                       (slot['index'], slot['request_utf8'], slot['request_sha256'], 'planned'))
-        _event(db, 'planned', None, {'plan_sha256': plan['plan_sha256'], 'manifest_sha256': digest(_loads((out / 'manifest.json').read_bytes()))}, mode)
+    try:
+        db.executescript('''
+          CREATE TABLE slots(slot INTEGER PRIMARY KEY, request_utf8 TEXT NOT NULL, request_sha256 TEXT NOT NULL,
+            state TEXT NOT NULL CHECK(state IN ('planned','reserved','claimed','received','settled','uncertain')),
+            input_units INTEGER,output_cap INTEGER,handle TEXT,charged_units INTEGER,
+            raw_reply BLOB,receipt_ns INTEGER,late INTEGER NOT NULL DEFAULT 0);
+          CREATE TABLE events(id INTEGER PRIMARY KEY,event TEXT NOT NULL,slot INTEGER,payload TEXT NOT NULL,observed_ns INTEGER NOT NULL);
+          CREATE TRIGGER immutable_request BEFORE UPDATE OF request_utf8,request_sha256 ON slots
+            BEGIN SELECT RAISE(ABORT,'request binding immutable'); END;
+          CREATE TRIGGER immutable_events_update BEFORE UPDATE ON events
+            BEGIN SELECT RAISE(ABORT,'events immutable'); END;
+          CREATE TRIGGER immutable_events_delete BEFORE DELETE ON events
+            BEGIN SELECT RAISE(ABORT,'events immutable'); END;
+        ''')
+        with db:
+            for slot in plan['schedule']:
+                db.execute('INSERT INTO slots(slot,request_utf8,request_sha256,state) VALUES(?,?,?,?)',
+                           (slot['index'], slot['request_utf8'], slot['request_sha256'], 'planned'))
+            _event(db, 'planned', None, {'plan_sha256': plan['plan_sha256'], 'manifest_sha256': digest(_loads((out / 'manifest.json').read_bytes()))}, mode)
+    except BaseException:
+        db.close()
+        raise
     return db
 
 
@@ -326,9 +335,9 @@ def audit_run(out, *, _manifest_validator=None, _event_validator=None):
             path = Path(temporary) / 'ledger.sqlite'
             for suffix, data in before.items(): Path(str(path)+suffix).write_bytes(data)
             require(snapshot() == before, 'source changed during audit snapshot')
-            db = sqlite3.connect(path)
-            rows = db.execute('SELECT slot,request_utf8,request_sha256,state,input_units,output_cap,charged_units,raw_reply,receipt_ns,late FROM slots ORDER BY slot').fetchall()
-            events = db.execute('SELECT event,slot,payload,observed_ns FROM events ORDER BY id').fetchall(); db.close()
+            with closing(sqlite3.connect(path)) as db:
+                rows = db.execute('SELECT slot,request_utf8,request_sha256,state,input_units,output_cap,charged_units,raw_reply,receipt_ns,late FROM slots ORDER BY slot').fetchall()
+                events = db.execute('SELECT event,slot,payload,observed_ns FROM events ORDER BY id').fetchall()
         require([r[0] for r in rows] == list(range(8)), 'exact planned slot set required')
         require(events and events[0][0:2] == ('planned', None), 'initial event missing')
         require(_loads(events[0][2]) == {'plan_sha256': manifest['plan']['plan_sha256'], 'manifest_sha256': digest(manifest)}, 'ledger manifest binding')

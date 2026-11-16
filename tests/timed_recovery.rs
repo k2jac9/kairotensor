@@ -939,7 +939,7 @@ fn schema8_migration_keeps_legacy_sent_denied_cancelled_and_deterministic_record
     let db = Connection::open(&file.0)?;
     assert_eq!(
         db.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))?,
-        9
+        10
     );
     assert_eq!(
         db.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |r| r

@@ -7,6 +7,7 @@ never modified. This verifies internal consistency, not authenticity of model or
 hardware attestations. SQLite is opened mode=ro, with query_only enabled.
 """
 import argparse
+from contextlib import closing
 import json
 from pathlib import Path
 import sqlite3
@@ -257,7 +258,7 @@ def audit_bundle(directory):
     require(header[18:20] == b'\x01\x01' and not any(Path(str(db_path) + suffix).exists()
             for suffix in ('-wal', '-shm', '-journal')), 'WAL or journal sidecar bundle unsupported; not opened or scored')
     try:
-        with sqlite3.connect(db_path.as_uri() + '?mode=ro', uri=True) as db:
+        with closing(sqlite3.connect(db_path.as_uri() + '?mode=ro', uri=True)) as db, db:
             db.row_factory = sqlite3.Row
             db.execute('PRAGMA query_only=ON')
             db.execute('BEGIN')
@@ -273,8 +274,20 @@ def audit_bundle(directory):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('directory', type=Path)
+    parser.add_argument('directory', type=Path, nargs='?')
+    parser.add_argument('--decision-v1', type=Path, metavar='FILE')
     args = parser.parse_args()
+    if args.decision_v1 is not None:
+        if args.directory is not None:
+            parser.error('--decision-v1 FILE cannot be combined with a directory')
+        from decision_bundle_v1 import audit_file
+        try:
+            print(json.dumps(audit_file(args.decision_v1), indent=2, allow_nan=False))
+        except (OSError, ValueError) as error:
+            parser.exit(2, f'decision v1 audit failed: {error}\n')
+        return
+    if args.directory is None:
+        parser.error('directory is required unless --decision-v1 FILE is explicit')
     try:
         result = audit_bundle(args.directory)
         print(json.dumps(result, indent=2, allow_nan=False))

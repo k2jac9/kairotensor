@@ -112,6 +112,17 @@ A future integration must capture complete authorized evidence and recheck actua
 Store freshness at claim/publication. Missing or revoked evidence is not grounds
 to ask a model to infer its hidden content.
 
+The offline [Store-backed fixture](incident-store-bridge.md#all-case-store-request-export-and-parity)
+now admits and captures actual Store occurrences for all 12 frozen cases. Run
+`incident_store_bridge --requests PATH` through the admitted Cargo wrapper, then
+`python3 scripts/check_incident_store_bridge.py --requests PATH`. The destination
+file must not exist. The checker compares exact UTF-8 request bytes and order
+against `prepare(..., split='all')`, including evidence order, rather than trusting
+exported hashes. This fixture reports Store capture, UTF-8 byte accounting and
+zero model calls; it performs no live inference or semantic scoring. Case IDs,
+manifest digests and captured occurrence IDs stay outside request bytes. See the
+linked contract for the complete export schema and occurrence scope.
+
 ## Audit a complete response bundle
 
 Run:

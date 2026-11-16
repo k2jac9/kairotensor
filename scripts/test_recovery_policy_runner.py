@@ -6,6 +6,7 @@ These tests never invoke cargo, install dependencies, or request live inference.
 """
 import json
 import hashlib
+from contextlib import closing, contextmanager
 from datetime import datetime
 import os
 from pathlib import Path
@@ -43,10 +44,11 @@ class RecoveryPolicyRunnerTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.directory.cleanup()
 
+    @contextmanager
     def database(self):
-        db = sqlite3.connect(f'{self.db_path.as_uri()}?mode=ro', uri=True)
-        db.row_factory = sqlite3.Row
-        return db
+        with closing(sqlite3.connect(f'{self.db_path.as_uri()}?mode=ro', uri=True)) as db, db:
+            db.row_factory = sqlite3.Row
+            yield db
 
     def test_collected_trace_scores_and_affordable_totals_reconcile_sqlite(self):
         self.assertEqual(self.trace['schema_version'], 2)
@@ -281,7 +283,7 @@ class RecoveryPolicySelectionTests(unittest.TestCase):
             ids = {c['case_id'] for c in selected}
             self.assertEqual({c['case_id'] for c in raw['completed_cases']}, ids)
             self.assertTrue(all(e['case_id'] in ids for e in raw['events']))
-            with sqlite3.connect(f'{Path(str(trace) + ".sqlite").as_uri()}?mode=ro', uri=True) as db:
+            with closing(sqlite3.connect(f'{Path(str(trace) + ".sqlite").as_uri()}?mode=ro', uri=True)) as db, db:
                 keys = [r[0] for r in db.execute('SELECT recovery_key FROM recovery_runs')]
                 self.assertEqual(set(keys), {'ci-report-recovery-v2/' + c for c in ids})
                 calls = db.execute('SELECT COUNT(*) FROM dispatches').fetchone()[0]

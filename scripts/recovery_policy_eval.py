@@ -211,6 +211,62 @@ def synthetic_fixture():
                 provenance='Hand-authored byte-independent token counts and durations; no model measurements.', cases=cases)
 
 
+def activation_fixture():
+    """Complete hand-authored registry counters, never feasible policy trajectories."""
+    from policy_evaluation_v2 import canonical, sha, SELECTION_CONTRACT_SHA256
+
+    def record(raw):
+        return dict(bytes=list(raw), sha256=sha(raw))
+
+    compatibility = sha(b'policy-report-fixture/1:one-policy-then-reports;fixture-byte-runtime/1')
+    policies = [dict(policy_name=name, artifact=record(canonical(dict(
+        schema_version=1, policy_name=name, purpose='fixture/recovery-policy',
+        compatibility_contract_sha256=compatibility)))) for name in POLICIES]
+    scorer = sha(b'synthetic-opaque-scorer/1')
+    label = record(canonical(dict(answerable=True, admissible_support=True,
+        normalized_format='opaque-bytes/1', scorer_sha256=scorer, expected_normalized=list(b'yes'))))
+    opportunities = [dict(policy_name=p['policy_name'], opportunities=[dict(
+        opportunity_id=p['policy_name'] + '/' + str(n), request=record(('synthetic request ' + str(n)).encode()),
+        evidence_manifest=record(b'synthetic evidence'), admitted=True, consistent=True,
+        input_bound=4, output_cap=6, start_min_ms=0, start_max_ms=99)
+        for n in range(1 if p['policy_name'] == 'always_stop' else 2)]) for p in policies]
+    case = dict(case_id='synthetic-counter-case', family_id='synthetic-family', split_id='heldout',
+        initial_evidence=record(b'synthetic evidence'), label=label, budget=30, deadline_ms=100,
+        timing_start_ms=0, timing_end_ms=200, policy_opportunities=opportunities)
+    manifest = dict(format='policy-comparison/1', actor='policy-activation-fixture', scope='ci-report',
+        purpose='fixture/recovery-policy', provenance='synthetic_registry_mechanics',
+        accounting_unit='fixture_bytes', compatibility_contract_sha256=compatibility,
+        policies=policies, cases=[case], **{key + '_sha256': sha(('synthetic-' + key + '/1').encode())
+            for key in ('workload', 'prompt', 'runtime', 'model', 'tokenizer', 'validator')}, scorer_sha256=scorer)
+    baseline = dict(case_id=case['case_id'], outcome='Refused', correct=False, eligible=True,
+        answerable=True, completed_ms=100, charged=4, reserved_bound=0, false_refusal=True,
+        unsafe_acceptance=False, deadline_miss=False, simulated=True, attempts=[])
+    candidate = dict(baseline, outcome='Accepted', correct=True, false_refusal=False)
+    raw = canonical(manifest)
+    evaluation = dict(evaluation_id='synthetic-paired/1', actor=manifest['actor'], scope=manifest['scope'],
+        purpose=manifest['purpose'], baseline_id='always-stop/1', candidate_id='affordable-retry/1',
+        baseline_sha256=policies[0]['artifact']['sha256'], candidate_sha256=policies[1]['artifact']['sha256'],
+        experiment_manifest=list(raw), experiment_sha256=sha(raw), evaluator_version='policy-selection/1',
+        evaluator_sha256=SELECTION_CONTRACT_SHA256, provenance=manifest['provenance'],
+        baseline_rows=[baseline], candidate_rows=[candidate])
+    return dict(format='policy-activation-fixture/1', new_model_calls=0, evaluation=evaluation,
+        limitations='Synthetic registry attestations only; not feasible named-policy replay or measured superiority.')
+
+
+def archived_v1_refusal():
+    """Exercise the unchanged converter on the retained actual archive."""
+    import zipfile
+    from policy_evaluation_v2 import convert_legacy, sha
+    archive = Path(__file__).resolve().parents[1] / 'docs/evaluations/recovery-policy-v1-2026-11-14.zip'
+    with zipfile.ZipFile(archive) as source:
+        raw = source.read('trace.json')
+    conversion = convert_legacy(json.loads(raw, object_pairs_hook=unique_object))
+    return dict(format='archived-policy-promotion-refusal/1', archive=str(archive),
+        archive_sha256=sha(archive.read_bytes()), trace_sha256=sha(raw), conversion=conversion,
+        promotion_requested=False, new_model_calls=0,
+        limitations='Incomplete conversion supplies no insertable PolicyEvaluation; promotion is withheld before Store insertion.')
+
+
 def unique_object(pairs):
     result = {}
     for key, value in pairs:
@@ -224,14 +280,35 @@ def main():
     parser.add_argument('trace', nargs='?', type=Path)
     parser.add_argument('--fixture', action='store_true', help='evaluate deterministic synthetic mechanics only')
     parser.add_argument('--emit-fixture', action='store_true', help='print the full synthetic input schema example')
+    parser.add_argument('--activation-fixture', action='store_true', help='emit a separate complete synthetic registry fixture')
+    parser.add_argument('--archived-v1-refusal', action='store_true', help='show actual archived v1 conversion refusal without inventing facts')
+    parser.add_argument('--convert-v2', action='store_true', help='explicit complete-attestation conversion; missing facts remain incomplete')
+    parser.add_argument('--comparison-v2', type=Path, help='matching complete v2 comparison attestation for --convert-v2')
     args = parser.parse_args()
-    if sum((args.trace is not None, args.fixture, args.emit_fixture)) != 1:
-        parser.error('choose exactly one of TRACE, --fixture, --emit-fixture')
+    if (args.activation_fixture or args.archived_v1_refusal) and (args.convert_v2 or args.comparison_v2):
+        parser.error('registry fixture/refusal modes cannot convert legacy inputs')
+    if (args.comparison_v2 and not args.convert_v2) or (args.convert_v2 and args.emit_fixture):
+        parser.error('--comparison-v2 requires --convert-v2; conversion cannot emit a fixture')
+    if sum((args.trace is not None, args.fixture, args.emit_fixture, args.activation_fixture, args.archived_v1_refusal)) != 1:
+        parser.error('choose exactly one input/fixture/refusal mode')
     try:
+        if args.activation_fixture or args.archived_v1_refusal:
+            result = activation_fixture() if args.activation_fixture else archived_v1_refusal()
+            print(json.dumps(result, indent=2, allow_nan=False))
+            return
         document = synthetic_fixture() if args.fixture or args.emit_fixture else json.loads(
             args.trace.read_text(), object_pairs_hook=unique_object,
             parse_constant=lambda value: (_ for _ in ()).throw(ValueError(f'nonfinite JSON value: {value}')))
-        print(json.dumps(document if args.emit_fixture else evaluate(document), indent=2, allow_nan=False))
+        if args.convert_v2:
+            from policy_evaluation_v2 import convert_legacy, parse_policy_evaluation, MAX_BYTES
+            comparison = None
+            if args.comparison_v2:
+                with args.comparison_v2.open('rb') as stream:
+                    comparison = parse_policy_evaluation(stream.read(MAX_BYTES + 1))
+            result = convert_legacy(document, comparison)
+        else:
+            result = document if args.emit_fixture else evaluate(document)
+        print(json.dumps(result, indent=2, allow_nan=False))
     except (ValueError, OSError, TypeError) as error:
         parser.exit(2, f'error: {error}\n')
 
