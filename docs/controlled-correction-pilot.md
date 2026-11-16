@@ -8,6 +8,9 @@ held-out evaluation, training or change to existing Store/validator behavior is
 included. It is separate from the main submission pinned to `20fab84` and from
 the fixture-only incident Store bridge.
 
+The [16 November recorded run](controlled-correction-results.md) completed this
+fixed schedule; its source revision and observed limits are reported separately.
+
 The model candidate is cached `ornith-1.5:9b`, Q4_K_M, on Ollama 0.40.16. The
 adapter fixes its selected variant digest and the supervisor pins the cached
 container image and full model/config/projector/variant content hashes. This is
