@@ -79,11 +79,27 @@ That platform metric has not been independently evaluated and is not a KairoTens
 research result. No dataset expansion, restart or new training run is part of this
 handoff. A later observation must recheck the run rather than assume this status.
 
-The repository remains private. The owner authorized read-only link access to
-the final Drive report PDF and combined reviewer bundle. Permission metadata
-showed owner-only access; the connector supports named-user and Workspace-domain
-sharing but does not expose "Anyone with the link." Public access therefore
-remains pending a Drive sharing change and an unauthenticated read check.
+The repository is now public, verified on 16 November at 08:36 UTC through
+unauthenticated requests. GitHub reported `private: false` and `visibility: public`;
+the main README and the measured `20fab84` README returned HTTP 200, with the
+latter matching the local Git snapshot byte for byte. The
+[verification receipt](verification/public-access-20261116/anonymous-check.json)
+records the exact URLs and hashes. This closes the source-access gap.
+
+The public PDF on main is still an earlier export (SHA-256
+`a755007e453b633cae4f19d38fd1c1f557c365a04d07ddfffb52d5753bf10c5a`),
+not the final seven-page editorial PDF (SHA-256
+`86bf058fcaf0cf5ed886af7b198a7a6aff9978bac5e2994a5a217e9f8d4c692c`).
+The latest editorial commits remain local. Publishing those commits is separate
+from making the existing repository public.
+
+The owner authorized read-only link access to the final Drive report PDF and
+combined reviewer bundle. The last Drive checks at 08:29 UTC still showed
+owner-only access and anonymous reads reached sign-in. The connector supports
+named-user and Workspace-domain sharing but does not expose "Anyone with the
+link." GitHub visibility does not change these Drive permissions. Earlier PDF
+and package statements about repository privacy are dated and superseded by this
+note; their verified bytes and historical receipts remain unchanged.
 
 The refreshed combined reviewer bundle contains the current report package,
 corrected pilot package, this status note, the exact integrated source and
@@ -97,7 +113,8 @@ The [official sprint page](https://apartresearch.com/sprints/ai-x-epistemics-res
 lists the submission deadline as 16 November at 11:59 UTC, which is 06:59 in
 America/Toronto. The report PDF is the primary upload; the form also accepts an
 additional-material URL. A local ZIP or owner-only link is not an accessible URL
-for judges. Public sharing is authorized but not yet established by this check.
+for judges. The public repository can now serve as a source/evidence URL; public
+access to the latest Drive PDF and combined bundle is still unverified.
 Event submission remains a separate action; this preparation establishes no
 event receipt.
 

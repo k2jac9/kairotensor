@@ -74,10 +74,17 @@ pixel, text passage and URI link is checked against that export. A direct future
 Docs export will need that numbering step again. Figure source and rendering
 assets are included in the reviewer package.
 
-The repository remains private. The owner authorized read-only reviewer link
+The [repository](https://github.com/k2jac9/kairotensor) is now public. Anonymous
+reads of repository metadata, the main README, the measured snapshot README and
+the PDF on main succeeded on 16 November at 08:36 UTC. The measured README matched
+Git at `20fab84`. The PDF on main is an older export; it does not match the current
+seven-page editorial PDF in this local branch. See the
+[public-access receipt](verification/public-access-20261116/anonymous-check.json).
+
+The owner also authorized read-only reviewer link
 access for the [report PDF](https://drive.google.com/file/d/1dTGN3-QSCzFGtf2vwILFT7V1CRl_CmIQ/view)
 and [combined evidence package](https://drive.google.com/file/d/1Nc2X8NwHdDpKTSU2kknw0V_V5cqOEBOP/view).
-These links are stable delivery targets, not proof of public access. The current
+These Drive links are stable delivery targets, not proof of public access. The current
 connector cannot grant anonymous access; see Current status for the remaining
 sharing step. No event entry has been submitted by this preparation.
 
