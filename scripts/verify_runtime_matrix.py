@@ -117,6 +117,69 @@ def lane_environment(lane, aliases, explicit, inherited=None):
     return env
 
 
+
+def check_aliases(lane, aliases):
+    for alias, key in [('rustc','rustc'),('cargo','cargo'),('python3','python')]:
+        path=Path(aliases)/alias
+        if not path.is_symlink() or path.resolve()!=Path(lane[key]['path']).resolve():
+            raise ValueError(f'private alias mismatch: {alias}')
+        check_file({'path':str(path),'sha256':lane[key]['sha256']})
+
+
+def check_command_context(m,lane,out,record,runners=None):
+    expected={**PROFILE,'PATH':str(Path(out)/'bin')+os.pathsep+m['host_path'],
+              'RUSTC':lane['rustc']['path'],'RUNNER_TEMP':str(Path(out)/'outputs')}
+    if runners is not None:
+        expected.update(KAIROTENSOR_RECOVERY_RUNNER=runners['recovery_policy_eval']['path'],
+                        KAIROTENSOR_DECISION_REPLAY=runners['decision_replay']['path'])
+    if record.get('cwd')!=lane['checkout'] or record.get('environment')!=expected:
+        raise ValueError('command context contradicts declared checkout/runtime environment')
+
+
+PYTHON_PROBE_CODE = """import sys,os,json,subprocess,sqlite3,ssl,ctypes,zlib,bz2,lzma
+child=json.loads(subprocess.check_output(['python3','-c',
+'import sys,os,json;print(json.dumps({"realpath":os.path.realpath(sys.executable),"version":"Python "+sys.version.split()[0]}))'],text=True))
+print(json.dumps({'parent':{'realpath':os.path.realpath(sys.executable),'version':'Python '+sys.version.split()[0]},'child':child}))
+"""
+
+
+def probe_python(lane,env):
+    argv=[lane['python']['path'],'-c',PYTHON_PROBE_CODE]
+    r=subprocess.run(argv,env=env,capture_output=True,text=True,timeout=20)
+    probe={'argv':argv,'exit':r.returncode,'stdout':r.stdout,'stderr':r.stderr}
+    try: probe['observed']=json.loads(r.stdout)
+    except ValueError: probe['observed']=None
+    return probe
+
+
+def check_python_probe(lane,aliases,probe):
+    check_aliases(lane,aliases)
+    expected={'realpath':str(Path(lane['python']['path']).resolve()),'version':lane['python']['version']}
+    try: observed=json.loads(probe['stdout'])
+    except (KeyError,ValueError,TypeError):raise ValueError('invalid Python probe output') from None
+    if (probe.get('exit')!=0 or probe.get('argv')!=[lane['python']['path'],'-c',PYTHON_PROBE_CODE]
+            or observed!={'parent':expected,'child':expected} or probe.get('observed')!=observed
+            or not isinstance(probe.get('stderr'),str)):
+        raise ValueError('Python probe contradicts selected parent/child interpreter')
+
+
+def compiled_runners(record):
+    check_file(record['stdout'])
+    required={'recovery_policy_eval','decision_replay','policy_activation'}
+    runners={}
+    for line in Path(record['stdout']['path']).read_text().splitlines():
+        try: row=json.loads(line)
+        except ValueError: continue
+        if row.get('reason')!='compiler-artifact' or not row.get('executable'):continue
+        name=row['target']['name']
+        if name not in required:continue
+        if not Path(row['executable']).is_absolute():raise ValueError('runner path must be absolute')
+        identity=file_identity(row['executable'])
+        if name in runners and runners[name]!=identity:raise ValueError('conflicting compiled runner paths')
+        runners[name]=identity
+    if set(runners)!=required:raise ValueError('missing compiled runner artifacts')
+    return runners
+
 def command_inventory():
     """Source check.yml workload plus E1 demonstrations; placeholders are explicit."""
     commands = []
@@ -253,6 +316,9 @@ def check_command_receipt(command, record):
 
 def check_manifest(m):
     if m.get('schema')!='kairotensor-runtime-matrix/1': raise ValueError('unknown manifest schema')
+    host_path=m.get('host_path','')
+    if not isinstance(host_path,str) or any(not p or not Path(p).is_absolute() for p in host_path.split(os.pathsep)):
+        raise ValueError('host_path must contain nonempty absolute directories')
     validate_roles(m['lanes'])
     if m['commands'] != command_inventory(): raise ValueError('incomplete or changed required command inventory')
     for field in ['wrapper','storage_guard','cargo_recipe','bundle','attestations']:
@@ -277,12 +343,10 @@ def run_lane(m,lane,out):
         check_manifest(m)
         tools={k:check_identity(lane[k]) for k in ['rustc','cargo','python']}
         result['tools']=tools
-        env=lane_environment(lane,out/'bin',{'RUNNER_TEMP':str(outputs)})
-        # This actual subprocess must find the selected private python3 alias.
-        probe=subprocess.run([lane['python']['path'],'-c',
-            'import sys,subprocess,sqlite3,ssl,ctypes,zlib,bz2,lzma;print(sys.executable);subprocess.run(["python3","--version"],check=True)'],
-            env=env,capture_output=True,text=True,timeout=20,check=True)
-        result['python_child_probe']={'stdout':probe.stdout,'stderr':probe.stderr}
+        env=lane_environment(lane,out/'bin',{'RUNNER_TEMP':str(outputs)},dict(os.environ,PATH=m['host_path']))
+        result['python_child_probe']=probe_python(lane,env)
+        save(out/'receipt.json',result)
+        check_python_probe(lane,out/'bin',result['python_child_probe'])
         variables={'wrapper':m['wrapper']['path'],'python':lane['python']['path'],
                    'outputs':outputs,'bundle':m['bundle']['path'],'attestations':m['attestations']['path']}
         commands=render(m['commands'],variables);result['resolved_commands']=commands
@@ -295,15 +359,9 @@ def run_lane(m,lane,out):
             print(lane['role'],command['id'],record['status'],record['exit'],flush=True)
             if record['status']!='Pass': break
             if command['id']=='compile-required-runners':
-                runners={}
-                for line in Path(record['stdout']['path']).read_text().splitlines():
-                    try: row=json.loads(line)
-                    except ValueError: continue
-                    if row.get('reason')=='compiler-artifact' and row.get('executable'):
-                        runners[row['target']['name']]=file_identity(row['executable'])
+                runners=compiled_runners(record)
                 for name,key in [('recovery_policy_eval','KAIROTENSOR_RECOVERY_RUNNER'),('decision_replay','KAIROTENSOR_DECISION_REPLAY')]:
                     env[key]=runners[name]['path']
-                if 'policy_activation' not in runners: raise ValueError('missing policy runner')
                 result['runners']=runners
         check_manifest(m);result['source_verified_after']=True
         for identity in tools.values(): check_file(identity)
@@ -311,8 +369,11 @@ def run_lane(m,lane,out):
         if len(result['commands'])==len(commands) and all(r['status']=='Pass' for r in result['commands']):
             for c,r in zip(commands,result['commands']): check_command_receipt(c,r)
             result['status']='Pass'
+            save(out/'receipt.json',result)
+            verify_receipt(m,lane,json.loads((out/'receipt.json').read_text()))
     except (OSError,ValueError,KeyError,subprocess.SubprocessError) as error:
         result['error']=str(error)
+        if result['commands']:result['status']='Failed'
     save(out/'receipt.json',result)
     return result
 
@@ -326,16 +387,20 @@ def verify_receipt(m,lane,receipt):
     if not receipt.get('source_verified_after'): raise ValueError('missing source verification')
     for k in ['rustc','cargo','python']:
         if receipt['tools'][k]!=check_identity(lane[k]): raise ValueError('runtime receipt mismatch')
-    if set(receipt.get('runners',{}))!={'recovery_policy_eval','decision_replay','policy_activation'}:
-        raise ValueError('missing runner receipts')
-    for identity in receipt['runners'].values(): check_file(identity)
+    if not receipt.get('commands'):raise ValueError('missing command receipts')
+    runners=compiled_runners(receipt['commands'][0])
+    if receipt.get('runners')!=runners:raise ValueError('runner receipt contradicts compiler artifacts')
+    out=Path(receipt['commands'][0]['stdout']['path']).parent.parent
+    check_python_probe(lane,out/'bin',receipt.get('python_child_probe',{}))
     commands=receipt['resolved_commands']
     variables={'wrapper':m['wrapper']['path'],'python':lane['python']['path'],
         'outputs':str(Path(receipt['commands'][0]['stdout']['path']).parent.parent/'outputs'),
         'bundle':m['bundle']['path'],'attestations':m['attestations']['path']}
     if commands!=render(m['commands'],variables) or len(receipt['commands'])!=len(commands):
         raise ValueError('missing or changed command receipts')
-    for c,r in zip(commands,receipt['commands']): check_command_receipt(c,r)
+    for index,(c,r) in enumerate(zip(commands,receipt['commands'])):
+        check_command_context(m,lane,out,r,None if index==0 else runners)
+        check_command_receipt(c,r)
 
 
 def main():

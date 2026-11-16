@@ -175,7 +175,7 @@ class RuntimeMatrixTests(unittest.TestCase):
         lanes=[{'role':role,'checkout':str(repo),'rustc':self.identity,'cargo':self.identity,
                 'python':self.identity,'provenance':[identity]}
                for role in ['stable','rust-upcoming','rust-previous','python-upcoming','python-previous']]
-        return {'schema':'kairotensor-runtime-matrix/1','lanes':lanes,
+        return {'schema':'kairotensor-runtime-matrix/1','host_path':os.environ['PATH'],'lanes':lanes,
                 'source':{'commit':commit,'files':{'Cargo.lock':self.sha(repo/'Cargo.lock')},'lock_sha256':self.sha(repo/'Cargo.lock')},
                 'commands':self.m.command_inventory(),'native_files':[identity],
                 **{k:identity for k in ['wrapper','storage_guard','cargo_recipe','bundle','attestations']}}
@@ -225,6 +225,72 @@ class RuntimeMatrixTests(unittest.TestCase):
         c=self.command('print("test result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out")','rust')
         r=json.loads(json.dumps(self.run_command(c)));r['status']='Pass';r['skips']=0
         with self.assertRaises(ValueError):self.m.check_command_receipt(c,r)
+
+    def context_fixture(self):
+        lane={'checkout':str(self.root),'rustc':self.identity,'cargo':self.identity,'python':self.identity}
+        manifest={'host_path':'/usr/bin:/bin'}
+        env={'CARGO_PROFILE_DEV_DEBUG':'0','CARGO_PROFILE_TEST_DEBUG':'0','CARGO_INCREMENTAL':'0',
+             'KAIROTENSOR_REQUIRE_LINUX_CLOCK':'1','RUSTUP_AUTO_INSTALL':'0','UV_PYTHON_DOWNLOADS':'never',
+             'PYTHONDONTWRITEBYTECODE':'1','PATH':str(self.root/'bin')+':/usr/bin:/bin',
+             'RUSTC':str(self.tool),'RUNNER_TEMP':str(self.root/'outputs')}
+        return manifest,lane,{'cwd':str(self.root),'environment':env}
+
+    def test_recorded_context_roundtrip(self):
+        m,lane,r=self.context_fixture()
+        self.m.check_command_context(m,lane,self.root,json.loads(json.dumps(r)))
+
+    def test_contradictory_cwd_rejected(self):
+        m,lane,r=self.context_fixture();r['cwd']='/another/checkout'
+        with self.assertRaisesRegex(ValueError,'context'):self.m.check_command_context(m,lane,self.root,r)
+
+    def test_contradictory_runtime_profile_or_path_rejected(self):
+        for key,value in [('RUSTC','/wrong/rustc'),('CARGO_PROFILE_DEV_DEBUG','2'),('PATH','/usr/bin'),('RUNNER_TEMP','/wrong/output')]:
+            with self.subTest(key=key):
+                m,lane,r=self.context_fixture();r['environment'][key]=value
+                with self.assertRaisesRegex(ValueError,'context'):self.m.check_command_context(m,lane,self.root,r)
+
+    def test_missing_or_wrong_runner_environment_rejected(self):
+        m,lane,r=self.context_fixture();runners={k:self.identity for k in ['recovery_policy_eval','decision_replay','policy_activation']}
+        with self.assertRaisesRegex(ValueError,'context'):self.m.check_command_context(m,lane,self.root,r,runners)
+        r['environment'].update(KAIROTENSOR_RECOVERY_RUNNER=str(self.tool),KAIROTENSOR_DECISION_REPLAY='/wrong/runner')
+        with self.assertRaisesRegex(ValueError,'context'):self.m.check_command_context(m,lane,self.root,r,runners)
+
+    def test_alias_retargeting_rejected(self):
+        lane={'rustc':self.identity,'cargo':self.identity,'python':self.identity}
+        aliases=self.root/'aliases';aliases.mkdir()
+        for name in ['rustc','cargo','python3']:(aliases/name).symlink_to(self.tool)
+        self.m.check_aliases(lane,aliases)
+        (aliases/'python3').unlink();(aliases/'python3').symlink_to(sys.executable)
+        with self.assertRaisesRegex(ValueError,'alias'):self.m.check_aliases(lane,aliases)
+
+    def test_host_path_must_have_nonempty_absolute_components(self):
+        m=self.manifest()
+        for path in ['', '/bin::/usr/bin','relative:/bin']:
+            m['host_path']=path
+            with self.assertRaisesRegex(ValueError,'host_path'):self.m.check_manifest(m)
+
+    def test_structured_actual_python_parent_child_probe_roundtrip(self):
+        identity={'path':sys.executable,'sha256':self.sha(sys.executable),'version_args':['--version'],
+                  'version':subprocess.check_output([sys.executable,'--version'],text=True).strip()}
+        lane={'python':identity,'rustc':identity,'cargo':identity}
+        aliases=self.root/'aliases';env=self.m.lane_environment(lane,aliases,{}, {'PATH':os.environ['PATH']})
+        probe=json.loads(json.dumps(self.m.probe_python(lane,env)))
+        self.m.check_python_probe(lane,aliases,probe)
+        self.assertEqual(probe['observed']['parent']['realpath'],str(Path(sys.executable).resolve()))
+        self.assertEqual(probe['observed']['child']['realpath'],str(Path(sys.executable).resolve()))
+        probe['observed']['child']['realpath']='/wrong/python'
+        with self.assertRaisesRegex(ValueError,'probe'):self.m.check_python_probe(lane,aliases,probe)
+
+    def test_compiler_artifact_runner_paths_are_authoritative(self):
+        log=self.root/'compiler.stdout'
+        log.write_text('\n'.join(json.dumps({'reason':'compiler-artifact','target':{'name':name},'executable':str(self.tool)})
+                                  for name in ['recovery_policy_eval','decision_replay','policy_activation']))
+        r={'stdout':{'path':str(log),'sha256':self.sha(log)}}
+        expected={name:{'path':str(self.tool),'sha256':self.sha(self.tool)}
+                  for name in ['recovery_policy_eval','decision_replay','policy_activation']}
+        self.assertEqual(self.m.compiled_runners(r),expected)
+        log.write_text('{}')
+        with self.assertRaises(ValueError):self.m.compiled_runners(r)
 
     def test_inventory_contains_all_distinct_commands(self):
         commands=self.m.command_inventory()
