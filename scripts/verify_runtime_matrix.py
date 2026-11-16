@@ -315,10 +315,18 @@ def check_command_receipt(command, record):
 
 
 def check_manifest(m):
+    """Check shared inputs and every role's contract, not its availability."""
     if m.get('schema')!='kairotensor-runtime-matrix/1': raise ValueError('unknown manifest schema')
     host_path=m.get('host_path','')
     if not isinstance(host_path,str) or any(not p or not Path(p).is_absolute() for p in host_path.split(os.pathsep)):
         raise ValueError('host_path must contain nonempty absolute directories')
+    source=m['source'];files=source['files']
+    if (not re.fullmatch(r'[0-9a-f]{40}',source['commit']) or not isinstance(files,dict)
+            or files.get('Cargo.lock')!=source['lock_sha256']
+            or not re.fullmatch(r'[0-9a-f]{64}',source['lock_sha256'])
+            or any(Path(name).is_absolute() or '..' in Path(name).parts
+                   or not re.fullmatch(r'[0-9a-f]{64}',digest) for name,digest in files.items())):
+        raise ValueError('invalid shared source contract')
     validate_roles(m['lanes'])
     if m['commands'] != command_inventory(): raise ValueError('incomplete or changed required command inventory')
     for field in ['wrapper','storage_guard','cargo_recipe','bundle','attestations']:
@@ -327,12 +335,26 @@ def check_manifest(m):
     for identity in m['native_files']: check_file(identity)
     for lane in m['lanes']:
         if not Path(lane['checkout']).is_absolute(): raise ValueError('absolute checkout required')
-        check_source(lane['checkout'],m['source'])
         if not lane.get('provenance'): raise ValueError('missing runtime archive/closure provenance')
-        for identity in lane['provenance']: check_file(identity)
+        for identity in [*lane['provenance'],*(lane[k] for k in ['rustc','cargo','python'])]:
+            if not Path(identity['path']).is_absolute(): raise ValueError('identity requires absolute path')
+            if not re.fullmatch(r'[0-9a-f]{64}',identity['sha256']): raise ValueError('invalid identity digest')
+        for key in ['rustc','cargo','python']:
+            identity=lane[key]
+            if (not isinstance(identity['version'],str) or not identity['version']
+                    or not isinstance(identity['version_args'],list)
+                    or not all(isinstance(arg,str) for arg in identity['version_args'])):
+                raise ValueError('invalid runtime version contract')
 
 
-def run_lane(m,lane,out):
+def check_lane(m,lane):
+    root=Path(lane['checkout'])
+    if not root.exists(): raise FileNotFoundError(f'unavailable checkout: {root}')
+    check_source(root,m['source'])
+    for identity in lane['provenance']: check_file(identity)
+
+
+def run_lane(m,lane,out,blocked_reason=None):
     out=Path(out);out.mkdir(parents=True,exist_ok=False)
     root=Path(lane['checkout']); outputs=out/'outputs';outputs.mkdir()
     result={'role':lane['role'],'source':m['source'],'status':'Unexecuted','commands':[],
@@ -341,6 +363,11 @@ def run_lane(m,lane,out):
     save(out/'receipt.json',result)
     try:
         check_manifest(m)
+        check_lane(m,lane)
+        if blocked_reason:
+            result['error']=blocked_reason
+            save(out/'receipt.json',result)
+            return result
         tools={k:check_identity(lane[k]) for k in ['rustc','cargo','python']}
         result['tools']=tools
         env=lane_environment(lane,out/'bin',{'RUNNER_TEMP':str(outputs)},dict(os.environ,PATH=m['host_path']))
@@ -363,7 +390,7 @@ def run_lane(m,lane,out):
                 for name,key in [('recovery_policy_eval','KAIROTENSOR_RECOVERY_RUNNER'),('decision_replay','KAIROTENSOR_DECISION_REPLAY')]:
                     env[key]=runners[name]['path']
                 result['runners']=runners
-        check_manifest(m);result['source_verified_after']=True
+        check_manifest(m);check_lane(m,lane);result['source_verified_after']=True
         for identity in tools.values(): check_file(identity)
         for identity in result.get('runners',{}).values(): check_file(identity)
         if len(result['commands'])==len(commands) and all(r['status']=='Pass' for r in result['commands']):
@@ -373,13 +400,14 @@ def run_lane(m,lane,out):
             verify_receipt(m,lane,json.loads((out/'receipt.json').read_text()))
     except (OSError,ValueError,KeyError,subprocess.SubprocessError) as error:
         result['error']=str(error)
-        if result['commands']:result['status']='Failed'
+        if result['commands'] or not isinstance(error,OSError):result['status']='Failed'
     save(out/'receipt.json',result)
     return result
 
 
 def verify_receipt(m,lane,receipt):
     check_manifest(m)
+    check_lane(m,lane)
     if receipt.get('manifest_sha256')!=hashlib.sha256(json.dumps(m,sort_keys=True).encode()).hexdigest():
         raise ValueError('receipt manifest identity mismatch')
     if receipt.get('role')!=lane['role'] or receipt.get('source')!=m['source'] or receipt.get('status')!='Pass':
@@ -418,11 +446,14 @@ def main():
     results=[]
     for lane in m['lanes']:
         if args.lane and lane['role']!=args.lane: continue
+        blocked_reason=None
         if lane['role'].startswith('python-'):
             stable=args.output/'stable'/'receipt.json'
-            if not stable.is_file(): raise ValueError('stable qualification required before dependent Python lane')
-            verify_receipt(m,next(l for l in m['lanes'] if l['role']=='stable'),json.loads(stable.read_text()))
-        results.append(run_lane(m,lane,args.output/lane['role']))
+            try:
+                verify_receipt(m,next(l for l in m['lanes'] if l['role']=='stable'),json.loads(stable.read_text()))
+            except (OSError,ValueError,KeyError,subprocess.SubprocessError) as error:
+                blocked_reason=f'validated stable qualification required: {error}'
+        results.append(run_lane(m,lane,args.output/lane['role'],blocked_reason))
     return 0 if results and all(r['status']=='Pass' for r in results) else 1
 
 

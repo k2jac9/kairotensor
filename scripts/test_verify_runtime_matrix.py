@@ -190,6 +190,116 @@ class RuntimeMatrixTests(unittest.TestCase):
         self.assertEqual(r['status'],'Unexecuted');self.assertEqual(r['commands'],[])
         self.assertTrue((self.root/'result'/'receipt.json').is_file())
 
+    def cli_fixture(self):
+        m=copy.deepcopy(self.manifest())
+        m['lanes']=[copy.deepcopy(lane) for lane in m['lanes']]
+        python={'path':sys.executable,'sha256':self.sha(sys.executable),
+                'version_args':['--version'],
+                'version':subprocess.check_output([sys.executable,'--version'],text=True).strip()}
+        for lane in m['lanes']:lane['python']=copy.deepcopy(python)
+        wrapper=self.root/'fixture-wrapper'
+        wrapper.write_text(f'#!{sys.executable}\nprint("fixture workload reached")\nraise SystemExit(23)\n')
+        wrapper.chmod(0o755)
+        m['wrapper']={'path':str(wrapper),'sha256':self.sha(wrapper)}
+        return m
+
+    def invoke_cli(self,m,label,lane=None):
+        manifest=self.root/(label+'.json');manifest.write_text(json.dumps(m))
+        output=self.root/('run-'+label)
+        argv=[sys.executable,SPEC.origin,'--manifest',str(manifest),'--output',str(output)]
+        if lane:argv+=['--lane',lane]
+        # The matrix itself runs these tests under selected compiler variables.
+        # This child CLI fixture declares its own runtime environment.
+        env={k:v for k,v in os.environ.items() if k not in self.m.OVERRIDES
+             and not k.startswith(('CARGO_TARGET_','CARGO_PROFILE_'))}
+        result=subprocess.run(argv,capture_output=True,text=True,env=env,timeout=30)
+        receipts={p.parent.name:json.loads(p.read_text()) for p in output.glob('*/receipt.json')}
+        return result,receipts
+
+    def missing_prerequisite(self,lane,kind):
+        missing=str(self.root/('unavailable-'+kind))
+        if kind=='checkout':lane['checkout']=missing
+        elif kind=='archive':lane['provenance']=[{'path':missing,'sha256':'0'*64}]
+        else:lane['cargo']['path']=missing
+
+    def assert_workload_reached(self,receipt):
+        self.assertEqual(receipt['status'],'Failed')
+        self.assertEqual(len(receipt['commands']),1)
+        self.assertEqual(receipt['commands'][0]['exit'],23)
+        self.assertIn('fixture workload reached',Path(receipt['commands'][0]['stdout']['path']).read_text())
+
+    def test_cli_selected_stable_ignores_unavailable_preview_prerequisites(self):
+        m=self.cli_fixture()
+        for kind in ['archive','checkout','executable']:
+            with self.subTest(kind=kind):
+                changed=copy.deepcopy(m);self.missing_prerequisite(changed['lanes'][1],kind)
+                result,receipts=self.invoke_cli(changed,'selected-'+kind,'stable')
+                self.assertEqual(set(receipts),{'stable'},result.stderr)
+                self.assert_workload_reached(receipts['stable'])
+                self.assertEqual(result.returncode,1)  # intentional fixture workload failure
+
+    def test_cli_requested_unavailable_role_has_explicit_receipt(self):
+        m=self.cli_fixture()
+        for kind in ['archive','checkout','executable']:
+            with self.subTest(kind=kind):
+                changed=copy.deepcopy(m);self.missing_prerequisite(changed['lanes'][1],kind)
+                result,receipts=self.invoke_cli(changed,'unavailable-'+kind,'rust-upcoming')
+                self.assertEqual(set(receipts),{'rust-upcoming'},result.stderr)
+                self.assertEqual(receipts['rust-upcoming']['status'],'Unexecuted')
+                self.assertEqual(receipts['rust-upcoming']['commands'],[])
+                self.assertNotEqual(result.returncode,0)
+
+    def test_cli_full_matrix_continues_independent_roles_when_stable_unavailable(self):
+        m=self.cli_fixture();self.missing_prerequisite(m['lanes'][0],'archive')
+        result,receipts=self.invoke_cli(m,'full-unavailable')
+        self.assertEqual(set(receipts),self.m.ROLES,result.stderr)
+        self.assertEqual(receipts['stable']['status'],'Unexecuted')
+        for role in ['rust-upcoming','rust-previous']:self.assert_workload_reached(receipts[role])
+        for role in ['python-upcoming','python-previous']:
+            self.assertEqual(receipts[role]['status'],'Unexecuted')
+            self.assertEqual(receipts[role]['commands'],[])
+            self.assertIn('stable',receipts[role]['error'])
+        self.assertNotEqual(result.returncode,0)
+
+    def test_cli_full_matrix_failed_stable_blocks_dependent_rows(self):
+        result,receipts=self.invoke_cli(self.cli_fixture(),'full-failed')
+        self.assertEqual(set(receipts),self.m.ROLES,result.stderr)
+        for role in ['stable','rust-upcoming','rust-previous']:self.assert_workload_reached(receipts[role])
+        for role in ['python-upcoming','python-previous']:
+            self.assertEqual(receipts[role]['status'],'Unexecuted')
+            self.assertEqual(receipts[role]['commands'],[])
+        self.assertNotEqual(result.returncode,0)
+
+    def test_cli_selected_python_without_stable_receipt_is_unexecuted(self):
+        result,receipts=self.invoke_cli(self.cli_fixture(),'no-stable','python-upcoming')
+        self.assertEqual(set(receipts),{'python-upcoming'},result.stderr)
+        self.assertEqual(receipts['python-upcoming']['status'],'Unexecuted')
+        self.assertEqual(receipts['python-upcoming']['commands'],[])
+        self.assertNotEqual(result.returncode,0)
+
+    def test_cli_digest_mismatch_is_failure_not_unavailable(self):
+        m=self.cli_fixture();m['lanes'][1]['provenance'][0]['sha256']='0'*64
+        result,receipts=self.invoke_cli(m,'bad-digest','rust-upcoming')
+        self.assertEqual(set(receipts),{'rust-upcoming'},result.stderr)
+        self.assertEqual(receipts['rust-upcoming']['status'],'Failed')
+        self.assertEqual(receipts['rust-upcoming']['commands'],[])
+        self.assertIn('digest',receipts['rust-upcoming']['error'])
+        self.assertNotEqual(result.returncode,0)
+
+    def test_cli_unselected_structural_contradiction_still_refuses(self):
+        m=self.cli_fixture();m['lanes'][1]['checkout']='relative-checkout'
+        result,receipts=self.invoke_cli(m,'invalid-structure','stable')
+        self.assertEqual(receipts,{})
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn('absolute',result.stderr)
+
+    def test_cli_missing_checkout_does_not_hide_invalid_shared_source_contract(self):
+        m=self.cli_fixture();self.missing_prerequisite(m['lanes'][0],'checkout')
+        m['source']['lock_sha256']='0'*64
+        result,receipts=self.invoke_cli(m,'invalid-source','stable')
+        self.assertEqual(receipts,{})
+        self.assertNotEqual(result.returncode,0)
+
     def test_receipt_binds_whole_manifest(self):
         m=self.manifest();receipt={'role':'stable','source':m['source'],'status':'Pass','manifest_sha256':'0'*64}
         with self.assertRaisesRegex(ValueError,'manifest'):
