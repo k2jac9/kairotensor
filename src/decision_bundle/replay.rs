@@ -50,6 +50,7 @@ pub fn reevaluate_bundle(bundle: &DecisionBundleV1, validator: &str) -> ReplayRe
 }
 fn replay(b: &DecisionBundleV1, new_validator: Option<&str>) -> ReplayReport {
     let mut result = ReplayReport {
+        report_schema: "decision-replay-report/2",
         consistency: ReplayStatus::Mismatch,
         reconstruction: ReplayStatus::NotReproducible,
         validation: ReplayStatus::NotReproducible,
@@ -57,6 +58,7 @@ fn replay(b: &DecisionBundleV1, new_validator: Option<&str>) -> ReplayReport {
         validator_provenance: None,
         missing_requirements: vec![],
         accounting: vec![],
+        unknown_accounting: vec![],
         source_bundle_sha256: None,
         reevaluated_validator: None,
         attempts: vec![],
@@ -78,8 +80,12 @@ fn replay(b: &DecisionBundleV1, new_validator: Option<&str>) -> ReplayReport {
         let unit = a.accounting.unit;
         if unit == AccountingUnit::Unknown {
             missing(&mut result, MissingRequirement::UnknownAccountingUnit);
-        }
-        if let Some(t) = result.accounting.iter_mut().find(|t| t.unit == unit) {
+            result.unknown_accounting.push(UnknownAccountingObservation {
+                attempt_id: a.id,
+                charged: a.accounting.charge,
+                held: a.accounting.hold_bound,
+            });
+        } else if let Some(t) = result.accounting.iter_mut().find(|t| t.unit == unit) {
             t.charged += a.accounting.charge;
             t.held += a.accounting.hold_bound;
         } else {

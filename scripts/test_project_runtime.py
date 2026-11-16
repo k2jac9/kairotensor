@@ -64,9 +64,13 @@ class ProjectRuntimeTests(unittest.TestCase):
         for t in self.receipt['tools'].values():
             t['resolved_path'] = str(Path(t['path']).resolve())
         self.receipt_path = self.write('receipt.json', self.receipt)
-        self.selection = {'schema': 'kairotensor-project-runtime/1', 'role': 'stable', 'tools': self.tools, 'host_tools': self.host_tools,
+        self.selection = {'schema': 'kairotensor-project-runtime/2', 'role': 'stable', 'tools': self.tools, 'host_tools': self.host_tools,
                           'qualification_manifest': identity(self.manifest_path), 'qualification_receipt': identity(self.receipt_path),
                           'independent_review': identity(self.review), 'acceptance': identity(self.acceptance)}
+        rustdoc = self.root / 'rustdoc'
+        rustdoc.write_text('#!/bin/sh\nprintf "%s\\n" "rustdoc fixture"\n')
+        rustdoc.chmod(0o700)
+        self.tools['rustdoc'] = dict(identity(rustdoc), version='rustdoc fixture', version_args=['--version'])
         self.selection_path = self.root / 'selection.json'
 
     def write(self, name, value):
@@ -82,6 +86,55 @@ class ProjectRuntimeTests(unittest.TestCase):
 
     def latest(self):
         return json.loads(sorted(self.state.glob('invocations/*/receipt.json'))[-1].read_text())
+
+    def test_selected_rustdoc_shadows_host_and_is_recorded(self):
+        shadow = self.root / 'shadow-rustdoc'
+        shadow.mkdir()
+        fake = shadow / 'rustdoc'
+        fake.write_text('#!/bin/sh\necho host-shadow\nexit 63\n')
+        fake.chmod(0o700)
+        env = dict(self.env, PATH=str(shadow) + os.pathsep + self.env['PATH'])
+        r = self.run_launcher('python', '-c', 'import os,shutil,subprocess,json; print(json.dumps([os.environ["RUSTDOC"],os.path.realpath(shutil.which("rustdoc")),subprocess.check_output(["rustdoc","--version"],text=True).strip(),os.environ["RUSTC"]]))', env=env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout), [self.tools['rustdoc']['path'], self.tools['rustdoc']['path'], 'rustdoc fixture', self.tools['rustc']['path']])
+        self.assertEqual(self.latest()['tools']['rustdoc']['sha256'], self.tools['rustdoc']['sha256'])
+
+    def test_rustdoc_binding_refuses_missing_hash_version_path_and_args(self):
+        original = dict(self.tools['rustdoc'])
+        cases = [('sha256', '0' * 64), ('version', 'rustdoc wrong'), ('path', self.tools['cargo']['path']), ('version_args', ['-vV'])]
+        for key, value in cases:
+            with self.subTest(key=key):
+                self.tools['rustdoc'] = dict(original, **{key: value})
+                self.assertEqual(self.run_launcher('identity').returncode, 2)
+        self.tools['rustdoc'] = original
+        Path(original['path']).unlink()
+        self.assertEqual(self.run_launcher('identity').returncode, 2)
+
+    def test_rustdoc_actual_version_is_verified_after_hash_rebind(self):
+        path = Path(self.tools['rustdoc']['path'])
+        path.write_text('#!/bin/sh\necho "rustdoc wrong"\n')
+        self.tools['rustdoc'].update(identity(path))
+        r = self.run_launcher('identity')
+        self.assertEqual(r.returncode, 2)
+        self.assertIn('version mismatch', r.stderr)
+
+    def test_runtime_tool_set_is_exact(self):
+        for mode in ['missing', 'additional']:
+            with self.subTest(mode=mode):
+                original = dict(self.selection['tools'])
+                if mode == 'missing':
+                    del self.selection['tools']['rustdoc']
+                else:
+                    self.selection['tools']['unqualified'] = self.tools['cargo']
+                self.assertEqual(self.run_launcher('identity').returncode, 2)
+                self.selection['tools'] = original
+
+    def test_old_selection_requires_explicit_migration(self):
+        self.selection['schema'] = 'kairotensor-project-runtime/1'
+        self.assertEqual(self.run_launcher('identity').returncode, 2)
+
+    def test_rustdoc_selectors_and_flags_refuse_before_aliases(self):
+        self.assert_native_overrides_refused([(key, value) for key in ['RUSTDOC', 'RUSTDOCFLAGS', 'CARGO_ENCODED_RUSTDOCFLAGS', 'CARGO_BUILD_RUSTDOC'] for value in ['unexpected', '']])
 
     def test_selected_parent_and_child_python(self):
         r = self.run_launcher('python', '-c', 'import subprocess; print(subprocess.check_output(["python3", "--version"], text=True).strip())')

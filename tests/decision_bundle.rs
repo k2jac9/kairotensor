@@ -46,6 +46,103 @@ fn report_fixture() -> Value {
     a["accounting"]["unit"] = "logical_support".into();
     v
 }
+// Distinct opaque computations can have unrelated measurement dimensions.
+fn accounting_pair(first: i64, second: i64) -> Value {
+    let mut v = fixture();
+    v["attempts"][0]["accounting"]["charge"] = first.into();
+    v["attempts"][0]["delivery"]["usage"] = first.into();
+    let mut next = v["attempts"][0].clone();
+    next["id"] = 2.into();
+    next["branch"] = 2.into();
+    next["inherited_from"] = 1.into();
+    next["parent"] = 1.into();
+    next["accounting"]["charge"] = second.into();
+    next["delivery"]["usage"] = second.into();
+    v["attempts"].as_array_mut().unwrap().push(next);
+    v
+}
+#[test]
+fn unknown_observations_are_ordered_per_attempt_not_summed() {
+    let raw = seal(accounting_pair(10, 20));
+    let bundle = parse_decision_bundle(&raw).unwrap();
+    let report = validate_recorded_bundle(&bundle);
+    let json = serde_json::to_value(&report).unwrap();
+    assert_eq!(json["report_schema"], "decision-replay-report/2");
+    assert_eq!(json["accounting"], json!([]));
+    assert_eq!(json["unknown_accounting"], json!([
+        {"attempt_id":1,"charged":10,"held":0}, {"attempt_id":2,"charged":20,"held":0}
+    ]));
+    assert!(report.missing_requirements.contains(&MissingRequirement::UnknownAccountingUnit));
+    assert_eq!(bundle.to_json().unwrap(), raw);
+}
+#[test]
+fn independent_large_unknown_charges_do_not_overflow_an_invented_total() {
+    let bundle = parsed(accounting_pair(i64::MAX, 1));
+    let report = serde_json::to_value(validate_recorded_bundle(&bundle)).unwrap();
+    assert_eq!(report["consistency"], "matched");
+    assert_eq!(report["accounting"], json!([]));
+    assert_eq!(report["unknown_accounting"], json!([
+        {"attempt_id":1,"charged":i64::MAX,"held":0}, {"attempt_id":2,"charged":1,"held":0}
+    ]));
+}
+#[test]
+fn unknown_holds_remain_independent_and_known_totals_survive() {
+    let mut v = accounting_pair(0, 0);
+    for (attempt, hold) in v["attempts"].as_array_mut().unwrap().iter_mut().zip([i64::MAX, 1]) {
+        attempt["delivery"] = json!({"state":"unresolved"});
+        attempt["inherited_from"] = Value::Null;
+        attempt["accounting"] = json!({"unit":"unknown","quote":{"input_tokens":0,"output_cap":hold},"granted":true,"budget_reference":1,"charge":0,"hold_bound":hold});
+    }
+    let mut known = fixture()["attempts"][0].clone();
+    known["inputs"][0]["role"] = "evidence".into();
+    known["accounting"]["unit"] = "logical_support".into();
+    known["support"] = json!({"version":"support/v1","rule_id":999,"verdict":true,"clauses":[{"clause_id":1,"premises":[{"evidence_id":1,"actor":"a","scope":"s"}]}]});
+    known["id"] = 3.into();
+    known["branch"] = 3.into();
+    known["accounting"]["charge"] = 7.into();
+    known["delivery"]["usage"] = 7.into();
+    v["attempts"].as_array_mut().unwrap().push(known);
+    let report = serde_json::to_value(validate_recorded_bundle(&parsed(v))).unwrap();
+    assert_eq!(report["consistency"], "matched");
+    assert_eq!(report["accounting"], json!([{"unit":"logical_support","charged":7,"held":0}]));
+    assert_eq!(report["unknown_accounting"], json!([
+        {"attempt_id":1,"charged":0,"held":i64::MAX}, {"attempt_id":2,"charged":0,"held":1}
+    ]));
+}
+#[test]
+fn known_unit_aggregate_and_combined_hold_overflow_still_refuse() {
+    for held in [false, true] {
+        let mut v = accounting_pair(i64::MAX, 1);
+        for a in v["attempts"].as_array_mut().unwrap() {
+            a["accounting"]["unit"] = "logical_support".into();
+            a["inputs"][0]["role"] = "evidence".into();
+            a["support"] = json!({"version":"support/v1","rule_id":999,"verdict":true,"clauses":[{"clause_id":1,"premises":[{"evidence_id":1,"actor":"a","scope":"s"}]}]});
+        }
+        if held {
+            v["attempts"][1]["delivery"] = json!({"state":"unresolved"});
+            v["attempts"][1]["accounting"] = json!({"unit":"logical_support","quote":{"input_tokens":0,"output_cap":1},"granted":true,"budget_reference":1,"charge":0,"hold_bound":1});
+        }
+        let mut valid = v.clone();
+        valid["attempts"][0]["accounting"]["charge"] = 10.into();
+        valid["attempts"][0]["delivery"]["usage"] = 10.into();
+        assert!(parse_decision_bundle(&seal(valid)).is_ok());
+        assert!(matches!(parse_decision_bundle(&seal(v)), Err(BundleError::InconsistentLedger)));
+    }
+}
+#[test]
+fn report_v2_empty_unknowns_and_invalid_bundles_remain_bounded() {
+    let b = parsed(report_fixture());
+    let report = serde_json::to_value(validate_recorded_bundle(&b)).unwrap();
+    assert_eq!(report["unknown_accounting"], json!([]));
+    let mut bad = parsed(fixture());
+    bad.attempts[0].accounting.charge = -1;
+    let report = serde_json::to_value(validate_recorded_bundle(&bad)).unwrap();
+    assert_eq!(report["consistency"], "mismatch");
+    assert_eq!(report["accounting"], json!([]));
+    assert_eq!(report["unknown_accounting"], json!([]));
+    assert_eq!(report["source_bundle_sha256"], Value::Null);
+    assert_eq!(report["attempts"], json!([]));
+}
 #[test]
 fn missing_unknown_duplicate_and_wrong_schema_refuse() {
     assert!(matches!(
@@ -184,8 +281,8 @@ fn unresolved_delivery_retains_hold_and_unknown_usage() {
     let r = validate_recorded_bundle(&b);
     assert_eq!(r.consistency, ReplayStatus::Matched);
     assert_eq!(r.validation, ReplayStatus::Incomplete);
-    assert_eq!(r.accounting[0].held, 6);
-    assert_eq!(r.accounting[0].charged, 0);
+    assert_eq!(r.unknown_accounting[0].held, 6);
+    assert_eq!(r.unknown_accounting[0].charged, 0);
     assert!(r
         .missing_requirements
         .contains(&MissingRequirement::MissingDelivery));
@@ -258,7 +355,7 @@ fn cancelled_unsent_recovery_releases_granted_hold() {
     a["recovery"] = json!({"recovery_id":1,"ordinal":0,"state":"cancelled","predecessor_id":null,"request":bytes(b"request")});
     a["accounting"] = json!({"unit":"unknown","quote":{"input_tokens":2,"output_cap":4},"granted":true,"budget_reference":1,"charge":0,"hold_bound":0});
     let r = validate_recorded_bundle(&parsed(v));
-    assert_eq!(r.accounting[0].held, 0);
+    assert_eq!(r.unknown_accounting[0].held, 0);
 }
 #[test]
 fn shared_occurrence_requires_each_consuming_attempt_scope() {
@@ -516,7 +613,7 @@ fn reserved_unsent_incident_reconstructs_recorded_preparation_without_claiming_d
     let r = validate_recorded_bundle(&parsed(v));
     assert_eq!(r.reconstruction, ReplayStatus::Matched);
     assert_eq!(r.validation, ReplayStatus::Incomplete);
-    assert_eq!(r.accounting[0].held, 514);
+    assert_eq!(r.unknown_accounting[0].held, 514);
 }
 
 #[test]
@@ -642,7 +739,7 @@ fn unsent_timed_refusal_keeps_uncovered_reservation_facts() {
         assert_eq!(report.reconstruction, ReplayStatus::Matched, "{state}");
         assert_eq!(report.validation, ReplayStatus::Incomplete, "{state}");
         assert_eq!(
-            report.accounting[0].held,
+            report.unknown_accounting[0].held,
             if state == "reserved" { 1538 } else { 0 }
         );
     }

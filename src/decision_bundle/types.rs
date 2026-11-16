@@ -273,6 +273,13 @@ pub struct UnitAccounting {
     pub charged: i64,
     pub held: i64,
 }
+/// An original ledger observation without an established shared measurement unit.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct UnknownAccountingObservation {
+    pub attempt_id: i64,
+    pub charged: i64,
+    pub held: i64,
+}
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct AttemptReplay {
     pub attempt_id: i64,
@@ -283,6 +290,7 @@ pub struct AttemptReplay {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct ReplayReport {
+    pub report_schema: &'static str,
     pub consistency: ReplayStatus,
     pub reconstruction: ReplayStatus,
     pub validation: ReplayStatus,
@@ -290,6 +298,7 @@ pub struct ReplayReport {
     pub validator_provenance: Option<ValidatorProvenance>,
     pub missing_requirements: Vec<MissingRequirement>,
     pub accounting: Vec<UnitAccounting>,
+    pub unknown_accounting: Vec<UnknownAccountingObservation>,
     pub source_bundle_sha256: Option<String>,
     pub reevaluated_validator: Option<String>,
     pub attempts: Vec<AttemptReplay>,

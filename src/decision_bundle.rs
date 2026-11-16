@@ -508,12 +508,12 @@ fn check_bundle(b: &DecisionBundleV1) -> Result<serde_json::Value, Error> {
         return Err(Error::InconsistentLedger);
     }
     value["integrity"]["sha256"] = b.integrity.sha256.clone().into();
-    // Aggregate arithmetic checked independently for each unit; no global budget totals.
+    // Only established common units admit aggregate arithmetic. Unknown observations
+    // retain their per-attempt bounds above without inventing a shared dimension.
     for unit in [
         AccountingUnit::LogicalSupport,
         AccountingUnit::FixtureBytes,
         AccountingUnit::ModelTokens,
-        AccountingUnit::Unknown,
     ] {
         let (mut charge, mut held) = (0i64, 0i64);
         for a in b.attempts.iter().filter(|a| a.accounting.unit == unit) {

@@ -67,8 +67,10 @@ def tool_identity(tool, env):
 
 
 def selection_contract(selection):
-    if selection['schema'] != 'kairotensor-project-runtime/1':
+    if selection['schema'] != 'kairotensor-project-runtime/2':
         raise ValueError('unknown selection schema')
+    if set(selection['tools']) != {'rustc', 'cargo', 'python', 'rustdoc'}:
+        raise ValueError('missing or unexpected runtime tool identity')
     manifest = load_identity(selection['qualification_manifest'])
     receipt = load_identity(selection['qualification_receipt'])
     acceptance = load_identity(selection['acceptance'])
@@ -92,6 +94,17 @@ def selection_contract(selection):
         recorded = receipt['tools'][key]
         if any(recorded[field] != expected[field] for field in ('path', 'sha256', 'version')):
             raise ValueError('qualification tool identity mismatch')
+    # Supplementary V2 binding: G1 never exercised or recorded rustdoc.
+    rustc = selection['tools']['rustc']
+    rustdoc = selection['tools']['rustdoc']
+    sibling = Path(rustc['path']).with_name('rustdoc')
+    expected_version = rustc['version'].splitlines()[0].replace('rustc ', 'rustdoc ', 1)
+    if (set(rustdoc) != {'path', 'sha256', 'version', 'version_args'}
+            or rustdoc['path'] != str(sibling)
+            or rustdoc['version_args'] != ['--version']
+            or rustdoc['version'] != expected_version):
+        raise ValueError('rustdoc identity must bind selected rustc sibling and version')
+    check_file(rustdoc)
     for item in [*manifest['native_files'], *lane['provenance'],
                  *(manifest[key] for key in ('wrapper', 'storage_guard', 'cargo_recipe'))]:
         check_file(item)
@@ -123,7 +136,9 @@ def runtime_environment(selection, manifest, aliases):
                             'CARGO_BUILD_TARGET', 'CARGO_BUILD_RUSTDOC', 'CARGO_ALIAS_TEST',
                             'GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_CONFIG',
                             'GIT_CONFIG_COUNT', 'GIT_CONFIG_PARAMETERS', 'BASH_ENV', 'ENV'}
+    rustdoc_inputs = {'RUSTDOC', 'RUSTDOCFLAGS', 'CARGO_ENCODED_RUSTDOCFLAGS', 'CARGO_BUILD_RUSTDOC'}
     unexpected = [key for key in forbidden if env.get(key)]
+    unexpected += [key for key in rustdoc_inputs if key in env]
     unexpected += [key for key in env if native_override(key)]
     unexpected += [key for key in env if key.startswith(('CARGO_TARGET_', 'CARGO_PROFILE_', 'CARGO_ALIAS_', 'CARGO_BUILD_'))
                    and env[key] and env[key] != PROFILE.get(key)]
@@ -131,12 +146,13 @@ def runtime_environment(selection, manifest, aliases):
         raise ValueError('unexpected runtime overrides: ' + ', '.join(sorted(set(unexpected))))
     env.update(PROFILE)
     aliases.mkdir(mode=0o700)
-    for alias, key in [('rustc', 'rustc'), ('cargo', 'cargo'), ('python3', 'python'), ('python', 'python')]:
+    for alias, key in [('rustc', 'rustc'), ('rustdoc', 'rustdoc'), ('cargo', 'cargo'), ('python3', 'python'), ('python', 'python')]:
         (aliases / alias).symlink_to(selection['tools'][key]['path'])
     for name, identity in selection['host_tools'].items():
         (aliases / name).symlink_to(identity['path'])
     env['PATH'] = str(aliases) + os.pathsep + manifest['host_path']
     env['RUSTC'] = selection['tools']['rustc']['path']
+    env['RUSTDOC'] = selection['tools']['rustdoc']['path']
     return env
 
 
@@ -202,7 +218,8 @@ def main():
         root = Path(subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], env=env, text=True).strip()).resolve()
         record = {'schema': 'kairotensor-project-invocation/1', 'selection': {'path': str(selection_path), 'sha256': sha(selection_path)},
                   'qualification_source': manifest['source']['commit'], 'source': source_record(root, env), 'host_tools': selection['host_tools'],
-                  'tools': tools, 'python_probe': probe, 'profile': PROFILE, 'wrapper': manifest['wrapper'],
+                  'tools': tools, 'supplementary_tools': {'rustdoc': 'selection-v2; not historical G1 qualification'},
+                  'python_probe': probe, 'profile': PROFILE, 'wrapper': manifest['wrapper'],
                   'started_at': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'exit': None}
         receipt_path = invocation / 'receipt.json'
         if args.command == 'identity':
