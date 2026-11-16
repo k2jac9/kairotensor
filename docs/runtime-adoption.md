@@ -569,8 +569,8 @@ The source-bound final negative control refused the exact reviewed suffixed
 Nix flag with exit 2 before launching the selected compiler. The new regression
 coverage checks 258 native-input cases, including the end-to-end observed case;
 220 subcases failed in the retained pre-fix RED and all 22 tests passed GREEN.
-The audited selected shell wrappers have 50 native-variable read occurrences
-across the inspected files, all classified by the new refusal boundary; this is
+The audited selected shell wrappers expose 50 distinct native-variable-name/file pairs
+in the inspected files, all classified by the new refusal boundary; this is
 an audit of those selected wrappers, not a claim about arbitrary external code.
 
 Fresh candidate library and standalone probe builds used unchanged admitted
