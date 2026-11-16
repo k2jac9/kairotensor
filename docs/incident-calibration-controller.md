@@ -119,3 +119,18 @@ receipt, settlement, and artifact synchronization; late fallback receipts;
 supervisor death; duplicate event/conflicting receipt; changed manifest and
 corrupt accounting; and existing-destination refusal. Synthetic fixtures test the
 protocol, not Qwen preparation measurements or language-model efficacy.
+
+The receipt-hang accounting test waits for a real receipt artifact and a committed
+SQLite `received` row with identical bytes and observation time, then advances only
+the supervisor's injected clock to the original deadline. It verifies actual group
+termination, SIGKILL/reaping, one claim, zero settlements, 180 known receipt units
+and the full 269-unit hold. A separate regression delays process startup by two
+seconds; the startup-expiry refusal test remains unchanged. These are deterministic
+accounting/watchdog checks, not real-time latency measurements. Child/worker clocks,
+production deadlines, receipts and accounting logic are unchanged.
+
+This boundary replaced a 1.5-second test window after integration CI run
+`43819750749`, job `133139861895`, expired before the intended receipt existed.
+A delayed-launch reproduction failed with unknown accounting before the correction;
+the original CI failure and RED/GREEN receipts are retained in the local
+`kairotensor-artifacts/pr-integration-20261116-2x6z4skr` packet.

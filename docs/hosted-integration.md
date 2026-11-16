@@ -60,3 +60,28 @@ are unchanged. Evidence is retained in
 `submission-finalization-mkpl39bc/pr18/integrated/fixture-fix/`; exact-head hosted
 checks remain required. The injected supervisor clock is deterministic test
 evidence, not a real-model timing measurement.
+
+The PR #18 Python-previous run at `3c4a386` then exposed a separate hosted-runner
+fixture assumption. Its crash/hang/partial test allowed only 200 ms for durable
+setup and execution; expiry before the claim correctly retained zero hold, so
+the intended partial-response path was never reached. A 250 ms delay after the
+real request write reproduces that failure and is retained with the original
+hosted log.
+
+Hosted-runner protocol and audit fixtures now use a bounded 30-second startup
+allowance. Crash and partial-response tests require one actual claim, the full
+400-unit synthetic hold, the expected child exit, and the exact retained partial
+body length. The separate hang test waits for the real forked child to enter
+its hanging send path before advancing only the parent's test clock to expiry;
+the real watchdog must kill and reap it. Dedicated deterministic tests still
+exercise expiry both before and after the claim, forbid a fork at either
+boundary, and require respectively zero hold or the full 400-unit hold.
+
+All 15 hosted-runner tests passed both normally and with the injected setup
+delay. The full 440-test Python scripts suite passed with the accepted runtime
+and verified existing Rust binaries. This correction changes only PR #18 tests
+and this record; production deadlines, claims, holds and live authority are
+unchanged. Evidence is retained in
+`submission-finalization-mkpl39bc/pr18/integrated/hosted-fixture-fix/`.
+Exact-head hosted acceptance remains required; these offline process fixtures
+do not establish provider behavior or billing.
