@@ -266,19 +266,38 @@ the incident manifest fingerprint and immutable runtime identity
 `canned-no-inference`. There is no allowlisted real-model token runtime in C1;
 legacy and other runtime accounting stays `unknown`. Do not infer units from
 sizes or arbitrary model contract strings. Budget references are opaque local
-IDs, not global totals or authority. Report totals sum only exported attempts,
-grouped by declared unit; `unknown` totals remain numerically recorded unknown
-units and must not be interpreted as model-token or monetary totals.
+IDs, not global totals or authority.
+
+The current reporting successor is `decision-replay-report/2`. Its `accounting`
+array contains numeric `charged`/`held` totals only for established compatible
+units (`logical_support`, `fixture_bytes`, `model_tokens`), over exported attempts.
+It never contains an `unknown` numeric total. Instead, `unknown_accounting` is an
+ordered list of `{attempt_id, charged, held}` observations in bundle attempt order.
+Each observation preserves that attempt's original ledger numbers without addition
+across attempts. A valid report without unknown observations has an empty list.
+`unknown_accounting_unit` remains a missing requirement; unknown labels do not
+establish a common dimension. Independent unknown charges or holds of `i64::MAX`
+and 1 are permitted when each record is valid. Quote/charge/hold bounds, usage
+consistency and all ledger checks still apply per attempt. Known-unit charge,
+hold and combined charge-plus-hold totals still refuse overflow.
+
+The earlier unversioned replay report deliberately summed unknown values. That
+contract is historical and superseded by this reporting decision; retained old
+reports are not rewritten. DecisionBundleV1's wire schema, bytes, integrity digest,
+occurrence identities, dispositions, admissions and ledger writes are unchanged.
+There is no bundle migration. Archived pre-successor documentation is retained in
+`final-fix/before-decision-bundle-v1.md` in the project evidence packet.
 
 ## Replay semantics and pure boundary
 
-Reports contain independent `consistency`, `reconstruction`, `validation`, root
+Reports declare `report_schema: "decision-replay-report/2"` and contain independent `consistency`, `reconstruction`, `validation`, root
 `recorded_disposition`, root `validator_provenance`, `missing_requirements`,
-`accounting`, `source_bundle_sha256`, `reevaluated_validator` and per-attempt
+`accounting`, `unknown_accounting`, `source_bundle_sha256`, `reevaluated_validator` and per-attempt
 `attempts` results. Status serialization is `matched`, `mismatch`, `incomplete`,
 `not_reproducible`. Aggregation prioritizes mismatch, then incomplete, then not
 reproducible. An invalid directly constructed value yields consistency mismatch
-without cloning its private metadata into the report.
+with empty accounting and unknown-observation lists, without cloning its private
+metadata into the report.
 
 Missing requirements serialize as `validator_unavailable`, `renderer_unavailable`,
 `missing_input`, `missing_delivery`, `missing_dependency`,

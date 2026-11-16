@@ -590,3 +590,94 @@ categories remain deferred to integrated review. All 199 files protected by the
 fix intake, four owner policies, review/context identities and candidate selection
 bytes were checked unchanged. Hosted CI, other full S2 roles, real-model/ML
 consumers and activation remain unexecuted, as before.
+
+### Final integrated-review successor: selection V2 and replay report V2
+
+The final correction uses executable source
+`5e9c76e0b95fa2559fc594523fd9739263577a1b` (S3). The subsequent documentation-only
+successor is mapped in `final-fix/docs-only-transition.json`; it changes only
+`docs/runtime-adoption.md`, `docs/decision-bundle-v1.md`, and
+`docs/decision-replay.md`. Historical G1/G2 qualification records, old source,
+selections and accepted pointer remain intact. This section supersedes the earlier
+runtime proposal for final acceptance; activation remains a root action after
+independent scoped review.
+
+`kairotensor-project-runtime/2` retains the exact G1-qualified rustc, Cargo,
+Python, native/helper, review and acceptance identities and requires exactly one
+additional tool: the selected rustc path's sibling `rustdoc`. Its path and SHA-256
+are bound, its arguments are fixed to `--version`, and its version must match the
+release/commit/date derived from the qualified rustc's first version line. The
+launcher verifies the actual rustdoc hash and version, puts it on the private
+PATH and sets `RUSTDOC`, alongside `RUSTC`. Invocation receipts include its actual
+identity and explicitly identify it as supplementary selection-V2 evidence;
+G1 never tested or recorded rustdoc. Missing or additional runtime tool keys,
+wrong sibling/hash/version/arguments, and inherited `RUSTDOC`, `RUSTDOCFLAGS`,
+`CARGO_ENCODED_RUSTDOCFLAGS` or `CARGO_BUILD_RUSTDOC` (including empty values) refuse.
+Existing Cargo config/selector and native environment refusals remain in force.
+
+Five new candidate selections reside under
+`/home/neo/.local/state/kairotensor/runtime/candidates/final-fix-20261116/`.
+The original V1 accepted pointer is deliberately unchanged during review; the V2
+launcher explicitly refuses it. Use `--selection` with a new V2 candidate for
+qualification. Retained old source/checkouts and their V1 launcher continue to
+use the old pointer. There is no silent fallback, installation or workstation
+runtime-default change. Root must bind reviewed S3 evidence and the candidate
+selection before changing that pointer, then test a fresh database.
+
+The replay correction is independently versioned as `decision-replay-report/2`.
+Known compatible units retain numeric totals; unknown units become ordered
+per-attempt observations without addition. DecisionBundleV1 bytes, integrity,
+per-attempt accounting, ledger writes and historical dispositions remain intact.
+The two integrated-review input bundles are preserved and replayed by the new
+source-bound binary under `final-fix/replay-probes/`. This is offline reconstruction
+and contract checking, with no model calls or new semantic-quality claim.
+
+The project Cargo documentation-test invocation passed with **zero doctests**:
+that is tooling coverage, not an invented test. A separate, exact artifact source
+(`final-fix/rustdoc_fixture.rs`) ran **one real passing doctest** through the V2
+selected rustdoc with selected Rustc. Supplementary source, executable identities,
+commands and results are retained in `final-fix/doc-probes/` and
+`final-fix/rustdoc-fixture-final/`. The one-test artifact was repeated with
+compiler temporary output explicitly declared under its evidence directory; both
+passing results are retained, not counted as two distinct tests. All five qualified
+runtime pairs also execute
+actual V2 identity/child-Python probes and the focused 28-test launcher suite.
+
+The new Store health probe is built from S3 and the exact approved probe source;
+`final-fix/activation-probe/build-identities.json` binds compiler, library,
+dependencies, source and binary. Its fresh disposable create/reopen observations
+retain exact current bytes, spent 7, reserved 12 and unresolved attempt 2, with no
+second claim/cancel and zero backend calls. They are candidate checks; root's
+post-review activation must use another fresh database.
+
+Two supplementary storage jobs initially refused because their retention lists
+included existing regular files and the storage inspector requires directories.
+Their manifests and failed outputs remain in `doc-probes/` and `activation-probe/`.
+New manifests retain enclosing output directories under the same 0.05 GiB bounds;
+exact file hashes remain separately bound. The admitted retry passed. No storage
+guard, acceptance gate, application source or historical receipt was changed.
+
+M1 remains a minor shared-example warning cleanup follow-up; protected adapter
+code and warnings are retained. Hosted CI, real-model/ML consumers, external report
+consumer inventory, seven-day observation and shared publication remain outside
+this candidate's evidence. The prior lost preflight display remains an explicit
+historical preservation defect. This work neither extends the storage exception
+(expiry `2026-11-17T18:04:38Z`) nor authorizes reservation release or asset retirement.
+
+#### S3 full runtime matrix
+
+`final-fix/verification-rollup.json` binds all five final-S3 runtime pairs to the
+unchanged 40-command workload and passing independent receipt revalidation:
+**200 commands**, with **362 Rust, 371 full Python, 18 reference and 8 oracle**
+checks per role, zero skips/ignored/filtered checks. Explicit overlapping suites
+remain 24/50/15/19/7; the five full roles total 4370 test executions including
+those overlaps. The five separate focused 28-test launcher suites add 140
+executions. These are actual reruns at S3, not relabelled historical G1/G2 runs.
+
+Three fresh registered Rust checkouts distinguish source/compiler/native keys.
+Python-varied rows rerun against the exactly bound stable Rust key. All use the
+original storage/Cargo wrappers with 2 GiB admission per fresh key; supplemental
+probes retain their separate 0.05 GiB jobs. The warning inventory contains 17
+lines per role (85 including repeated diagnostics and summaries across the full
+matrix), all retained in `final-fix/compiler-warnings.json`. Passing matrix and
+candidate health still require independent review and root activation.

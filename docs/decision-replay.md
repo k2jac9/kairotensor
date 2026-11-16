@@ -45,6 +45,29 @@ child-process/network calls in one run is bounded observational evidence; it is
 not a universal proof for other paths or a detector of an in-memory Store.
 The source boundary supplies the separate evidence for Store initialization.
 
+## Report version 2
+
+The executable emits `report_schema: "decision-replay-report/2"`. `accounting`
+contains totals only for known compatible units; `unknown_accounting` preserves
+ordered `{attempt_id, charged, held}` observations without cross-attempt addition.
+Empty unknown lists are explicit. Missing unit requirements remain visible.
+Invalid bundles refuse in this CLI; the direct replay API returns a bounded
+mismatch with empty accounting lists. Per-record ledger checks and known-unit
+aggregate overflow checks remain enforced.
+
+This versions the report, not DecisionBundleV1. Existing bundle bytes and digests
+remain valid; no ledger history or disposition is rewritten. Consumers must use
+the report schema to distinguish these semantics from the historical unversioned
+report, whose unknown totals were invalid dimensional aggregates. The repository
+runner serializes the report generically; the Python reader consumes bundle bytes,
+not this report. The local consumer audit found no other report-shape consumer
+requiring migration. External consumers were not inventoried.
+
+The exact integrated-review bundles (charges 10/20 and `i64::MAX`/1) are retained
+and replayed by the new S3 binary under `final-fix/replay-probes/`; their original
+input hashes are checked before and after the separate processes. Old review
+outputs remain historical evidence beside the original inputs.
+
 ## Python reader and E1 helper boundary
 
 `scripts/decision_bundle_v1.py` uses only the Python standard library. It performs
