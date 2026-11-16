@@ -22,6 +22,15 @@ cover redirects, HTTP failures, partial responses, timeout, response-size bounds
 credential validation, deadline expiry, process crashes and hangs, duplicate
 run refusal, and artifact consistency checks.
 
+The parent also reaps its child before propagating `KeyboardInterrupt` or
+`SystemExit`. This matters when an embedding caller catches the interruption
+and keeps the parent alive: parent-death protection would not fire. The claimed
+reservation remains held and the interrupted directory cannot be reused. An
+absent parent seal remains an incomplete outcome, not proof of nonexecution.
+The separate synthetic ledger now closes SQLite connections after transaction
+completion, including early returns and rollback; it does not wait for garbage
+collection to release file descriptors.
+
 The previous `incident_hosted_controller.py` remains the separate synthetic
 multi-operation accounting experiment. Its artifacts and guarantees are not
 silently reused as live authority. This runner uses

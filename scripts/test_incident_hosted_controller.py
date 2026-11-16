@@ -150,4 +150,38 @@ class HostedTests(unittest.TestCase):
         db=sqlite3.connect(self.root/'ledger.sqlite')
         self.assertEqual(db.execute('SELECT state,estimated FROM operations WHERE id=?',(op,)).fetchone(),('claimed',None));db.close()
 
+    def test_connections_close_on_success_early_return_and_rollback(self):
+        import sqlite3
+        from unittest.mock import patch
+        import incident_hosted_controller as controller
+        original = controller._connect
+        opened = []
+
+        def track(*args, **kwargs):
+            db = original(*args, **kwargs)
+            opened.append(db)
+            return db
+
+        try:
+            with patch.object(controller, '_connect', track):
+                ledger = HostedLedger.create(Path(self.temp.name) / 'closed', budget=800,
+                                             clock_domain='fixture-clock', start=0, deadline=1000)
+                with patch.object(ledger, '_event', side_effect=RuntimeError('event failure')):
+                    with self.assertRaises(RuntimeError):
+                        ledger.create_operation('rolled-back', 'cal-01', MODEL, self.quote)
+                self.assertEqual(ledger.audit()['operations'], [])
+                op = ledger.create_operation('a', 'cal-01', MODEL, self.quote)
+                self.assertEqual(ledger.create_operation('a', 'cal-01', MODEL, self.quote), op)
+                report = ledger.dispatch(op, FixtureTransport(reply()), approval=OfflineApproval(),
+                                         clock_domain='fixture-clock', clock=lambda:20)
+                self.assertEqual(report['estimated_spent'], 45)
+                self.assertFalse(ledger.cancel(op))
+                ledger.reconcile(op)
+            for index, db in enumerate(opened):
+                with self.subTest(connection=index), self.assertRaises(sqlite3.ProgrammingError):
+                    db.execute('SELECT 1')
+        finally:
+            for db in opened:
+                db.close()
+
 if __name__=='__main__':unittest.main()

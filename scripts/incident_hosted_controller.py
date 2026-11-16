@@ -1,6 +1,7 @@
 """Offline hosted accounting experiment. No HTTP client, credentials or live CLI."""
 import argparse
 import base64
+from contextlib import closing
 from dataclasses import dataclass,asdict
 import hashlib
 import json
@@ -135,7 +136,7 @@ class HostedLedger:
         rendered=render_case(case_id,model,states=states)
         request=rendered['request_bytes'];provenance={k:v for k,v in rendered.items() if k!='request_bytes'}
         binding=(case_id,model,request,rendered['request_sha256'],canonical(provenance),canonical(asdict(quote)))
-        with _connect(self.path) as db:
+        with closing(_connect(self.path)) as db, db:
             db.execute('BEGIN IMMEDIATE')
             prior=db.execute('SELECT * FROM operations WHERE key=?',(key,)).fetchone()
             if prior:
@@ -151,7 +152,7 @@ class HostedLedger:
             if row['state'] in HOLD_STATES:held+=_loads(row['quote'])['maximum']
         return integer(spent,'aggregate estimate'),integer(held,'aggregate hold')
     def reserve(self,op):
-        with _connect(self.path) as db:
+        with closing(_connect(self.path)) as db, db:
             db.execute('BEGIN IMMEDIATE');r=db.execute('SELECT * FROM operations WHERE id=?',(op,)).fetchone();require(r is not None,'operation missing')
             if r['state']!='planned':return r['state']=='reserved'
             spent,held=self._totals(db);maximum=_loads(r['quote'])['maximum'];budget=db.execute('SELECT budget FROM meta').fetchone()[0]
@@ -159,7 +160,7 @@ class HostedLedger:
             db.execute('UPDATE operations SET state=? WHERE id=?',(state,op));self._event(db,op,state,{'bound':maximum});return accepted
     def claim(self,op,*,approval=None,clock_domain=None,clock=None):
         _approval(approval);require(callable(clock),'trusted fixture clock required')
-        with _connect(self.path) as db:
+        with closing(_connect(self.path)) as db, db:
             db.execute('BEGIN IMMEDIATE');r=db.execute('SELECT * FROM operations WHERE id=?',(op,)).fetchone();require(r is not None,'operation missing')
             if r['state']!='reserved':return None
             m=db.execute('SELECT * FROM meta').fetchone()
@@ -177,7 +178,7 @@ class HostedLedger:
             db.execute("UPDATE operations SET state='claimed' WHERE id=?",(op,));self._event(db,op,'claimed',{'tick':now})
             return bytes(r['request'])
     def cancel(self,op):
-        with _connect(self.path) as db:
+        with closing(_connect(self.path)) as db, db:
             db.execute('BEGIN IMMEDIATE');r=db.execute('SELECT state FROM operations WHERE id=?',(op,)).fetchone();require(r is not None,'operation missing')
             if r[0]=='cancelled':return True
             if r[0] not in ('planned','reserved'):return False
@@ -224,7 +225,7 @@ class HostedLedger:
             return issues
         finally:db.close()
     def reconcile(self,op):
-        with _connect(self.path) as db:
+        with closing(_connect(self.path)) as db, db:
             db.execute('BEGIN IMMEDIATE');row=db.execute('SELECT * FROM operations WHERE id=?',(op,)).fetchone();require(row is not None,'operation missing')
             claim=db.execute('SELECT tick FROM claims WHERE operation=?',(op,)).fetchone();require(claim is not None,'reconciliation requires claim')
             record=db.execute('SELECT payload FROM receipts WHERE operation=?',(op,)).fetchone()
@@ -256,7 +257,7 @@ class HostedLedger:
         self.reserve(op);request=self.claim(op,approval=approval,clock_domain=clock_domain,clock=clock)
         if request is None:return self.audit()
         try:
-            with _connect(self.path) as db:
+            with closing(_connect(self.path)) as db, db:
                 m=db.execute('SELECT * FROM meta').fetchone()
                 final=integer(clock(),'final clock')
                 require(clock_domain==m['domain'] and m['floor']<=final<m['deadline'],'final clock window')
@@ -269,7 +270,7 @@ class HostedLedger:
             self.record_receipt(op,receipt,observed=observed,minimum_tick=last)
             self.reconcile(op)
         except Exception as error:
-            with _connect(self.path) as db:
+            with closing(_connect(self.path)) as db, db:
                 db.execute("UPDATE operations SET state='uncertain',issue=? WHERE id=? AND state IN ('claimed','received')",(canonical([type(error).__name__]),op))
                 self._event(db,op,'failed',{'exception_type':type(error).__name__})
         return self.audit()
@@ -280,7 +281,7 @@ class HostedLedger:
             require(manifest['version']==result['version'] and manifest['mode']=='offline_fixture' and manifest['live_admissible'] is False and type(manifest['new_model_calls']) is int and manifest['new_model_calls']==0 and manifest['monetary_unit']==result['monetary_unit'],'manifest identity')
             require(manifest['freeze_sha256']==FREEZE_SHA256,'frozen workload mismatch')
             require(manifest['source_sha256']=={name:hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest() for name in ('incident_hosted_controller.py','incident_adaption_backend.py','incident_routing.py')},'source binding mismatch')
-            with _connect(self.path,True) as db:
+            with closing(_connect(self.path,True)) as db, db:
                 m=db.execute('SELECT * FROM meta').fetchone()
                 require(tuple(m[k] for k in ('budget','domain','start','deadline','max_claims'))==tuple(manifest[k] for k in ('budget','clock_domain','start','deadline','max_claims')),'manifest/window mismatch')
                 for key in ('budget','start','deadline','floor','max_claims'):integer(m[key],key)

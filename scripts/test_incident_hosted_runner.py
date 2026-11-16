@@ -1,5 +1,7 @@
 import hashlib
+import multiprocessing
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -123,5 +125,46 @@ class RunnerTests(unittest.TestCase):
     def test_clock_and_budget_limits(self):
         for duration in (True,0,99,1200001):
             with self.subTest(duration=duration),self.assertRaises(ValueError):run_fixture(self.root,duration_ms=duration)
+
+    def test_parent_interrupt_reaps_child_before_propagating_and_retains_hold(self):
+        # Removing cleanup on BaseException would leave a real hanging child
+        # running after a caller catches the parent's interrupt.
+        original_join = multiprocessing.process.BaseProcess.join
+        for exception in (KeyboardInterrupt, SystemExit):
+            path = self.root.with_name(exception.__name__)
+            children = []
+            interrupted = False
+
+            def interrupt_first_join(process, timeout=None):
+                nonlocal interrupted
+                if not interrupted:
+                    interrupted = True
+                    children.append(process)
+                    if exception is KeyboardInterrupt:
+                        os.kill(os.getpid(), signal.SIGINT)
+                    else:
+                        raise SystemExit(9)
+                return original_join(process, timeout)
+
+            try:
+                with self.subTest(exception=exception.__name__):
+                    with patch.object(multiprocessing.process.BaseProcess, 'join', interrupt_first_join):
+                        with self.assertRaises(exception):
+                            run_fixture(path, duration_ms=10000, fault='hang')
+                    self.assertEqual(len(children), 1)
+                    self.assertFalse(children[0].is_alive())
+                    self.assertIsNotNone(children[0].exitcode)
+                    result = audit_run(path)
+                    self.assertTrue(result['audit_complete'])
+                    self.assertEqual(result['held_micro_usd'], 400)
+                    self.assertEqual(result['claimed_count'], 1)
+                    self.assertEqual(result['state'], 'delivery_uncertain')
+                    with self.assertRaises(FileExistsError):
+                        run_fixture(path)
+            finally:
+                for child in children:
+                    if child.is_alive():
+                        child.kill()
+                    original_join(child, 2)
 
 if __name__=='__main__':unittest.main()

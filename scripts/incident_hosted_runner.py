@@ -204,11 +204,19 @@ def _run(root, case_id, model, *, mode, budget_micro_usd, duration_ms,
             reason = 'child_exit_without_complete_receipt'
     except Exception as error:
         reason = type(error).__name__
-        if process is not None and process.pid is not None and process.is_alive():
-            process.kill()
-            process.join(timeout=1)
     finally:
-        db.close()
+        # A caller may catch KeyboardInterrupt/SystemExit and keep this parent
+        # alive, so Linux parent-death protection alone is insufficient. Reap
+        # the local child on every exit while preserving interrupt propagation
+        # and the durable potentially-sent claim/hold.
+        try:
+            if process is not None and process.pid is not None:
+                if process.is_alive():
+                    process.kill()
+                process.join(timeout=1)
+                require(not process.is_alive(), 'child termination not confirmed')
+        finally:
+            db.close()
     _write(root / 'parent.json', {'claimed': claimed, 'reason': reason,
                                 'finished_ns': _now(),
                                 'child_exitcode': process.exitcode if process is not None and process.pid else None})
