@@ -8,6 +8,13 @@ and AutoScientist runs are outside this measured snapshot and are excluded from
 the report's outcomes. [Current status](CURRENT_STATUS.md) describes the later
 integration and points to the separately reported pilot.
 
+The final report's Table 1 summarizes the atomic-revision, scoped-reuse and
+recovery rows below. Its values are existing observations, not new experiments.
+The [combined reviewer package](https://drive.google.com/file/d/1Nc2X8NwHdDpKTSU2kknw0V_V5cqOEBOP/view)
+contains a current report package with the unchanged measured-source archive and
+raw evidence, plus the separate pilot and integrated-source supplements. Access
+must be checked independently of the package's byte manifest.
+
 | Report claim | Raw evidence and protocol | Result and limit |
 | --- | --- | --- |
 | Atomic revision reduces the expensive per-branch edit path | `docs/benchmarks/atomic-revision-2026-11-13.csv`; `docs/revision-benchmark.md` | 90 rows, 30 matched triplets. Dense 128-rule/32-edit cell: 1,972.508 vs 146.650 ms median edit time; median paired ratio 13.460, range 13.244-13.563, six trials. Full scan wins total time in all 30 trials but preserves less history. |

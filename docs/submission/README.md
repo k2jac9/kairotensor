@@ -40,7 +40,7 @@ which experiments the paper reports.
 - [Reproduction guide](REPRODUCE.md): offline summaries and consistency checks.
 - [Four-minute presentation script](DEMO.md): an optional presentation, not a recording.
 
-The accompanying reviewer ZIP contains the seven-page report, exact source archive,
+The accompanying reviewer ZIP contains the eight-page report, exact source archive,
 these guides, verification receipts and SHA-256 manifest. The source archive has
 162 entries and SHA-256
 `e5928a4daf5b9d68cfbec0f58afdfd53d65f4202e3f1c5d54a4284baa1c0b821`.
@@ -50,16 +50,25 @@ The 16 November finalization adds Doyle's truth maintenance system and de Kleer'
 assumption-based TMS to the related work. The contribution is the durable
 integration of declared evidence dependence at the model execution boundary;
 dependency tracking itself is established prior work. Measured outcomes are
-unchanged. The report retains a 192-word abstract, five pages through code and
-data, one reference page, and one page with the ethics appendix and LLM statement.
+unchanged. The final template review adds three explicit contribution bullets,
+Table 1 with observed outcomes and limits, an evidence-package link, and scope
+wording that remains accurate after PR #18 merged. The report retains a 192-word
+abstract; it now has six pages through code and data, one reference page, and one
+page with the ethics appendix and LLM statement. The six main pages are below the
+eight-page limit, although above the template's four-page recommendation.
 
 New receipts are in [verification/finalization-20261116](verification/finalization-20261116/README.md).
 The original 15 November receipts remain unchanged and describe the earlier
-six-page export. They are historical records, not checks of the final PDF.
+six-page export. Those receipts and the first 16 November seven-page finalization
+are historical records. [Template-review verification](verification/improvements-20261116/README.md)
+checks the current eight-page PDF.
 
-The repository was private when the package was prepared. The owner plans to
-make it public; this preparation does not change visibility or submit an entry.
-Reviewers need the ZIP or repository access to inspect the evidence.
+The repository remains private. The owner authorized read-only reviewer link
+access for the [report PDF](https://drive.google.com/file/d/1dTGN3-QSCzFGtf2vwILFT7V1CRl_CmIQ/view)
+and [combined evidence package](https://drive.google.com/file/d/1Nc2X8NwHdDpKTSU2kknw0V_V5cqOEBOP/view).
+These links are stable delivery targets, not proof of public access. The current
+connector cannot grant anonymous access; see Current status for the remaining
+sharing step. No event entry has been submitted by this preparation.
 
 ## Verification scope
 

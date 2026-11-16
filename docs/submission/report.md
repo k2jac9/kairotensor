@@ -12,7 +12,13 @@ An agent may make a decision from a set of observations and later receive a corr
 
 KairoTensor investigates a narrower, operational question: can a local store keep a durable record of an agent computation's declared evidence and refuse stale reads or continuations, while permitting explicitly bounded reuse? The prototype provides an occurrence-level evidence ledger, revision-checked branches, and a deterministic alternative-witness mechanism. It does not authenticate evidence or infer what a model internally attended to. The caller must authenticate actors, supply all relevant dependencies, validate outputs, and correctly report usage.
 
-Alejandro Castellanos confirms that no KairoTensor-specific ideas, code or experiments predate the sprint. The repository history begins on 13 November 2026, and the measured revision and model experiments were committed on 13-14 November. This provenance statement is the author's declaration; commit timestamps alone cannot establish when work began. This report covers the measured snapshot 20fab84a6baa525452191ecf80eeee339f0b5ac7. Later reliability work, the unmerged hosted-integration branch and active AutoScientist runs are excluded from the reported results.
+Our contributions are:
+
+- A durable Rust/SQLite execution contract that records declared evidence and refuses stale results while retaining incurred usage.
+- A reproducible synthetic comparison of revision strategies that distinguishes equivalent publication histories from a lighter baseline.
+- A bounded model-reuse demonstration with a changed-input control, alongside negative recovery results that expose output-format and deadline limitations.
+
+Alejandro Castellanos confirms that no KairoTensor-specific ideas, code or experiments predate the sprint. The repository history begins on 13 November 2026, and the measured revision and model experiments were committed on 13-14 November. This provenance statement is the author's declaration; commit timestamps alone cannot establish when work began. This report covers the measured snapshot 20fab84a6baa525452191ecf80eeee339f0b5ac7. Subsequent reliability and hosted-integration work, the separate correction pilot, and AutoScientist training are outside this report's measured scope.
 
 ## 2. Related work
 
@@ -38,6 +44,16 @@ The model reuse example separates a test-report judgment from a deployment plann
 
 ## 4. Results
 
+Table 1 summarizes the three main experimental findings.
+
+Table 1. Observed outcomes and their limits [6-8]. Timings, token counts and success rates describe separate experiments; they are not a combined performance measure.
+
+| Experiment | Observed result | Scope and limitation |
+| --- | --- | --- |
+| Atomic revision | Dense cell: 13.46x median paired edit-time speedup (range 13.24-13.56). | Six paired trials; fixed synthetic trace. Lighter full scan wins total time. |
+| Model-result reuse | Repair: 1 call / 193 tokens. Fresh: 2 calls / 404 tokens. Same checked plan. | One observation per route after prompt revision; no general savings estimate. |
+| Recovery policies | Each of three policies: 0/6 held-out successes. | Shared trajectories; strict JSON failures; every retry late. |
+
 In the atomic revision experiment, 128 rules with 32 dense edits took a median 1,972.5 ms for per-branch edits versus 146.7 ms for atomic edits. The median paired speedup was 13.46 times, range 13.24–13.56 across six trials. For 1,024 rules and 128 sparse edits, it was 1.40 times, range 1.34–1.68. Atomic edits improved edit time in all 30 matched comparisons. The lighter full scan had the lowest total time in every matched trial; for the dense cell its median total was 27.8 ms versus 369.1 ms for atomic indexed revision. The baseline's reduced historical contract prevents attributing the difference to indexing alone [6].
 
 In a later bulk setup experiment, the 1,024-rule fixture's median setup time was 3,690 ms using individual production calls versus 214 ms using bulk calls. The median paired setup ratio was 16.62, range 14.89–34.55, across six trials. The scan retained the lowest median total in all five cells and finished first in 29 of 30 matched trials [6]. These are fixed synthetic, single-writer traces on hosted machines, not a general break-even result.
@@ -59,6 +75,8 @@ Versioned evidence and conservative checks can prevent this prototype from servi
 ## Code and data
 
 Measured main-branch snapshot: 20fab84a6baa525452191ecf80eeee339f0b5ac7, https://github.com/k2jac9/kairotensor. Raw benchmark CSVs, prompts, model traces and evaluation protocols are in docs/benchmarks and docs/evaluations. Historical CI executions use their recorded source commits, not the current main commit. The accompanying reviewer package preserves the source archive and its checksum; exact experimental sources and commands are documented in [6-8].
+
+Reviewer evidence package: [download the source and evidence bundle](https://drive.google.com/file/d/1Nc2X8NwHdDpKTSU2kknw0V_V5cqOEBOP/view). The package includes the pinned source and raw evidence, so reviewing them does not require GitHub access.
 
 ## References
 

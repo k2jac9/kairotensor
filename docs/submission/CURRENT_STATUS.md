@@ -3,8 +3,11 @@
 This is a dated supplement to the frozen report, with live status observations
 recorded at approximately 07:39 UTC after PR integration and branch cleanup.
 The paper and PDF still report source
-`20fab84a6baa525452191ecf80eeee339f0b5ac7`; their historical wording describes that
-pre-integration snapshot. No result below is silently added to the paper.
+`20fab84a6baa525452191ecf80eeee339f0b5ac7`. The subsequent template review replaces
+stale branch-status wording with an explicit measured-scope boundary, adds three
+contribution bullets and a numbered results table, and links the reviewer package.
+The abstract and original result paragraphs are unchanged. No result below is
+silently added to the paper.
 
 ## Integrated implementation
 
@@ -69,19 +72,27 @@ That platform metric has not been independently evaluated and is not a KairoTens
 research result. No dataset expansion, restart or new training run is part of this
 handoff. A later observation must recheck the run rather than assume this status.
 
-The repository and existing Drive PDF/reviewer/pilot files remain private.
-Permission metadata showed owner-only access at this check. Existing cloud links
-therefore do not establish reviewer access. The local combined reviewer bundle
-contains the original report package, corrected pilot package, this status note,
-the exact integrated source and source-bound CI receipts. Its manifest verifies
+The repository remains private. The owner authorized read-only link access to
+the final Drive report PDF and combined reviewer bundle. Permission metadata
+showed owner-only access; the connector supports named-user and Workspace-domain
+sharing but does not expose "Anyone with the link." Public access therefore
+remains pending a Drive sharing change and an unauthenticated read check.
+
+The refreshed combined reviewer bundle contains the current report package,
+corrected pilot package, this status note, the exact integrated source and
+source-bound CI receipts. Its current report package retains the measured-source
+archive and raw evidence unchanged. Prior packages remain retained locally as
+historical evidence. Private submission-form contact details and account-access
+observations are omitted from the reviewer distribution. Its manifest verifies
 byte consistency; it does not authenticate model execution.
 
 The [official sprint page](https://apartresearch.com/sprints/ai-x-epistemics-research-sprint-2026-11-13-to-2026-11-15)
 lists the submission deadline as 16 November at 11:59 UTC, which is 06:59 in
 America/Toronto. The report PDF is the primary upload; the form also accepts an
 additional-material URL. A local ZIP or owner-only link is not an accessible URL
-for judges. Public sharing and event submission are separate delivery actions;
-this preparation does neither and establishes no event receipt.
+for judges. Public sharing is authorized but not yet established by this check.
+Event submission remains a separate action; this preparation establishes no
+event receipt.
 
 Ready form values remain: title **KairoTensor: Evidence-Grounded Revision for Agent
 Memory**; team **KairoTensor**; location **Online**; author **Alejandro Castellanos**;
